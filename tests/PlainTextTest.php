@@ -16,10 +16,10 @@ function assert_true( bool $condition, string $message ): void {
 	}
 }
 
-assert_true( 'Roam & Relish' === PlainText::decode( 'Roam &amp; Relish' ), 'an ampersand entity decodes' );
+assert_true( 'Fern & Finch' === PlainText::decode( 'Fern &amp; Finch' ), 'an ampersand entity decodes' );
 assert_true( "Chef\u{2019}s table" === PlainText::decode( 'Chef&#8217;s table' ), 'a texturized apostrophe decodes' );
 assert_true( '<b>bold</b>' === PlainText::decode( '&lt;b&gt;bold&lt;/b&gt;' ), 'decoding never adds markup of its own' );
-assert_true( 'Roam & Relish' === PlainText::blog_name( (object) [ 'blogname' => 'Roam &amp; Relish' ] ), 'a blog name decodes' );
+assert_true( 'Fern & Finch' === PlainText::blog_name( (object) [ 'blogname' => 'Fern &amp; Finch' ] ), 'a blog name decodes' );
 assert_true( '' === PlainText::blog_name( (object) [] ), 'a site without a name is empty' );
 
 // Every title read in shipped code goes through PlainText, so an encoded title
@@ -46,9 +46,9 @@ assert_true( [] === $offenders, "a title is read without PlainText:\n" . implode
 // A title stored encoded by an older version still comes out plain everywhere it is read.
 wp_test_reset( [] );
 $queue = new TranslateWP\Components\IndexQueue();
-$queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 7, 'language' => 'lv', 'url' => 'https://example.com/learn/', 'page_title' => 'Roam &amp; Relish Kitchen School', 'priority' => 10 ] ] );
+$queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 7, 'language' => 'lv', 'url' => 'https://example.com/learn/', 'page_title' => 'Fern &amp; Finch Kitchen School', 'priority' => 10 ] ] );
 $rows = $queue->list_rows();
-assert_true( [] !== $rows && 'Roam & Relish Kitchen School' === (string) ( $rows[0]['page_title'] ?? '' ), 'the queue hands back a stored title as plain text, got ' . wp_json_encode( array_column( $rows, 'page_title' ) ) );
+assert_true( [] !== $rows && 'Fern & Finch Kitchen School' === (string) ( $rows[0]['page_title'] ?? '' ), 'the queue hands back a stored title as plain text, got ' . wp_json_encode( array_column( $rows, 'page_title' ) ) );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "PlainTextTest: {$failures} assertion(s) failed\n" );

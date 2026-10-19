@@ -45,16 +45,16 @@ describe('HeadTitleTranslator', () =>
 
     it('translates an og:title that differs from the page title on its own', async () =>
     {
-        const og = setHead('Weekly schedule', 'Notebook bundle SPACE');
+        const og = setHead('Weekly schedule', 'Notebook bundle HARBOR');
         const { translator, calls } = fakeTranslator({
             'Weekly schedule': 'Weekly schedule (PL)',
-            'Notebook bundle SPACE': 'Zestaw notatników SPACE',
+            'Notebook bundle HARBOR': 'Zestaw notatników HARBOR',
         });
 
         await new HeadTitleTranslator(document).translate(translator);
 
         expect(document.title).toBe('Weekly schedule (PL)');
-        expect(og?.getAttribute('content')).toBe('Zestaw notatników SPACE');
+        expect(og?.getAttribute('content')).toBe('Zestaw notatników HARBOR');
         expect(calls).toHaveLength(2);
     });
 
@@ -141,22 +141,22 @@ describe('HeadTitleTranslator with a server-named source title', () =>
 
     it('translates from the source title the server named, not from the translated title it printed', async () =>
     {
-        setHead('Chi siamo - Deju studija SPACE', 'Chi siamo - Deju studija SPACE');
+        setHead('Chi siamo - Harbor Dance Studio', 'Chi siamo - Harbor Dance Studio');
         const meta = document.createElement('meta');
         meta.setAttribute('name', 'translatewp-source-title');
-        meta.setAttribute('content', 'Par mums - Deju studija SPACE');
+        meta.setAttribute('content', 'Par mums - Harbor Dance Studio');
         document.head.appendChild(meta);
-        const { translator, calls } = fakeTranslator({ 'Par mums - Deju studija SPACE': 'About us - Deju studija SPACE' });
+        const { translator, calls } = fakeTranslator({ 'Par mums - Harbor Dance Studio': 'About us - Harbor Dance Studio' });
 
         const subject = new HeadTitleTranslator();
         await subject.translate(translator);
 
-        expect(calls.map(call => call.source)).toEqual(['Par mums - Deju studija SPACE']);
-        expect(document.title).toBe('About us - Deju studija SPACE');
-        expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('About us - Deju studija SPACE');
+        expect(calls.map(call => call.source)).toEqual(['Par mums - Harbor Dance Studio']);
+        expect(document.title).toBe('About us - Harbor Dance Studio');
+        expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('About us - Harbor Dance Studio');
 
         subject.restore();
-        expect(document.title).toBe('Par mums - Deju studija SPACE');
+        expect(document.title).toBe('Par mums - Harbor Dance Studio');
     });
 });
 

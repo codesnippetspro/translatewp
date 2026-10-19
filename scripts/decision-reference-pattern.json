@@ -1,1 +1,1 @@
-"\\bTWP[- ][0-9]+\\b|\\bDecision[s]? [0-9]+\\b|\\blane[ -]?[0-9]+\\b|\\bslice [0-9]+\\b|\\btier [0-9]+\\b"
+"\\bTWP[- ]?[A-Z]?[0-9]+\\b|\\bDecision[s]? [0-9]+\\b|\\blane[ -]?[0-9]+\\b|\\bslice [0-9]+\\b|\\btier [0-9]+\\b"

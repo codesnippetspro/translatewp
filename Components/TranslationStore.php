@@ -24,10 +24,9 @@ class TranslationStore {
 	 */
 	public const CACHE_GENERATION_OPTION = 'translatewp_translation_cache_generation';
 
-	// TWP F37: per-language generations {locale: int}. A per-page or per-language
-	// retranslation bumps only the languages it touched, so other languages'
-	// visitors keep their warm local hydration cache. The legacy option above is
-	// the site-wide fallback (retranslate-all, and any language never bumped).
+	// Per-language generations {locale: int}: a retranslation bumps only the
+	// languages it touched, so the others keep their browser cache. The option
+	// above is the site-wide fallback for languages never bumped.
 	public const CACHE_GENERATIONS_OPTION = 'translatewp_translation_cache_generations';
 
 	private const SCHEMA_VERSION = 1;
@@ -280,9 +279,7 @@ class TranslationStore {
 	 * admin surfaces and the page-map read: 'stored' once the title's
 	 * translation is in the map, 'pending' while its hash is still queued for
 	 * back-fill (under either storage key), and 'missing' when neither holds.
-	 * The title is a server-only segment with no visitor-path fallback, so
-	 * surfacing its state lets the next indexing pass (and the operator) see
-	 * that a page body indexed without its title catching up.
+	 * The title is server-only, with no visitor-path fallback.
 	 */
 	public static function title_state( string $url, string $title, string $locale, int $post_id = 0 ): string {
 		$title  = trim( $title );
