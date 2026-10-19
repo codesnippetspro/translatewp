@@ -59,7 +59,7 @@ namespace TranslateWP\Components;
  *      - translate_protected_pages: boolean
  *      - preserve_html_attributes: boolean
  *      - translate_comments, translate_menus, translate_widgets: boolean (page areas; on unless switched off)
- *      - visible_roles: string[] (Pro; empty means everyone sees translations)
+ *      - visible_roles: string[] (retired: a stored value is ignored and every visitor sees translations)
  *      - preserve_branded_terms: boolean
  *      - localized_date_time_formats: boolean
  *      - enable_units_conversion: boolean
