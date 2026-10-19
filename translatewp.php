@@ -3,7 +3,7 @@
  * Plugin Name:       TranslateWP
  * Plugin URI:        https://translatewp.ai/
  * Description:       AI translation for WordPress. Unlimited websites, unlimited languages, zero word-count billing.
- * Version:           1.0.0
+ * Version:           1.0.0-beta.1
  * Author:            Code Snippets
  * Author URI:        https://codesnippets.pro/
  * License:           GPL-3.0+
@@ -20,7 +20,7 @@ if ( ! defined( 'WPINC' ) ) {
 
 // PLUGIN CONSTANTS.
 define( 'TRANSLATEWP_NAME', 'translatewp' );
-define( 'TRANSLATEWP_VERSION', '1.0.0' );
+define( 'TRANSLATEWP_VERSION', '1.0.0-beta.1' );
 define( 'TRANSLATEWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TRANSLATEWP_BASENAME', plugin_basename( __FILE__ ) );
 define( 'TRANSLATEWP_URL', plugin_dir_url( __FILE__ ) );
