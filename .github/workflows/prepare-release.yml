@@ -1,0 +1,76 @@
+name: "(Release): Prepare"
+
+# Ported from codesnippetspro/code-snippets. Dispatches the central changelog
+# workflow which opens the release PR; a human reviews, merges, and the merged
+# release/v* PR triggers create-tag.yml. Automation never merges or tags.
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+        default: patch
+      custom_version:
+        description: 'Custom version (used when Release version = custom; leading v optional)'
+        required: false
+        type: string
+        default: ''
+      auto_changelog:
+        description: '(Copilot) auto-create changelog'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  version:
+    uses: codesnippetspro/.github/.github/workflows/next_version.yml@main
+    with:
+      file_path: package.json
+      ref_name: ${{ github.ref_name }}
+      bump: ${{ github.event.inputs.version }}
+      custom_version: ${{ github.event.inputs.custom_version }}
+
+  changelog:
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Dispatch changelog workflow
+        env:
+          GH_TOKEN: ${{ secrets.CHANGELOG_PAT || github.token }}
+        run: |
+          target_repo="codesnippetspro/.github-private"
+          workflow_file="changelog.yml"
+          version="${{ needs.version.outputs.version }}"
+
+          if ! gh repo view "$target_repo" >/dev/null 2>&1; then
+            echo "::error::Cannot access $target_repo — configure CHANGELOG_PAT"
+            exit 1
+          fi
+
+          echo "::notice::Dispatching '$workflow_file' for v$version"
+
+          if ! gh workflow run "$workflow_file" \
+            --repo "$target_repo" \
+            --ref main \
+            --field repo="${{ github.repository }}" \
+            --field branch="${{ github.ref_name }}" \
+            --field version="$version" \
+            --field readme_path="./readme.txt" \
+            --field generate_changelog="${{ github.event.inputs.auto_changelog }}"; then
+            echo "::error::Failed to dispatch '$workflow_file' in $target_repo"
+            exit 1
+          fi
+
+          echo "::notice::Release PR preparation dispatched — review and merge it, then the tag workflow takes over"

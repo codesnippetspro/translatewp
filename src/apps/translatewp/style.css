@@ -1,0 +1,21 @@
+@import "../../shared/tailwind.css";
+
+#translatewp h2,
+#translatewp h3,
+#translatewp h4,
+#translatewp h5,
+#translatewp h6,
+#translatewp p {
+    margin: 0 !important;
+
+    font-family: var(--translatewp-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+}
+
+/* An anchored switcher beside its element shares the element's row. */
+.twp-anchor-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    max-width: 100%;
+    vertical-align: middle;
+}

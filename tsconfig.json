@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "outDir": "./build/",
+        "jsx": "react-jsx",
+        "module": "ESNext",
+        "target": "ES2020",
+        "strict": true,
+        "allowSyntheticDefaultImports": true,
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "lib": [
+            "DOM",
+            "DOM.Iterable",
+            "ESNext"
+        ],
+        "skipLibCheck": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        },
+        "types": [
+            "jest"
+        ]
+    },
+    "include": [
+        "src/**/*"
+    ]
+}

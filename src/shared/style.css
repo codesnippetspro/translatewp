@@ -1,0 +1,8 @@
+/*
+ * Shared type foundation. No bundled font files: Apple's SF Pro is not
+ * GPL-compatible and cannot ship on WP.org, so the UI uses the platform's
+ * native stack (San Francisco on Apple devices via -apple-system).
+ */
+:root {
+    --translatewp-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", roboto, oxygen-sans, ubuntu, cantarell, "Helvetica Neue", sans-serif;
+}

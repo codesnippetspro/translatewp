@@ -1,0 +1,367 @@
+@import "../../shared/tailwind.css";
+
+#translatewp-setup h1,
+#translatewp-setup h2,
+#translatewp-setup h3,
+#translatewp-setup h4,
+#translatewp-setup h5,
+#translatewp-setup h6,
+#translatewp-setup p {
+    margin: 0 !important;
+
+    font-family: var(--translatewp-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+}
+
+/* WordPress input-control labels (select, number, text) follow the plugin's
+   form label style: sentence case, bold, neutral. */
+/* stylelint-disable selector-class-pattern -- WordPress component class names. */
+#translatewp-setup .components-input-control__label,
+#translatewp-setup .components-base-control__label {
+    text-transform: none !important;
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    color: var(--color-translatewp-neutral, #343739) !important;
+}
+/* stylelint-enable selector-class-pattern */
+
+#translatewp-setup .setup-card > :not(.flex-1) {
+    flex-shrink: 0;
+}
+
+#translatewp-setup .setup-step {
+    padding: 20px 32px;
+    overflow-y: auto;
+}
+
+#translatewp-setup .setup-read > :not(:last-child) {
+    flex-shrink: 0;
+}
+
+/* WordPress inserts control wrappers between the flex item and its textarea. */
+/* stylelint-disable selector-class-pattern */
+#translatewp-setup .setup-context,
+#translatewp-setup .setup-context .components-base-control__field {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+}
+
+#translatewp-setup .setup-context textarea {
+    flex: 1;
+    height: 100%;
+    min-height: 60px;
+    resize: none;
+}
+/* stylelint-enable selector-class-pattern */
+
+#translatewp-setup .setup-languages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    gap: 12px;
+}
+
+#translatewp-setup .setup-languages > :first-child {
+    flex-shrink: 0;
+    gap: 4px;
+}
+
+#translatewp-setup .setup-language-targets {
+    flex: 1;
+    min-height: 0;
+    gap: 6px;
+}
+
+#translatewp-setup .setup-language-target-grid {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+    min-height: 0;
+    gap: 20px;
+}
+
+#translatewp-setup .setup-language-summary,
+#translatewp-setup .setup-language-checklist {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#translatewp-setup .setup-language-summary {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+#translatewp-setup .setup-languages > :first-child > .relative {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#translatewp-setup .setup-languages > :first-child > .relative > :last-child:not(:first-child) {
+    flex-shrink: 0;
+    margin-top: 0;
+}
+
+#translatewp-setup .setup-language-checklist [role="group"] {
+    flex: 1;
+    height: auto;
+    min-height: 80px;
+    overscroll-behavior: contain;
+}
+
+#translatewp-setup .setup-translation-step {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#translatewp-setup .setup-translation-progress {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 24px;
+    gap: 12px;
+    border: 1px solid var(--color-translatewp-border, #E2E2E4);
+    border-radius: 8px;
+    text-align: center;
+}
+
+#translatewp-setup .setup-translation-progress-bar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 520px;
+    gap: 14px;
+}
+
+#translatewp-setup .setup-translation-track {
+    position: relative;
+    flex: 1;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--color-translatewp-selection, #F6F7F7);
+}
+
+#translatewp-setup .setup-translation-fill {
+    display: block;
+    position: relative;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--color-translatewp-primary, #0e3ecd);
+    transition: width 1.2s ease-out;
+}
+
+#translatewp-setup .setup-translation-fill.is-running {
+    animation: setup-translation-pulse 2.4s ease-in-out infinite;
+}
+
+#translatewp-setup .setup-translation-fill.is-running::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+    animation: setup-translation-sheen 2.4s linear infinite;
+}
+
+#translatewp-setup .setup-translation-track.is-finished .setup-translation-fill {
+    background: var(--color-translatewp-success);
+}
+
+#translatewp-setup .setup-translation-value {
+    flex: none;
+    min-width: 3ch;
+    color: var(--color-translatewp-neutral, #343739);
+    font-size: 18px;
+    font-weight: 700;
+    text-align: right;
+}
+
+#translatewp-setup .setup-translation-value.is-finished {
+    color: var(--color-translatewp-success);
+}
+
+@keyframes setup-translation-pulse {
+
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.72;
+    }
+}
+
+@keyframes setup-translation-sheen {
+
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
+}
+
+#translatewp-setup .setup-translation-languages {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    gap: 8px;
+    list-style: none;
+}
+
+#translatewp-setup .setup-translation-language {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 4px 12px;
+    gap: 6px;
+    border: 1px solid var(--color-translatewp-border, #E2E2E4);
+    border-radius: 999px;
+    font-size: 13px;
+}
+
+#translatewp-setup .setup-finish-callout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 640px;
+    padding: 12px 16px;
+    gap: 10px 14px;
+    border: 1px solid var(--color-translatewp-success);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-translatewp-success) 8%, #FFF);
+    color: var(--color-translatewp-neutral, #343739);
+    text-align: left;
+    box-sizing: border-box;
+}
+
+#translatewp-setup .setup-finish-callout-icon {
+    flex: none;
+    margin-top: 1px;
+    color: var(--color-translatewp-success);
+}
+
+#translatewp-setup .setup-finish-callout .components-button.is-primary {
+    background: var(--color-translatewp-success);
+    border-color: var(--color-translatewp-success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    #translatewp-setup .setup-translation-fill.is-running,
+    #translatewp-setup .setup-translation-fill.is-running::after {
+        animation: none;
+    }
+}
+
+#translatewp-setup .setup-translation-status.is-translated {
+    color: var(--color-translatewp-success);
+}
+
+#translatewp-setup .setup-translation-status.is-translating {
+    color: var(--color-translatewp-primary, #0e3ecd);
+}
+
+#translatewp-setup .setup-translation-status.is-queued {
+    color: var(--color-translatewp-muted, #646970);
+}
+
+#translatewp-setup .setup-translation-status.is-failed {
+    color: var(--color-translatewp-error, #F00);
+}
+
+@media (max-width: 700px) {
+
+    #translatewp-setup .setup-language-target-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+
+    #translatewp-setup .setup-card {
+        height: 820px;
+    }
+
+    #translatewp-setup .setup-step {
+        padding: 16px;
+    }
+
+    /* Four step names wrap line by line on a phone; the count already says
+       where setup is, so only the current step is named. */
+    #translatewp-setup .setup-step-names > :not([data-state="current"]) {
+        display: none;
+    }
+}
+
+/* The homepage flags: a ring that closes as the language's pages translate and turns while it runs. */
+#translatewp-setup .setup-homepage-flag {
+    display: inline-flex;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 1px;
+    border-radius: 4px;
+    background: conic-gradient(from var(--twp-ring-angle), var(--color-translatewp-primary, #0e3ecd) var(--twp-ring-percent, 0%), var(--color-translatewp-border, #E2E2E4) 0);
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+/* The ring's start angle turns, so the square stays put while its fill goes round. */
+@property --twp-ring-angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+
+#translatewp-setup .setup-homepage-flag.is-running {
+    animation: setup-homepage-ring-turn 1.1s linear infinite;
+    cursor: default;
+}
+
+#translatewp-setup .setup-homepage-flag.is-ready {
+    background: var(--color-translatewp-success);
+}
+
+#translatewp-setup .setup-homepage-flag-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 8px;
+    border-radius: 3px;
+    background: #FFF;
+    box-sizing: border-box;
+}
+
+
+@keyframes setup-homepage-ring-turn {
+
+    to {
+        --twp-ring-angle: 360deg;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    #translatewp-setup .setup-homepage-flag.is-running {
+        animation: none;
+    }
+}

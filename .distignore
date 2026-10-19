@@ -1,0 +1,36 @@
+# Source + tooling never ship; the zip carries build/, vendor/ (no-dev),
+# PHP sources, languages/, readme.txt. The authoritative include list lives
+# in scripts/bundle.mjs (org pattern); keep this file in sync with it.
+/.git
+/.github
+.github
+/node_modules
+/.wordpress-org
+/src
+/tests
+/scripts
+/docs
+/.claude
+/.cursor
+
+.editorconfig
+.distignore
+.eslintrc.js
+.gitattributes
+.gitignore
+.node-version
+.stylelintrc.js
+jest.config.js
+phpcs.xml
+postcss.config.js
+tsconfig.json
+webpack.config.js
+package.json
+package-lock.json
+yarn.lock
+composer.json
+composer.lock
+Readme.md
+AGENTS.md
+CLAUDE.md
+CONTEXT.md

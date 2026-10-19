@@ -1,0 +1,38 @@
+name: "(Release): Create Tag"
+
+# Ported from codesnippetspro/code-snippets. When a merged release/v* PR lands
+# on a release branch, tag it with the package.json version; the release
+# creation then triggers release.yml. Humans merge; this only tags.
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - beta
+
+jobs:
+  create-tag:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          tag=$(jq -r .version package.json)
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "::notice::Creating git tag [v$tag]"
+
+      - name: Create tag
+        run: |
+          git config user.name "code-snippets-bot"
+          git config user.email "139164393+code-snippets-bot@users.noreply.github.com"
+          git tag "v${{ steps.version.outputs.tag }}"
+          git push origin "v${{ steps.version.outputs.tag }}"

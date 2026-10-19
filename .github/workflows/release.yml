@@ -1,0 +1,79 @@
+name: "(Release): Build"
+
+# A GitHub release triggers: verified build, zip, release asset, central
+# publish dispatch (codesnippetspro/.github-private publish.yml routes to
+# SVN or Freemius per its repo mapping, which holds the translatewp entry and
+# credentials).
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ github.event.release.tag_name }}
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      zip_name: ${{ steps.zip.outputs.zip_name }}
+    steps:
+      - name: Download built plugin
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ./bundle
+
+      - name: Create zip archive
+        id: zip
+        run: |
+          zip_name="${{ needs.build.outputs.artifact_name }}.zip"
+
+          cd ./bundle/${{ needs.build.outputs.artifact_name }}
+          zip -r "../$zip_name" .
+          cd ..
+
+          echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
+          echo "path=$(pwd)/$zip_name" >> $GITHUB_OUTPUT
+
+      - name: Upload release asset
+        uses: codesnippetspro/action-gh-release@master
+        with:
+          files: ${{ steps.zip.outputs.path }}
+
+  deploy:
+    needs: [build, upload]
+    # A beta or pre-release stays a GitHub release; only a stable tag goes to WordPress.org.
+    if: ${{ !github.event.release.prerelease && !contains(github.event.release.tag_name, '-beta') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch publish workflow
+        env:
+          GH_TOKEN: ${{ secrets.CHANGELOG_PAT }}
+        run: |
+          target_repo="codesnippetspro/.github-private"
+          workflow_file="publish.yml"
+
+          echo "::notice::Dispatching publish workflow for ${{ github.event.release.tag_name }}"
+
+          if ! gh workflow run "$workflow_file" \
+            --repo "$target_repo" \
+            --ref main \
+            --field repo="${{ github.repository }}" \
+            --field branch="${{ github.ref_name }}" \
+            --field tag="${{ github.event.release.tag_name }}" \
+            --field zip_name="${{ needs.upload.outputs.zip_name }}"; then
+            echo "::error::Failed to dispatch publish workflow in $target_repo"
+            exit 1
+          fi
+
+          echo "::notice::Successfully dispatched publish workflow"

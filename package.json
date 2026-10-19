@@ -1,0 +1,60 @@
+{
+	"name": "@translatewp/translatewp",
+	"version": "1.0.0",
+	"packageManager": "yarn@1.22.22",
+	"wpSlug": "translate",
+	"author": "TranslateWP",
+	"homepage": "https://translatewp.ai",
+	"private": true,
+	"licenses": [
+		{
+			"type": "GPL-3.0+",
+			"url": "https://www.gnu.org/licenses/gpl-3.0"
+		}
+	],
+	"engines": {
+		"node": ">=16.0.0"
+	},
+	"scripts": {
+		"build": "wp-scripts build",
+		"generate:flag-positions": "node scripts/generate-flag-positions.mjs",
+		"start": "wp-scripts start",
+		"dev": "wp-scripts start",
+		"test": "wp-scripts test-unit-js --runInBand",
+		"typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+		"lint:styles": "wp-scripts lint-style",
+		"lint:styles:fix": "wp-scripts lint-style --fix",
+		"lint:php": "vendor/bin/phpcs --standard=./phpcs.xml .",
+		"lint:php:fix": "vendor/bin/phpcbf --standard=./phpcs.xml .",
+		"translate": "yarn translate:pot && yarn translate:js",
+		"translate:pot": "wp i18n make-pot . ./languages/translate.pot --domain=translate --exclude=tests,scripts,docs,dist-archive",
+		"translate:js": "wp i18n make-json ./languages --pretty-print",
+		"bundle": "node scripts/bundle.mjs",
+		"e2e:env": "wp-env start",
+		"e2e": "playwright test --config e2e/playwright.config.ts"
+	},
+	"devDependencies": {
+		"@playwright/test": "1.56.0",
+		"@types/jest": "29.5.12",
+		"@types/wordpress__block-editor": "^15.0.0",
+		"@types/wordpress__blocks": "^12.5.18",
+		"@wordpress/env": "10.38.0",
+		"@wordpress/scripts": "^31.3.0",
+		"@wordpress/stylelint-config": "^24.0.0",
+		"typescript": "5.4.5"
+	},
+	"dependencies": {
+		"@tailwindcss/postcss": "^4.1.18",
+		"@tanstack/query-async-storage-persister": "^5.90.22",
+		"@tanstack/react-query": "^5.90.20",
+		"@tanstack/react-query-persist-client": "^5.90.22",
+		"@wordpress/block-editor": "^15.11.0",
+		"@wordpress/blocks": "^15.11.0",
+		"@wordpress/data": "^10.38.0",
+		"@wordpress/dom-ready": "^4.38.0",
+		"lucide-react": "^0.563.0",
+		"postcss": "^8.5.6",
+		"tailwindcss": "^4.1.18",
+		"zustand": "^5.0.10"
+	}
+}

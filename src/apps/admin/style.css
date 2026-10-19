@@ -1,0 +1,32 @@
+@import "../../shared/tailwind.css";
+
+#wpcontent {
+    padding-left: 0;
+}
+
+#wpbody-content {
+    padding: 0;
+}
+
+#translatewp-admin h2,
+#translatewp-admin h3,
+#translatewp-admin h4,
+#translatewp-admin h5,
+#translatewp-admin h6,
+#translatewp-admin p {
+    margin: 0 !important;
+
+    font-family: var(--translatewp-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+}
+
+/* WordPress input-control labels (select, number, text) follow the plugin's
+   form label style: sentence case, bold, neutral. */
+/* stylelint-disable selector-class-pattern -- WordPress component class names. */
+#translatewp-admin .components-input-control__label,
+#translatewp-admin .components-base-control__label {
+    text-transform: none !important;
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    color: var(--color-translatewp-neutral, #343739) !important;
+}
+/* stylelint-enable selector-class-pattern */

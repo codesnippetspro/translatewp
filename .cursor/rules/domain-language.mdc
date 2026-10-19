@@ -1,0 +1,19 @@
+---
+description: Domain vocabulary — use the terms in CONTEXT.md
+alwaysApply: true
+---
+
+`CONTEXT.md` at the repo root is the domain glossary. Match its terms in code,
+identifiers, and UI strings, and respect every `Avoid` list. Key rules:
+
+- **Site** is the API-issued UUID for metering and cache attribution — not a URL,
+  domain, customer, or the old `siteId` URL hash.
+- **Usage** is observed metering, for ops only. Never call it "rate limit",
+  "quota", or "budget".
+- Keep the switcher measurements distinct: **switcher offset** (distance from the
+  window edge), **switcher icon size** (the graphic), **switcher padding** (space
+  inside the trigger). None of them is a generic "size".
+
+Coin a new domain term in `CONTEXT.md` first; do not invent it in code.
+
+Full rules: `AGENTS.md`.

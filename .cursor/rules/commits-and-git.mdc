@@ -1,0 +1,21 @@
+---
+description: Commit message and git workflow convention
+alwaysApply: true
+---
+
+Single-line Conventional Commits. Exactly one prefix from: `feat:`, `fix:`,
+`chore:`, `docs:`.
+
+- **No scope in parentheses.** NOT `feat(api): …` — just `feat: …`.
+- **No body. No trailers. No `Co-Authored-By`.**
+- Imperative mood, lowercase after the colon, one logical change per commit.
+
+Examples:
+- `feat: add lexicon term endpoint`
+- `fix: sanitize targetLang before lookup`
+
+Branches: `feat/…`, `fix/…`, `chore/…`, `hotfix/…`. `beta` is the integration
+branch — branch from and merge into it. `main` is production/release. Never push,
+PR, or merge without explicit human confirmation.
+
+Full rules: `AGENTS.md`.

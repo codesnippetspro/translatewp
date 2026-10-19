@@ -1,0 +1,100 @@
+name: "(Build): Plugin"
+
+# The org pipeline: the full verification loop runs before packaging, and any
+# failure aborts before an artifact exists, so a broken build can never ship.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+        default: ${{ inputs.ref }}
+      php:
+        required: false
+        type: number
+        default: 8.3
+
+    outputs:
+      version:
+        value: ${{ jobs.build.outputs.version }}
+      artifact_name:
+        value: ${{ jobs.build.outputs.artifact_name }}
+      artifact_url:
+        value: ${{ jobs.build.outputs.artifact_url }}
+      artifact_id:
+        value: ${{ jobs.build.outputs.artifact_id }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
+      artifact_url: ${{ steps.artifacts.outputs.artifact-url }}
+      artifact_id: ${{ steps.artifacts.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up PHP
+        uses: codesnippetspro/setup-php@v2
+        with:
+          php-version: "${{ inputs.php }}"
+          tools: composer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: 'yarn'
+
+      - name: Install
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+          composer install --prefer-dist --no-progress
+
+      - name: Version consistency gate
+        run: |
+          pkg=$(jq -r .version package.json)
+          header=$(sed -n 's/^ \* Version: *//p' translatewp.php | tr -d '[:space:]')
+          stable=$(sed -n 's/^Stable tag: *//p' readme.txt | tr -d '[:space:]')
+          echo "package.json=$pkg header=$header stable-tag=$stable"
+          if [ "$pkg" != "$header" ] || [ "$pkg" != "$stable" ]; then
+            echo "::error::version mismatch: package.json=$pkg plugin-header=$header readme-stable-tag=$stable"
+            exit 1
+          fi
+
+      - name: Verification loop
+        run: |
+          yarn lint:php
+          yarn lint:styles
+          yarn typecheck
+          yarn test
+          yarn build
+          composer test:php
+
+      - name: Bundle
+        id: build
+        run: |
+          yarn bundle
+
+          name=$(jq -r '.wpSlug // (.name | split("/") | last)' package.json)
+          version=$(jq -r .version package.json)
+          artifact_name="${name}.${version}"
+
+          echo "name=$name" >> $GITHUB_OUTPUT
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
+
+          mkdir -p ./upload
+          mv ./bundle/$name ./upload/$name
+
+      - name: Upload
+        id: artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.artifact_name }}
+          path: ./upload

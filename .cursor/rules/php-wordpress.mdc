@@ -1,0 +1,32 @@
+---
+description: PHP / WordPress conventions and the REST-endpoint seam
+globs: ["**/*.php"]
+alwaysApply: false
+---
+
+- WordPress Coding Standards, enforced by phpcs (`phpcs.xml`, ruleset `WordPress`,
+  `testVersion 7.4-`): tabs, `snake_case`, WordPress hook naming, PHP 7.4+, lines
+  under 120 chars. Autofix only files you touched: `yarn lint:php:fix`.
+- Namespaced `TranslateWP\` (PSR-4 from repo root, composer autoload) — no manual
+  `require_once` for classes. Guard executable entry points with
+  `defined('WPINC')`/`defined('ABSPATH')`; not autoloaded class files. `wp_die()`
+  for fatal admin errors, never `die()`/`exit` with user-facing output.
+- Avoid custom DB tables — prefer `wp_options`, transients, or custom post types
+  (`Entities/CPTs/`). Extend behaviour through WordPress filters/actions; expose a
+  filter before changing a preference-driven default.
+
+REST endpoints:
+- Register only as plubo-routes `GetEndpoint`/`PostEndpoint` in
+  `Functionality/Endpoints/`, wired through `Includes/Loader.php`. Never call
+  `register_rest_route` directly.
+- Every endpoint takes a `*_permissions_check` capability callback and verifies a
+  nonce.
+- Sanitize every `$request` param (`sanitize_*`/`esc_*`) before use; escape output;
+  `$wpdb->prepare` for dynamic queries.
+
+i18n: wrap user-visible strings (`__`, `esc_html__`, `_x`, `_n`, …) in the
+`translate` text domain; translate whole sentences, no HTML inside strings, use
+`…`. Config/secrets read only in `Components/RemoteApi.php`. Use `CONTEXT.md`
+vocabulary. Verify with `yarn lint:php`.
+
+Full rules: `AGENTS.md`.

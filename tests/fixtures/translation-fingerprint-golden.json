@@ -1,0 +1,203 @@
+{
+    "vectors": [
+        {
+            "id": "unicode-text-flow",
+            "markerPayload": "⟪item_0001⟫Café résumé",
+            "sourceLang": "en",
+            "targetLang": "fr",
+            "contextKind": "text-flow",
+            "contextKey": "main > p:nth-of-type(2)",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": false,
+                "enable_units_conversion": true,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Café résumé\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"fr\"}",
+            "hash": "742ecc43fd0784d9bf8daaea44cbec12f3dc6b04dd99e852ddf8029f8819cd08"
+        },
+        {
+            "id": "reordered-settings-keys",
+            "markerPayload": "⟪item_0001⟫Hello",
+            "sourceLang": "en",
+            "targetLang": "es",
+            "contextKind": "text-flow",
+            "contextKey": "body",
+            "settings": {
+                "creativity": 0,
+                "tone": "neutral",
+                "context": "website",
+                "formality": 0,
+                "lexicon_terms": [],
+                "writing_style": "neutral",
+                "enable_units_conversion": true,
+                "localized_date_time_formats": false,
+                "preserve_branded_terms": true
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Hello\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"es\"}",
+            "hash": "398499e2f21a6a6f7878a334a74e17edc969667100b4a1ef76c8aea2a920d585"
+        },
+        {
+            "id": "boolean-number-settings",
+            "markerPayload": "⟪item_0001⟫Price: 42",
+            "sourceLang": "auto",
+            "targetLang": "lv",
+            "contextKind": "text-flow",
+            "contextKey": "section > span",
+            "settings": {
+                "preserve_branded_terms": false,
+                "localized_date_time_formats": true,
+                "enable_units_conversion": false,
+                "context": "",
+                "writing_style": "formal",
+                "tone": "friendly",
+                "formality": 7,
+                "creativity": 3,
+                "lexicon_terms": [
+                    {
+                        "term": "Résumé",
+                        "description": "CV document"
+                    }
+                ]
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Price: 42\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"\",\"creativity\":3,\"formality\":7,\"preserve_branded_terms\":false,\"tone\":\"friendly\",\"writing_style\":\"formal\"},\"sourceLang\":\"auto\",\"targetLang\":\"lv\"}",
+            "hash": "c7c1a5578d96373ca14fb08ce91815f18ac16a66b0636d3a16d77e71d3a7dc18"
+        },
+        {
+            "id": "alt-context-kind",
+            "markerPayload": "⟪item_0001⟫Logo alt",
+            "sourceLang": "en",
+            "targetLang": "de",
+            "contextKind": "alt",
+            "contextKey": "header > img:nth-of-type(1)",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": false,
+                "enable_units_conversion": true,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"alt\",\"markerPayload\":\"⟪item_0001⟫Logo alt\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"de\"}",
+            "hash": "e1bc6f2a5a76c45cf91fd1e1c0a3b4e817870e3e2f8c378daae34c4a4f8d870d"
+        },
+        {
+            "id": "attribute-context-kind",
+            "markerPayload": "⟪item_0001⟫Submit",
+            "sourceLang": "en",
+            "targetLang": "fr",
+            "contextKind": "attribute",
+            "contextKey": "form > button:nth-of-type(3)",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": false,
+                "enable_units_conversion": true,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"attribute\",\"markerPayload\":\"⟪item_0001⟫Submit\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"fr\"}",
+            "hash": "8a466d44b807b43e99f68450cbc4aa01ee6483795848c5576c03b4935f716c58"
+        },
+        {
+            "id": "basic-proxy-fixture",
+            "markerPayload": "⟪item_0001⟫Hello",
+            "sourceLang": "en",
+            "targetLang": "fr",
+            "contextKind": "text-flow",
+            "contextKey": "main > p",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": true,
+                "enable_units_conversion": true,
+                "context": "",
+                "writing_style": "neutral",
+                "tone": "friendly",
+                "formality": 5,
+                "creativity": 5,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Hello\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"\",\"creativity\":5,\"formality\":5,\"preserve_branded_terms\":true,\"tone\":\"friendly\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"fr\"}",
+            "hash": "d69a842e6ca02bb814c3bffff46012a63cd9bde90bb9830d99a55174db67d5e0"
+        },
+        {
+            "id": "seo-title-attribute",
+            "markerPayload": "⟪item_0001⟫Workshop hours",
+            "sourceLang": "ja",
+            "targetLang": "it",
+            "contextKind": "attribute",
+            "contextKey": "seo:title",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": false,
+                "enable_units_conversion": true,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"attribute\",\"markerPayload\":\"⟪item_0001⟫Workshop hours\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"ja\",\"targetLang\":\"it\"}",
+            "hash": "5d044212f9b225dfe8a0756c5b9b9abfe8f7c0d2592c6a76063593039adb5a48"
+        },
+        {
+            "id": "lexicon-terms-ignored",
+            "markerPayload": "⟪item_0001⟫Café résumé",
+            "sourceLang": "en",
+            "targetLang": "fr",
+            "contextKind": "text-flow",
+            "contextKey": "main > p:nth-of-type(2)",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": false,
+                "enable_units_conversion": true,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": [
+                    {
+                        "term": "Café",
+                        "description": "keep as is"
+                    }
+                ]
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Café résumé\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"fr\"}",
+            "hash": "742ecc43fd0784d9bf8daaea44cbec12f3dc6b04dd99e852ddf8029f8819cd08"
+        },
+        {
+            "id": "localizer-toggles-ignored",
+            "markerPayload": "⟪item_0001⟫Café résumé",
+            "sourceLang": "en",
+            "targetLang": "fr",
+            "contextKind": "text-flow",
+            "contextKey": "main > p:nth-of-type(2)",
+            "settings": {
+                "preserve_branded_terms": true,
+                "localized_date_time_formats": true,
+                "enable_units_conversion": false,
+                "context": "website",
+                "writing_style": "neutral",
+                "tone": "neutral",
+                "formality": 0,
+                "creativity": 0,
+                "lexicon_terms": []
+            },
+            "canonical": "{\"contextKind\":\"text-flow\",\"markerPayload\":\"⟪item_0001⟫Café résumé\",\"schemaVersion\":\"group-v4\",\"settings\":{\"context\":\"website\",\"creativity\":0,\"formality\":0,\"preserve_branded_terms\":true,\"tone\":\"neutral\",\"writing_style\":\"neutral\"},\"sourceLang\":\"en\",\"targetLang\":\"fr\"}",
+            "hash": "742ecc43fd0784d9bf8daaea44cbec12f3dc6b04dd99e852ddf8029f8819cd08"
+        }
+    ]
+}

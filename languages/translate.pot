@@ -1,0 +1,336 @@
+# Copyright (C) 2026 TranslateWP
+# This file is distributed under the GPL-3.0+.
+msgid ""
+msgstr ""
+"Project-Id-Version: TranslateWP 0.9.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/translatewp-relcut\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-08-23T16:00:02+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.7.1\n"
+"X-Domain: translate\n"
+
+#. Plugin Name of the plugin
+#. Author of the plugin
+#: Functionality/Admin/Menus.php:27
+#: Functionality/Admin/MultisiteSettingsPage.php:38
+msgid "TranslateWP"
+msgstr ""
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+msgid "https://translatewp.ai/"
+msgstr ""
+
+#. Description of the plugin
+msgid "A WordPress plugin for easily translating WordPress sites."
+msgstr ""
+
+#. translators: %d: number of connected sites
+#: Components/SiteConnection.php:431
+msgid "Network connected: %d site issued under your account."
+msgid_plural "Network connected: %d sites issued under your account."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: number of connected sites, 2: number of failed sites
+#: Components/SiteConnection.php:443
+msgid "Network connect finished: %1$d connected, %2$d failed. Retry the failed sites below."
+msgstr ""
+
+#: Components/SiteConnection.php:691
+msgid "Your site is connected. Hosted translation is ready."
+msgstr ""
+
+#: Components/SiteConnection.php:693
+msgid "Connection was not approved. Your site is still disconnected."
+msgstr ""
+
+#: Components/SiteConnection.php:695
+msgid "This connection link expired or was already used. Start connect again."
+msgstr ""
+
+#: Components/SiteConnection.php:697
+msgid "The connection response was incomplete. Start connect again."
+msgstr ""
+
+#: Components/SiteConnection.php:699
+msgid "The connection request was invalid. Start connect again."
+msgstr ""
+
+#: Components/SiteConnection.php:701
+msgid "The connection code expired or was already used. Start connect again."
+msgstr ""
+
+#: Components/SiteConnection.php:703
+msgid "This site is linked to another account. Disconnect it there or contact support."
+msgstr ""
+
+#: Components/SiteConnection.php:705
+msgid "Too many connection attempts. Wait a few minutes and try again."
+msgstr ""
+
+#: Components/SiteConnection.php:707
+msgid "Connection is temporarily unavailable. Try again later."
+msgstr ""
+
+#: Components/SiteConnection.php:709
+msgid "Connection could not be completed right now. Try again."
+msgstr ""
+
+#: Components/SiteConnection.php:711
+msgid "You do not have permission to connect this site."
+msgstr ""
+
+#: Components/SiteConnection.php:734
+msgid "Connect your site to enable hosted translation and usage reporting."
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:67
+#: Entities/CPTs/Lexicon.php:68
+#: Entities/CPTs/Lexicon.php:77
+#: Functionality/Admin/Menus.php:69
+#: Functionality/Admin/Menus.php:70
+msgid "Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:69
+msgid "Add New"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:70
+msgid "Add New Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:71
+msgid "Edit Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:72
+msgid "New Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:73
+msgid "View Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:74
+msgid "Search Lexicon"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:75
+msgid "No lexicon found."
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:76
+msgid "No lexicon found in Trash."
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:96
+#: Entities/CPTs/Lexicon.php:104
+msgid "Lexicon Categories"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:97
+msgid "Lexicon Category"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:98
+msgid "Search Lexicon Categories"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:99
+msgid "All Lexicon Categories"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:100
+msgid "Edit Lexicon Category"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:101
+msgid "Update Lexicon Category"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:102
+msgid "Add New Lexicon Category"
+msgstr ""
+
+#: Entities/CPTs/Lexicon.php:103
+msgid "New Lexicon Category Name"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:41
+#: Functionality/Admin/Menus.php:42
+msgid "Dashboard"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:50
+#: Functionality/Admin/Menus.php:51
+msgid "Languages"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:60
+#: Functionality/Admin/Menus.php:61
+msgid "Translations"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:78
+#: Functionality/Admin/Menus.php:79
+msgid "AI Providers"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:87
+#: Functionality/Admin/Menus.php:88
+msgid "Settings"
+msgstr ""
+
+#: Functionality/Admin/Menus.php:124
+msgid "Upgrade to Pro"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:37
+#: Functionality/Admin/MultisiteSettingsPage.php:143
+msgid "TranslateWP Network Settings"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:56
+msgid "Apply TranslateWP Network Settings"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:57
+#: Functionality/Admin/MultisiteSettingsPage.php:240
+msgid "Apply Network-Wide"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:146
+msgid "Copy settings between subsites or overwrite every subsite from one selected source."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:157
+msgid "Account Connection"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:166
+#: Functionality/Admin/MultisiteSettingsPage.php:264
+msgid "connected"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:170
+msgid "failed"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:184
+msgid "Retry Failed Sites"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:191
+msgid "Dismiss Results"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:198
+msgid "Connect the whole network to your TranslateWP account. Each subsite gets its own Site and token under the one account."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:202
+msgid "Connect Network"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:212
+msgid "Apply TranslateWP Settings Network-Wide"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:214
+msgid "This overwrites TranslateWP language and translation settings on every subsite with this subsite settings."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:223
+msgid "Apply This Subsite Network-Wide"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:228
+msgid "Apply Settings"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:233
+msgid "Source subsite"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:234
+msgid "Target subsite"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:237
+msgid "Apply to Target Subsite"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:254
+msgid "Subsite Overrides"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:266
+msgid "not connected"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:274
+msgid "Delegated Network-Wide Apply"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:278
+msgid "Subsite administrator user ID"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:280
+msgid "Grant"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:291
+msgid "Revoke"
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:303
+msgid "Settings applied network-wide."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:304
+msgid "Settings applied to the selected subsite."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:305
+msgid "Network-wide apply granted."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:306
+msgid "Network-wide apply revoked."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:307
+msgid "Settings could not be applied."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:308
+msgid "Grant requires a valid subsite administrator."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:309
+msgid "The grant could not be revoked."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:310
+msgid "Network connect could not be started. Try again."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:311
+msgid "Connection results dismissed."
+msgstr ""
+
+#: Functionality/Admin/MultisiteSettingsPage.php:348
+msgid "You are not allowed to manage these settings."
+msgstr ""
+
+#: Functionality/Endpoints/Connect.php:106
+msgid "Disconnect failed. Try again or disconnect from your account portal."
+msgstr ""

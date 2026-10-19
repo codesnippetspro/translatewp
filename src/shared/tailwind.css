@@ -1,0 +1,53 @@
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+@source: "@";
+
+@theme {
+    --color-translatewp-primary: #0e3ecd;
+    --color-translatewp-admin: #2271B1;
+    --color-translatewp-neutral: #343739;
+    --color-translatewp-muted: #646970;
+    --color-translatewp-border: #E2E2E4;
+    --color-translatewp-icons: #9CA1A8;
+    --color-translatewp-selection: #F6F7F7;
+    --color-translatewp-grip: #8D8F95;
+    --color-translatewp-success: #45A366;
+    --color-translatewp-warning: #c98a1e;
+    --color-translatewp-cta: #2E7D57;
+    --color-translatewp-cta-hover: #276B4A;
+    --color-translatewp-error: #F00;
+}
+
+.translatewp-app-root {
+    --wp-components-color-accent: #0e3ecd;
+    --wp-components-color-accent-darker-10: #0c37b8;
+    --wp-components-color-accent-darker-20: #0b31a4;
+    --wp-components-color-accent-inverted: #FFF;
+}
+
+.translatewp-app-root .button-primary {
+    background: #0e3ecd;
+    border-color: #0e3ecd;
+}
+
+.translatewp-app-root .button-primary:hover,
+.translatewp-app-root .button-primary:focus {
+    background: #0c37b8;
+    border-color: #0c37b8;
+}
+
+/* wp-admin fills every svg inside a button; lucide icons are strokes only. */
+svg.lucide {
+    fill: none !important;
+}
+
+/* An (i) explanation shows the moment the pointer is on it, on every device, with a short fade. */
+[data-info-tip] > [role="tooltip"] {
+    transition: opacity 120ms ease, visibility 120ms ease;
+}
+
+[data-info-tip]:hover > [role="tooltip"],
+[data-info-tip]:focus-visible > [role="tooltip"] {
+    visibility: visible;
+    opacity: 1;
+}

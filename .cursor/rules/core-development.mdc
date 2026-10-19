@@ -1,0 +1,31 @@
+---
+description: Core development doctrine — execution sequence, critical-partner mindset, prohibited actions
+alwaysApply: true
+---
+
+Read `AGENTS.md` at the repository root for full project standards. This file
+re-delivers the essentials.
+
+## Execution sequence
+
+1. **SEARCH FIRST** — find existing functionality before writing new code.
+2. **REUSE FIRST** — extend existing patterns; smallest change that fixes the
+   root cause.
+3. **NO ASSUMPTIONS** — only files read, user messages, and tool results count
+   as knowledge.
+4. **CHALLENGE IDEAS** — question assumptions, offer counterpoints, prioritise
+   truth over agreement. Do not sugarcoat.
+5. **PLAN IF COMPLEX** — 3+ steps gets a short plan first.
+6. **TEST BEFORE DONE** — exercise the changed flow, not just the compiler.
+
+## Do not
+
+- Push, open PRs, or merge without explicit human confirmation.
+- Write docs unless explicitly asked.
+- Run watch/dev/long-lived processes (`yarn dev`/`start`) — assume the user runs them.
+- Modify protected guidance files (`AGENTS.md`, `CLAUDE.md`, `.cursor/`, `.github/`)
+  without explicit human approval.
+- Commit `build/` output.
+- Fix problems outside the current task inline — flag them instead.
+
+Full rules: `AGENTS.md`.

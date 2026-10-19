@@ -1,0 +1,34 @@
+---
+description: TypeScript / React app conventions and the frontend API seam
+globs: ["src/**/*.ts", "src/**/*.tsx"]
+alwaysApply: false
+---
+
+- Strict TypeScript, tabs, `camelCase`, React function components with hooks.
+  Import from `src` via the `@/` alias. Lines under 100 chars. No JS linter is
+  configured — match the surrounding file exactly.
+- Export types used in exported signatures; keep imports sorted within groups
+  (third-party, local, relative). No magic numbers; 3+ params take a typed options
+  object. Reuse or extend existing types and utilities before adding new ones.
+- Prefer `@wordpress/components` for UI. Single `h1` per admin screen; sections
+  start at `h2`.
+- Declarative React: derive with `useMemo` over `useEffect` chains, update state
+  in handlers, controlled forms, compute at render. Hooks return state and actions,
+  not elements. Type no-arg callbacks as `VoidFunction`.
+- Conditional render `cond && <el>` (reserve `? … : null` for numeric/string).
+  Avoid nested ternaries, trivial memoization, unnecessary ARIA, and props that
+  repeat defaults. JSX over `createElement`. No barrel `index.ts` re-export files.
+- User-facing strings translated with the `translate` text domain and
+  `CONTEXT.md` vocabulary; `// translators:` on the line directly above the string.
+- `src/shared/lib/languages/flagSpritePositions.ts` is generated from `styles.css`
+  by `yarn generate:flag-positions` — never hand-edit it.
+
+App boundaries:
+- Three apps under `src/apps/{admin,setup,translatewp}`; an app never imports from
+  another app. Shared code lives in `src/shared`.
+- All server access goes through `src/shared/api/{admin,setup,wordpress}.ts` and
+  the TanStack Query option builders — no ad-hoc `fetch` in components.
+
+Verify with `yarn test` (Jest) and `yarn build`.
+
+Full rules: `AGENTS.md`.

@@ -1,0 +1,24 @@
+vendor
+.cache-loader
+dist
+node_modules
+npm-debug.log
+yarn-error.log
+/vendor
+resources/assets/config-local.json
+.budfiles
+resources/cache
+build
+.claude
+.agents
+.scratch
+.env
+.DS_Store
+/dist-archive
+/bundle
+/translatewp-wt-build
+*.zip
+
+# End-to-end test output
+e2e/results/
+.wp-env/

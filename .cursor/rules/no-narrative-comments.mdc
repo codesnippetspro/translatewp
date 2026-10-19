@@ -1,0 +1,19 @@
+---
+description: Comment discipline — no narrative, history, or what-comments
+alwaysApply: true
+---
+
+A comment may state only a current constraint or behaviour the code cannot
+show — written for the next reader, not the reviewer.
+
+Do not write:
+- "what" comments that narrate the next line
+- history: "used to…", "fixes the bug where…", "not a no-op"
+- rationale or design justification
+- docstrings that restate the signature
+
+Before writing a comment, try to make it unnecessary: a named constant, a better
+name, a smaller unit. Match the comment density of the surrounding file; when in
+doubt, omit it.
+
+Rationale belongs in the commit message or `AGENTS.md`, not in the code.

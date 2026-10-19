@@ -1,0 +1,21 @@
+name: "(Pull Request): Verify"
+
+# The required check for every pull request, forks included: the full
+# verification loop and the package build, with no secrets and read-only
+# access. The labelled build in pull-request.yml stays separate for the
+# download comment, which needs the org token.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-verify-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    uses: ./.github/workflows/build.yml

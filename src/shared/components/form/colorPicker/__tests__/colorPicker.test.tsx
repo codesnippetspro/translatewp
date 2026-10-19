@@ -1,0 +1,74 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+
+import { ColorPicker, isHexColor } from '@/shared/components/form/colorPicker';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const mountedRoots: Root[] = [];
+
+const render = async (element: React.ReactElement): Promise<HTMLElement> =>
+{
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push(root);
+    await act(async () =>
+    {
+        root.render(element);
+    });
+    return container;
+};
+
+const typeInto = async (input: HTMLInputElement, value: string): Promise<void> =>
+{
+    await act(async () =>
+    {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+};
+
+describe('ColorPicker text field', () =>
+{
+    afterEach(async () =>
+    {
+        await act(async () =>
+        {
+            for (const root of mountedRoots.splice(0)) {
+                root.unmount();
+            }
+        });
+        document.body.innerHTML = '';
+    });
+
+    it('accepts three and six digit hex colours only', () =>
+    {
+        expect(isHexColor('#0E3ECD')).toBe(true);
+        expect(isHexColor('#fff')).toBe(true);
+        expect(isHexColor(' #abcdef ')).toBe(true);
+        expect(isHexColor('ZZZZZZ')).toBe(false);
+        expect(isHexColor('#12345')).toBe(false);
+        expect(isHexColor('red')).toBe(false);
+    });
+
+    it('keeps a value that is not a hex colour out of the settings and shows the hint', async () =>
+    {
+        const onChange = jest.fn();
+        const container = await render(<ColorPicker label="Background Color" value="#FFFFFF" onChange={onChange} />);
+        const input = container.querySelector('input') as HTMLInputElement;
+
+        await typeInto(input, 'ZZZZZZ');
+
+        expect(onChange).not.toHaveBeenCalled();
+        expect(container.querySelector('[role="alert"]')?.textContent).toBe('Use a hex color such as #0E3ECD.');
+        expect(input.getAttribute('aria-invalid')).toBe('true');
+        expect(input.getAttribute('aria-describedby')).toBe(container.querySelector('[role="alert"]')?.id);
+
+        await typeInto(input, '#0E3ECD');
+
+        expect(onChange).toHaveBeenLastCalledWith('#0E3ECD');
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+    });
+});

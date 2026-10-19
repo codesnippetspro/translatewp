@@ -1,0 +1,39 @@
+{
+    "name": "translatewp/translatewp",
+    "type": "template",
+    "description": "A WordPress plugin for easily translating WordPress sites.",
+    "keywords": [
+        "plugin",
+        "wordpress",
+        "translate",
+        "wp"
+    ],
+    "homepage": "https://translatewp.ai",
+    "license": "GPL-3.0+",
+    "autoload": {
+        "psr-4": {
+            "TranslateWP\\": ""
+        },
+        "files": [
+            "Utils/plubo.php"
+        ]
+    },
+    "require": {
+        "php": ">=7.4",
+        "joanrodas/plubo-routes": "^0.7.8"
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
+        "wp-coding-standards/wpcs": "^3.1"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "php-http/discovery": true
+        }
+    },
+    "scripts": {
+        "test:php": "php tests/TranslatedNotWarmTest.php && php tests/QuotaHandoffTest.php && php tests/BrandingTest.php && php tests/SideTabTest.php && php tests/RoleCapabilitiesTest.php && php tests/AdminBarTest.php && php tests/BrandMenuIconTest.php && php tests/PluginRowTest.php && php tests/StyleConflictsTest.php && php tests/CacheScriptExclusionsTest.php && php tests/PageAreasTest.php && php tests/VisibleRolesTest.php && php tests/AdvancedStyleTest.php && php tests/TranslationReadinessTest.php && php tests/TranslationReadinessWiringTest.php && php tests/TranslationReadinessPacingTest.php && php tests/ReadinessSelfHealTest.php && php tests/SelfHealRepushTest.php && php tests/ReadinessSweepColdTest.php && php tests/ReadinessCursorTest.php && php tests/FirstPassPacingTest.php && php tests/SiteConnectionRouteTest.php && php tests/RetryFailedTest.php && php tests/MissPayloadTest.php && php tests/OnboardingReturnTest.php && php tests/OnboardingResumeTest.php && php tests/ConnectNoticesTest.php && php tests/SiteLanguageSyncTest.php && php tests/SiteDisconnectTest.php && php tests/SiteAccountLabelTest.php && php tests/LyfecycleTest.php && php tests/RestErrorUnwrapTest.php && php tests/TranslationFingerprintGoldenTest.php && php tests/TranslationWhitespaceParityTest.php && php tests/TranslationProxyStorageTest.php && php tests/TranslationProxyClientIpTest.php && php tests/TranslationJobsProxyTest.php && php tests/IndexerTest.php && php tests/IndexQueueChangedPagesTest.php && php tests/IndexRereadChangedTest.php && php tests/TranslationProviderFailureTest.php && php tests/TranslationStoreTest.php && php tests/CronFallbackTest.php && php tests/MissProxyTest.php && php tests/TranslationUrlTest.php && php tests/LanguageUrlTest.php && php tests/LanguageRoutingTest.php && php tests/PageTextTranslatorTest.php && php tests/CrawlerTranslationTest.php && php tests/CrawlerResponseTest.php && php tests/StoreFromMissTest.php && php tests/StoreReadPathTest.php && php tests/StoreEvictionTest.php && php tests/StoreAnnouncesTranslationTest.php && php tests/NetworkConnectTest.php && php tests/NetworkConnectOutcomeTest.php && php tests/NetworkGrantRetirementTest.php && php tests/SwitcherCustomCssRetirementTest.php && php tests/MultisiteSettingsPageTest.php && php tests/MultisiteSettingsTest.php && php tests/SettingsScopeTest.php && php tests/SettingsScopeStateTest.php && php tests/SettingsLockedWriteTest.php && php tests/NetworkScopeTest.php && php tests/SubsiteScopeTest.php && php tests/KeepWarmRewarmTest.php && php tests/KeepWarmRereadTest.php && php tests/SEOCacheTest.php && php tests/SEOTest.php && php tests/SEOCoreCanonicalTest.php && php tests/SEOCanonicalPluginTest.php && php tests/SEOProVersionTest.php && php tests/SEOHtmlAttributesTest.php && php tests/SeoSettingsMergeTest.php && php tests/LexiconOrderTest.php && php tests/LexiconEntitiesTest.php && php tests/ScriptConditionsTest.php && php tests/PageExclusionTest.php && php tests/PageExclusionMetaBoxTest.php && php tests/ConnectionInvalidationTest.php && php tests/AsyncScanTest.php && php tests/ContextScanSamplesTest.php && php tests/ClearCacheTest.php && php tests/OnboardingGateTest.php && php tests/CronKickTest.php && php tests/SetupPrefillTest.php && php tests/SaveStepResumeTest.php && php tests/SettingsResetTest.php && php tests/SwitcherSurfacesTest.php && php tests/SwitcherPlacementsContractTest.php && php tests/GutenbergSwitcherTest.php && php tests/SwitcherDefaultsTest.php && php tests/MigrationsTest.php && php tests/MigrationsHookTest.php && php tests/SharedStyleConditionsTest.php && php tests/EmDashSweepTest.php && php tests/UsageWordingSweepTest.php && php tests/ProEligibilityTest.php && php tests/ProInstallerMessageTest.php && php tests/TaglineTest.php && php tests/UpgradeTimelineTest.php && php tests/ProMenuFreshnessTest.php && php tests/ProUpdateTransientTest.php && php tests/AiProvidersSlugTest.php && php tests/TranslationContextTest.php && php tests/ForcedRetranslationTest.php && php tests/AdminScriptContextTest.php && php tests/IndexPagesTableTest.php && php tests/StoreBackfillResilienceTest.php && php tests/StoreConcurrentWorkTest.php && php tests/DashboardMetricsTest.php && php tests/DashboardMetricsSourceTest.php && php tests/LateLocaleTitleTest.php && php tests/MenusAiLabelTest.php && php tests/ConnectionResilienceTest.php && php tests/AddressReferenceTest.php && php tests/BrowserNotranslateTest.php && php tests/SetupRedirectNoticeTest.php && php tests/UrlSchemeTest.php && php tests/RebaseToHomeTest.php && php tests/DefaultLanguageMoveTest.php && php tests/LanguageSlugTest.php && php tests/SettingsTextTrimTest.php && php tests/IndexQueuePayloadTest.php && php tests/LexiconScopeTest.php && php tests/SwitcherSanitizeTest.php && php tests/SettingsRevisionTest.php && php tests/SettingsGroupsTest.php && php tests/ConnectChallengeTest.php && php tests/RetranslationEstimateTest.php && php tests/NoCreditsWordTest.php && php tests/SpineFirstTest.php && php tests/ScanProgressPayloadTest.php && php tests/RestNoCacheTest.php && php tests/PageCachePurgeTest.php && php tests/LexiconCandidatesEndpointTest.php && php tests/StyleVersionTest.php && php tests/SwitcherPositionEndpointTest.php && php tests/PluginCoexistenceTest.php && php tests/AdminNoticesTest.php && php tests/SwitcherPlacementTest.php && php tests/DecisionReferenceSweepTest.php && php tests/VersionConsistencyTest.php && php tests/VersionConsistencyPrereleaseTest.php && php tests/JobEventsPassThroughTest.php && php tests/UninstallBatchTest.php && php tests/UninstallEntryTest.php && php tests/UninstallWithProTest.php && php tests/TranslationSwitchRetirementTest.php && php tests/ProMenuActionTest.php && php tests/CachePluginNoticeTest.php && php tests/ProWelcomeTest.php && php tests/BundleContentsTest.php && php tests/AltTextGateTest.php && php tests/TextTranslationTest.php && php tests/EmailTemplateTest.php && php tests/TranslatedEmailsTest.php && php tests/SiteExportTest.php && php tests/ReadmeWordingTest.php && php tests/AltTextUpdateNoticeTest.php && php tests/UninstallDisconnectTest.php && php tests/UninstallCleanupTest.php && php tests/UninstallNetworkTest.php && php tests/DeactivationTest.php && php tests/AccessTest.php && php tests/AccessSurfacesTest.php && php tests/SupportReportTest.php && php tests/PlainTextTest.php && php tests/NotFoundTitleReadTest.php && php tests/AnchorMissesTest.php && php tests/AnswerEnginesDefaultTest.php && php tests/ServedTelemetryTest.php"
+    }
+}
