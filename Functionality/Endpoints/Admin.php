@@ -835,7 +835,7 @@ class Admin extends BaseApiEndpoints {
 	private const SWITCHER_ICON_STYLES    = [ 'rectangle', 'square', 'circle' ];
 	private const SWITCHER_REGIONAL_NAMES = [ 'full', 'short' ];
 	private const SWITCHER_BACKGROUND_STYLES = [ 'solid', 'transparent', 'glass' ];
-	private const SWITCHER_COLOR_KEYS     = [ 'text_color', 'background_color', 'border_color', 'highlight_text', 'highlight_bg' ];
+	private const SWITCHER_COLOR_KEYS     = [ 'text_color', 'background_color', 'border_color', 'highlight_text', 'highlight_bg', 'loading_border_color' ];
 	private const SWITCHER_PIXEL_KEYS     = [ 'offset', 'icon_size', 'padding' ];
 	private const PENDING_MESSAGE_MAX_LENGTH = 200;
 	private const SWITCHER_PIXEL_MAX   = 500;

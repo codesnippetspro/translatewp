@@ -260,6 +260,7 @@ class Management extends BaseApiEndpoints {
 				'border_color'     => '#E2E2E4',
 				'highlight_text'   => '#FFFFFF',
 				'highlight_bg'     => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
+				'loading_border_color' => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
 				'offset'           => 24,
 				'icon_size'        => 24,
 				'padding'          => 12,

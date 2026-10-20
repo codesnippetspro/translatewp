@@ -176,6 +176,17 @@ NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', '
 assert_true( '#abc' === ( $GLOBALS['wp_test_options_store']['blog_3_languages']['switcher']['border_color'] ?? null ), 'a chosen subsite overrides the border colour' );
 assert_true( '#0e3ecd80' === ( $GLOBALS['wp_test_options_store']['blog_2_languages']['switcher']['border_color'] ?? null ), 'another subsite keeps the inherited border colour' );
 
+// --- the loading border colour inherits and overrides like border_color ---
+assert_true( '#0e3ecd' === ( field( $appearance, 'languages.switcher.loading_border_color' )['value'] ?? null ), 'the loading border colour field starts from its default when nothing is stored' );
+NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', 'apply_to' => 'all', 'values' => [ 'languages.switcher.loading_border_color' => '#12345680' ] ] );
+assert_true( '#12345680' === ( SettingsScope::network_values()['translatewp_languages']['switcher']['loading_border_color'] ?? null ), 'a loading border colour with alpha becomes the network value' );
+foreach ( [ 'languages', 'blog_2_languages', 'blog_3_languages' ] as $key ) {
+	assert_true( '#12345680' === ( $GLOBALS['wp_test_options_store'][ $key ]['switcher']['loading_border_color'] ?? null ), $key . ' takes the loading border colour' );
+}
+NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', 'apply_to' => 'chosen', 'sites' => [ '3' ], 'values' => [ 'languages.switcher.loading_border_color' => '#654' ] ] );
+assert_true( '#654' === ( $GLOBALS['wp_test_options_store']['blog_3_languages']['switcher']['loading_border_color'] ?? null ), 'a chosen subsite overrides the loading border colour' );
+assert_true( '#12345680' === ( $GLOBALS['wp_test_options_store']['blog_2_languages']['switcher']['loading_border_color'] ?? null ), 'another subsite keeps the inherited loading border colour' );
+
 // --- network-only values and groups that span two options ---
 network_admin_setup();
 NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'uninstall', 'apply_to' => 'all', 'values' => [ 'advanced.delete_on_uninstall' => '1' ] ] );

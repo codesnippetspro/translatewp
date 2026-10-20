@@ -82,6 +82,16 @@ assert_same_value( Options::get( 'languages.switcher' )['border_color'] ?? null,
 $admin->update_data( switcher_update_request( array_merge( $stored, [ 'border_color' => '#abc' ] ) ) );
 assert_same_value( Options::get( 'languages.switcher' )['border_color'] ?? null, '#abc', 'A three digit border colour is stored' );
 
+// --- The loading border colour is sanitised like border_color: alpha kept, junk rejected ---
+wp_test_reset( [ 'languages' => [ 'switcher' => array_merge( $stored, [ 'loading_border_color' => '#0e3ecd' ] ) ] ] );
+$admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'loading_border_color' => '#0e3ecdAA' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['loading_border_color'] ?? null, '#0e3ecdAA', 'A loading border colour with alpha is stored' );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'loading_border_color' => 'not-a-colour' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['loading_border_color'] ?? null, '#0e3ecdAA', 'A loading border colour that is not hex leaves the stored one' );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'loading_border_color' => '#abc' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['loading_border_color'] ?? null, '#abc', 'A three digit loading border colour is stored' );
+
 // --- A type or icon style outside the known set is dropped ---
 wp_test_reset( [ 'languages' => [ 'switcher' => $stored ] ] );
 $admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
