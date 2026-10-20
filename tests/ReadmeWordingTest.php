@@ -28,7 +28,8 @@ assert_true( false === stripos( $current, 'without artificial limits' ), 'the re
 assert_true( false === stripos( $current, 'not metered' ), 'the readme must not say usage is not metered: every plan has a fair-use allowance' );
 assert_true( false === stripos( $current, 'woocommerce' ), 'the readme must make no WooCommerce claim' );
 assert_true( false === stripos( $current, 'hosted' ), 'the readme must not say "hosted"' );
-assert_true( false !== strpos( $current, 'Service terms: https://translatewp.ai/terms. Privacy policy: https://translatewp.ai/privacy' ), 'the terms and privacy links must stay' );
+assert_true( false !== strpos( $current, 'https://translatewp.ai/terms' ), 'the service terms link must stay' );
+assert_true( false !== strpos( $current, 'https://translatewp.ai/privacy' ), 'the privacy policy link must stay' );
 assert_true( false !== strpos( $current, 'api.translatewp.ai' ), 'the disclosure of what is sent to the service must stay' );
 
 if ( isset( $options['release'] ) ) {

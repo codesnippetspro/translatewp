@@ -12,7 +12,7 @@ function assert_true( bool $condition, string $message ): void {
 	}
 }
 
-const TAGLINE = 'AI translation for WordPress. Unlimited websites, unlimited languages, zero word-count billing.';
+const TAGLINE = 'Translate WordPress with AI, guide its wording with your Lexicon, and add a language switcher. Translations follow changes to your content.';
 
 $root   = dirname( __DIR__ );
 $plugin = (string) file_get_contents( $root . '/translatewp.php' );
