@@ -40,6 +40,8 @@ function hide_branding( bool $pro, ?bool $stored, ?bool $addon_active = null ): 
 
 assert_true( false === hide_branding( false, null ), 'Free shows the branding' );
 assert_true( false === hide_branding( false, true ), 'Free shows the branding whatever is stored' );
+// A non-entitled site cannot disable the branding by crafting the stored value, with or without the addon present.
+assert_true( false === hide_branding( false, true, true ), 'A crafted stored value with the addon active cannot turn branding off for a Free site' );
 assert_true( true === hide_branding( true, null ), 'Pro hides the branding by default' );
 assert_true( false === hide_branding( true, false ), 'Pro shows the branding when the site chose to' );
 assert_true( true === hide_branding( true, true ), 'Pro hides it when the site chose to' );

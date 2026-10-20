@@ -227,7 +227,9 @@ describe('native select', () => {
 	});
 });
 
-it('a Terrestrial site shows the by TranslateWP line and a locked Support TranslateWP switch that stays on', async () => {
+it('a Terrestrial site renders Support TranslateWP as a toggle switched on, disabled and non-mutating, keeping the blue row hover and the Terrestrial tooltip', async () => {
+	const { updateAdminData } = jest.requireMock('@/shared/api/admin') as { updateAdminData: jest.Mock };
+	updateAdminData.mockClear();
 	window.TranslateWP = { canManage: true, context: {} } as any;
 	editMode.set(true);
 	await act(async () => {
@@ -238,9 +240,38 @@ it('a Terrestrial site shows the by TranslateWP line and a locked Support Transl
 	expect(row).not.toBeNull();
 	expect(row.textContent).toContain('Support TranslateWP');
 	expect(row.textContent).not.toContain('Hide branding');
-	expect(row.disabled).toBe(true);
+	// An actual toggle, switched on.
+	expect(row.getAttribute('role')).toBe('switch');
+	const track = row.querySelector('.twp-admin-switch');
+	expect(track).not.toBeNull();
+	expect(track?.getAttribute('data-on')).toBe('true');
 	expect(row.getAttribute('aria-checked')).toBe('true');
-	expect(row.textContent).toContain('Pro');
+	// Disabled semantics without the disabled attribute, so the row wrapper keeps hover and tooltip.
+	expect(row.getAttribute('aria-disabled')).toBe('true');
+	expect(row.disabled).toBe(false);
+	expect(row.getAttribute('title')).toBe('Always on with Terrestrial. Pro lets you turn it off.');
+	expect(row.classList.contains('twp-admin-item')).toBe(true);
+	expect(row.classList.contains('twp-admin-locked')).toBe(false);
+	const css = container.querySelector('style')?.textContent ?? '';
+	const hoverRule = css.match(/\.twp-admin-item:hover, \.twp-admin-item:focus-visible[^{]*\{([^}]*)\}/)?.[1] ?? '';
+	expect(hoverRule).toMatch(/background-color/);
+	// The switch track carries its own outline and gets a legible treatment on the
+	// highlighted row, so it reads as a toggle in both the resting and hovered state.
+	const trackRule = css.match(/\.twp-admin-switch \{([^}]*)\}/)?.[1] ?? '';
+	expect(trackRule).toMatch(/border:/);
+	const switchHoverRule = css.match(/\.twp-admin-item:hover \.twp-admin-switch[^{]*\{([^}]*)\}/)?.[1] ?? '';
+	expect(switchHoverRule).toMatch(/rgba\(255, 255, 255/);
+	expect(css).toMatch(/\.twp-admin-item:focus-visible/);
+	// Clicking and keyboard activation do not mutate or call save.
+	await act(async () => { row.click(); });
+	expect(updateAdminData).not.toHaveBeenCalled();
+	expect(row.getAttribute('aria-checked')).toBe('true');
+	await act(async () => {
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+	});
+	expect(updateAdminData).not.toHaveBeenCalled();
+	expect(row.getAttribute('aria-checked')).toBe('true');
 });
 
 it('an Orbital site has Support TranslateWP off by default as the last row, below Switcher settings; turning it on shows the line and saves', async () => {
@@ -261,6 +292,26 @@ it('an Orbital site has Support TranslateWP off by default as the last row, belo
 	expect(updateAdminData).toHaveBeenCalledWith('languages.switcher', { hide_branding: false });
 	expect(container.querySelector('.twp-promo')).not.toBeNull();
 	expect(row.getAttribute('aria-checked')).toBe('true');
+});
+
+it('an eligible site gets an enabled toggle that reflects a saved support-on value and toggles it off through the save path', async () => {
+	const { updateAdminData } = jest.requireMock('@/shared/api/admin') as { updateAdminData: jest.Mock };
+	updateAdminData.mockClear();
+	updateAdminData.mockResolvedValue({ success: true });
+	window.TranslateWP = { canManage: true, context: { pro: { entitled: true } } } as any;
+	editMode.set(true);
+	await act(async () => {
+		root.render(<SwitcherView {...props} isOpen switcher={{ ...props.switcher, hide_branding: false }} />);
+	});
+	const row = container.querySelector('[data-twp-support-branding]') as HTMLButtonElement;
+	expect(row.disabled).toBe(false);
+	expect(row.getAttribute('aria-disabled')).toBeNull();
+	expect(row.getAttribute('aria-checked')).toBe('true');
+	expect(row.querySelector('.twp-admin-switch')?.getAttribute('data-on')).toBe('true');
+	expect(row.querySelector('.twp-admin-switch')?.getAttribute('data-locked')).toBeNull();
+	await act(async () => { row.click(); });
+	expect(updateAdminData).toHaveBeenCalledWith('languages.switcher', { hide_branding: true });
+	expect(row.getAttribute('aria-checked')).toBe('false');
 });
 
 describe('Switcher placement while Side tab is the selected type', () => {
