@@ -36,6 +36,7 @@ afterEach(async () =>
     await act(async () => { root?.unmount(); });
     root = null;
     document.body.innerHTML = '';
+    delete (window as { TranslateWP?: unknown }).TranslateWP;
 });
 
 describe('Settings, Advanced', () =>
@@ -49,8 +50,9 @@ describe('Settings, Advanced', () =>
         expect(container.querySelector('[role="status"]')?.textContent).toBe('Cache cleared. Each page translates again the next time someone opens it.');
     });
 
-    it('shows the other translation plugins advice as a notice', async () =>
+    it('shows the other translation plugins advice as a notice when one is detected', async () =>
     {
+        (window as unknown as { TranslateWP: unknown }).TranslateWP = { context: { other_translation_plugins: ['WPML'] } };
         const container = await render();
         const notice = container.querySelector('#other-translation-plugins [role="note"]') as HTMLElement;
         expect(notice).not.toBeNull();

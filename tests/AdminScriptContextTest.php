@@ -40,7 +40,7 @@ assert_true(
 	'Admin context localizer must merge into window.TranslateWP, got ' . $data
 );
 
-foreach ( [ 'home_url', 'site_id', 'nonce', 'remote_api_base', 'translation_base_url', 'export_url' ] as $context_key ) {
+foreach ( [ 'home_url', 'site_id', 'nonce', 'remote_api_base', 'translation_base_url', 'export_url', 'other_translation_plugins' ] as $context_key ) {
 	assert_true(
 		false !== strpos( $data, '"' . $context_key . '"' ),
 		'Admin context must localize ' . $context_key . ', got ' . $data
@@ -50,6 +50,13 @@ foreach ( [ 'home_url', 'site_id', 'nonce', 'remote_api_base', 'translation_base
 assert_true(
 	false !== strpos( $data, 'action=' . \TranslateWP\Components\SiteExport::ACTION ),
 	'Admin context must carry the address of the export action, got ' . $data
+);
+
+// With no other translation plugin loaded in the test process, the detection
+// list is empty, so the Advanced tab leaves the other-plugins section out.
+assert_true(
+	false !== strpos( $data, '"other_translation_plugins":[]' ),
+	'Admin context must carry an empty detection list when no other translation plugin is active, got ' . $data
 );
 
 assert_true(
