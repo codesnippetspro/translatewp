@@ -382,6 +382,48 @@ assert_true( 0 === lexicon_term_count(), 'A Pro proposal scan adds no terms by i
 $applied = $scanning->apply_scan_lexicon( make_request( 'POST' ) );
 assert_true( 2 === ( $applied['added'] ?? null ) && 2 === lexicon_term_count(), 'On Pro, apply-lexicon adds the proposed terms, got ' . wp_json_encode( $applied ) );
 
+// --- Formal is no longer a tone preset: a scan that still proposes it is offered as Neutral, with its own formality ---
+function scan_answer( string $tone, int $formality ): array {
+	return [
+		'response' => [ 'code' => 200 ],
+		'body'     => wp_json_encode(
+			[
+				'context'    => 'A site about translation',
+				'language'   => 'en',
+				'style'      => 'neutral',
+				'tone'       => $tone,
+				'formality'  => $formality,
+				'creativity' => 5,
+			]
+		),
+	];
+}
+
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$GLOBALS['wp_test_scan_response'] = scan_answer( 'formal', 8 );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$scanning->run_scan();
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'done' === ( $status['status'] ?? '' ) && 'neutral' === ( $status['tone'] ?? '' ) && 8 === ( $status['formality'] ?? null ), 'A scan proposing Formal must be offered as Neutral with its own formality, got ' . wp_json_encode( $status ) );
+assert_true( 'neutral' === \TranslateWP\Components\Options::get( 'translations.style.tone', '' ) && 8 === (int) \TranslateWP\Components\Options::get( 'translations.style.formality', 0 ), 'An applied scan proposing Formal must save Neutral and keep the scanned formality' );
+
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$GLOBALS['wp_test_scan_response'] = scan_answer( 'neutral', 5 );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$scanning->run_scan();
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'done' === ( $status['status'] ?? '' ) && 'neutral' === ( $status['tone'] ?? '' ), 'A scan answering Neutral is a valid result, got ' . wp_json_encode( $status ) );
+
+// A scan result stored before the change still reads as Neutral.
+wp_test_reset( scan_site_options() );
+\TranslateWP\Components\Options::update( 'translations.context.scan_status', 'done' );
+\TranslateWP\Components\Options::update( 'translations.context.scan_result', [ 'context' => 'Saved', 'style' => 'neutral', 'tone' => 'formal', 'formality' => 9, 'creativity' => 5, 'applied' => false ] );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'neutral' === ( $status['tone'] ?? '' ) && 9 === ( $status['formality'] ?? null ), 'A stored scan proposing Formal must read as Neutral with its own formality, got ' . wp_json_encode( $status ) );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "AsyncScanTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

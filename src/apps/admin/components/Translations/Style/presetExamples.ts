@@ -12,7 +12,7 @@ export interface PresetOption
 // The presets a Terrestrial site may use; the rest are Orbital.
 export const FREE_PRESETS: Record<PresetKind, string[]> = {
     style: ['neutral', 'marketing', 'technical'],
-    tone: ['friendly', 'professional', 'casual', 'formal'],
+    tone: ['neutral', 'friendly', 'professional', 'casual'],
 };
 
 // The preset lists live here once so the free control and the Pro panel (which
@@ -26,13 +26,20 @@ export const PRESET_OPTIONS: Record<PresetKind, PresetOption[]> = {
         { label: __('Medical', 'translate'), value: 'medical', pro: true },
     ],
     tone: [
+        { label: __('Neutral', 'translate'), value: 'neutral' },
         { label: __('Friendly', 'translate'), value: 'friendly' },
         { label: __('Professional', 'translate'), value: 'professional' },
         { label: __('Casual', 'translate'), value: 'casual' },
-        { label: __('Formal', 'translate'), value: 'formal' },
         { label: __('Playful', 'translate'), value: 'playful', pro: true },
         { label: __('Luxury', 'translate'), value: 'luxury', pro: true },
     ],
+};
+
+// No longer offered, but shown as the chosen preset on a site that saved it,
+// until the site picks another.
+export const RETIRED_PRESET_OPTIONS: Record<PresetKind, PresetOption[]> = {
+    style: [],
+    tone: [{ label: __('Formal', 'translate'), value: 'formal' }],
 };
 
 export const PRESET_LABELS: Record<PresetKind, string> = {
@@ -51,6 +58,7 @@ export const PRESET_EXAMPLES: Record<PresetKind, Record<string, string>> = {
         medical: __('Take one tablet twice daily with food and consult your doctor if symptoms persist.', 'translate'),
     },
     tone: {
+        neutral: __('Thank you for your message. We will look into it and get back to you.', 'translate'),
         friendly: __('Thanks for stopping by! We are happy to help with anything you need.', 'translate'),
         professional: __('Thank you for your enquiry. A member of our team will respond shortly.', 'translate'),
         casual: __('Hey, thanks for dropping in. Give us a shout if you need anything.', 'translate'),

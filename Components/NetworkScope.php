@@ -182,14 +182,7 @@ class NetworkScope {
 					__( 'Preset tone', 'translate' ),
 					'select',
 					'friendly',
-					[
-						'friendly'     => __( 'Friendly', 'translate' ),
-						'professional' => __( 'Professional', 'translate' ),
-						'casual'       => __( 'Casual', 'translate' ),
-						'playful'      => __( 'Playful', 'translate' ),
-						'luxury'       => __( 'Luxury', 'translate' ),
-						'formal'       => __( 'Formal', 'translate' ),
-					]
+					self::tone_options()
 				),
 				self::field( 'translations.style.formality', __( 'Formality', 'translate' ), 'range', 5 ),
 				self::field( 'translations.style.creativity', __( 'Precision vs fluency', 'translate' ), 'range', 5 ),
@@ -434,6 +427,26 @@ class NetworkScope {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Formal is no longer offered; a network default that saved it keeps it
+	 * listed, last, until the network admin picks another tone.
+	 */
+	private static function tone_options(): array {
+		$options = [
+			'neutral'      => __( 'Neutral', 'translate' ),
+			'friendly'     => __( 'Friendly', 'translate' ),
+			'professional' => __( 'Professional', 'translate' ),
+			'casual'       => __( 'Casual', 'translate' ),
+			'playful'      => __( 'Playful', 'translate' ),
+			'luxury'       => __( 'Luxury', 'translate' ),
+		];
+		if ( 'formal' === self::get_path( SettingsScope::network_values(), 'translations.style.tone' ) ) {
+			$options['formal'] = __( 'Formal', 'translate' );
+		}
+
+		return $options;
 	}
 
 	private static function field_value( array $field ) {

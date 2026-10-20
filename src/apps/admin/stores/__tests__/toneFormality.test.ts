@@ -33,6 +33,16 @@ describe('a tone preset moves the formality slider', () =>
         expect(style().formality).toBe(level);
     });
 
+    it('choosing Neutral sets the midpoint formality', () =>
+    {
+        loadStyle('casual', 2);
+
+        chooseTone('neutral');
+
+        expect(style().tone).toBe('neutral');
+        expect(style().formality).toBe(5);
+    });
+
     it.each(['playful', 'luxury'])('choosing %s leaves the slider where it is', (tone) =>
     {
         loadStyle('friendly', 6);

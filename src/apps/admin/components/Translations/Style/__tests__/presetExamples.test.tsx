@@ -45,7 +45,7 @@ describe('preset examples', () =>
         const style = Object.values(PRESET_EXAMPLES.style);
         const tone = Object.values(PRESET_EXAMPLES.tone);
         expect(Object.keys(PRESET_EXAMPLES.style).sort()).toEqual(['legal', 'marketing', 'medical', 'neutral', 'technical']);
-        expect(Object.keys(PRESET_EXAMPLES.tone).sort()).toEqual(['casual', 'formal', 'friendly', 'luxury', 'playful', 'professional']);
+        expect(Object.keys(PRESET_EXAMPLES.tone).sort()).toEqual(['casual', 'formal', 'friendly', 'luxury', 'neutral', 'playful', 'professional']);
         for (const sample of [...style, ...tone])
         {
             expect(sample.length).toBeGreaterThan(20);
@@ -70,14 +70,28 @@ describe('preset examples', () =>
         unmount();
     });
 
-    test('choosing Formal shows the Formal tone sample paragraph', () =>
+    test('Neutral is the first tone and Formal is no longer offered', () =>
     {
         const { container, unmount } = mount('tone', 'friendly');
+        const values = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(input => input.value);
 
-        choose(container, 'formal');
-
-        expect(container.textContent).toContain(PRESET_EXAMPLES.tone.formal);
+        expect(values).toEqual(['neutral', 'friendly', 'professional', 'casual']);
+        choose(container, 'neutral');
+        expect(container.textContent).toContain(PRESET_EXAMPLES.tone.neutral);
         expect(container.textContent).not.toContain(PRESET_EXAMPLES.tone.friendly);
+        unmount();
+    });
+
+    test('a site that saved Formal still sees it chosen, last, until it picks another tone', () =>
+    {
+        const { container, unmount } = mount('tone', 'formal');
+        const values = () => Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(input => input.value);
+
+        expect(values()).toEqual(['neutral', 'friendly', 'professional', 'casual', 'formal']);
+        expect(container.querySelector<HTMLInputElement>('input[value="formal"]')?.checked).toBe(true);
+        expect(container.textContent).toContain(PRESET_EXAMPLES.tone.formal);
+        choose(container, 'neutral');
+        expect(values()).toEqual(['neutral', 'friendly', 'professional', 'casual']);
         unmount();
     });
 

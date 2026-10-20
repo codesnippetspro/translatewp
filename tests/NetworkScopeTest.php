@@ -253,6 +253,14 @@ assert_true( '#000003' === ( $GLOBALS['wp_test_options_store']['blog_3_languages
 unset( $GLOBALS['wp_test_options_store']['languages']['switcher']['floating_position'] );
 assert_true( 'no-position' === NetworkScope::apply_post( [ 'op' => 'switcher_position' ] ), 'a main site without a dragged position has nothing to apply' );
 
+// --- Neutral is the first tone; Formal stays listed only for a network that saved it ---
+network_admin_setup();
+$tone_options = array_column( scope_group( NetworkScope::page_data(), 'style_tone' )['fields'], 'options', 'key' )['translations.style.tone'] ?? [];
+assert_true( [ 'neutral', 'friendly', 'professional', 'casual', 'playful', 'luxury' ] === array_keys( $tone_options ), 'Neutral leads the tone choices and Formal is not offered, got ' . wp_json_encode( array_keys( $tone_options ) ) );
+update_site_option( 'translatewp_network_settings_defaults', [ 'translatewp_translations' => [ 'style' => [ 'tone' => 'formal' ] ] ] );
+$tone_options = array_column( scope_group( NetworkScope::page_data(), 'style_tone' )['fields'], 'options', 'key' )['translations.style.tone'] ?? [];
+assert_true( 'formal' === array_key_last( $tone_options ), 'A network default of Formal stays listed, last, got ' . wp_json_encode( array_keys( $tone_options ) ) );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "NetworkScopeTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

@@ -23,7 +23,7 @@ class Scanning extends BaseApiEndpoints {
     // The front page plus the newest and the oldest SAMPLE_QUERY_SIZE items.
     public const SCAN_PAGE_CAP = 25;
     public const STYLE_PRESETS = [ 'marketing', 'neutral', 'medical', 'technical', 'legal' ];
-    public const TONE_PRESETS  = [ 'friendly', 'casual', 'professional', 'formal' ];
+    public const TONE_PRESETS  = [ 'neutral', 'friendly', 'casual', 'professional', 'formal' ];
     // A scan of a large site takes the model a while; the request waits for it.
     private const SCAN_TIMEOUT_SECONDS = 90;
     public const SCAN_HOOK = 'translatewp_context_scan_run';
@@ -193,7 +193,7 @@ class Scanning extends BaseApiEndpoints {
                 'context'    => (string) ( $result['context'] ?? '' ),
                 'language'   => (string) ( $result['language'] ?? '' ),
                 'style'      => (string) ( $result['style'] ?? '' ),
-                'tone'       => (string) ( $result['tone'] ?? '' ),
+                'tone'       => self::offered_tone( (string) ( $result['tone'] ?? '' ) ),
                 'formality'  => (int) ( $result['formality'] ?? 5 ),
                 'creativity' => (int) ( $result['creativity'] ?? 5 ),
                 // The scan proposes terms to Pro only; they land only
@@ -299,7 +299,7 @@ class Scanning extends BaseApiEndpoints {
 
         $scanned_context    = sanitize_textarea_field( (string) $scan_result['context'] );
         $scanned_style      = sanitize_text_field( (string) $scan_result['style'] );
-        $scanned_tone       = sanitize_text_field( (string) $scan_result['tone'] );
+        $scanned_tone       = self::offered_tone( sanitize_text_field( (string) $scan_result['tone'] ) );
         $scanned_formality  = (int) $scan_result['formality'];
         $scanned_creativity = (int) $scan_result['creativity'];
 
@@ -538,6 +538,14 @@ class Scanning extends BaseApiEndpoints {
         }
 
         return false;
+    }
+
+    /**
+     * Formal is no longer offered as a tone; a scan that proposes it is
+     * offered as Neutral, and the formality it proposes is kept apart.
+     */
+    public static function offered_tone( string $tone ): string {
+        return 'formal' === $tone ? 'neutral' : $tone;
     }
 
     private function is_valid_scan_result( $scan_result ): bool {
