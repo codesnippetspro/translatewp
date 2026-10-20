@@ -28,7 +28,8 @@ export const ConnectionStatusText = () =>
                         href={data.portalSiteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center rounded-full border border-translatewp-border bg-translatewp-selection px-2 py-0.5 text-xs text-translatewp-primary!"
+                        title={data.accountLabel}
+                        className="inline-flex min-h-8 max-w-full items-center truncate whitespace-nowrap rounded-full border border-twp-neutral-200 bg-twp-neutral-0 px-3.5 text-sm font-medium text-twp-neutral-800! no-underline! transition-colors hover:border-translatewp-primary/50 hover:bg-translatewp-primary/5 hover:text-translatewp-primary! focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-translatewp-primary"
                     >
                         {data.accountLabel}
                     </a>
@@ -37,7 +38,7 @@ export const ConnectionStatusText = () =>
             : null;
 
         return (
-            <p className="text-sm text-translatewp-neutral! m-0">
+            <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-translatewp-neutral!">
                 {label
                     ? <>{__('Connected as', 'translate')} {label}</>
                     : __('This site is connected to your TranslateWP account.', 'translate')}
