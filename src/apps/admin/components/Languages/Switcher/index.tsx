@@ -395,8 +395,8 @@ export const LanguagesSwitcher = () =>
                     {preview}
                     {switcherType}
                     {showSelectedLanguage}
-                    {sizes}
                     {languageNames}
+                    {sizes}
                 </>
             )}
             {translatingMessageSide === side && translatingMessage}
@@ -426,8 +426,8 @@ export const LanguagesSwitcher = () =>
                     {flagIconStyle}
                     {background}
                     {colors}
-                    {sizes}
                     {languageNames}
+                    {sizes}
                     {translatingMessage}
                     {support}
                 </div>
