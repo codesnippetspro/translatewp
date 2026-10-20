@@ -9,7 +9,9 @@ import { planLabel, type PlanEntitlement } from '@/shared/lib/plan/planLabel';
 const FRAME_PAID = 'border-twp-primary-500 bg-twp-primary-500/5';
 const FRAME_FREE = 'border-twp-neutral-200 bg-twp-neutral-0';
 
-const BASE = 'inline-flex h-8 items-center gap-2 rounded-full border px-3.5 text-sm no-underline transition-colors duration-300 ease-[var(--ease-twp)]';
+// shrink-0 + whitespace-nowrap: the chip keeps its width and its label stays on
+// one line, so a long plan name makes the row wrap the whole chip, never the text.
+const BASE = 'inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3.5 text-sm no-underline transition-colors duration-300 ease-[var(--ease-twp)]';
 
 interface PlanPillProps
 {
@@ -27,8 +29,8 @@ export const PlanPill = ({ entitlement, href, className = '' }: PlanPillProps) =
 
     const inner = (
         <>
-            <span className={labelTone}>{__('Current plan', 'translate')}</span>
-            <span className={`font-semibold ${planTone}`}>{planLabel(entitlement)}</span>
+            <span className={`whitespace-nowrap ${labelTone}`}>{__('Current plan', 'translate')}</span>
+            <span className={`whitespace-nowrap font-semibold ${planTone}`}>{planLabel(entitlement)}</span>
         </>
     );
 

@@ -62,6 +62,20 @@ describe('PlanPill', () =>
         act(() => root.unmount());
     });
 
+    it('never wraps its label: the chip and its spans are whitespace-nowrap, shrink-0', () =>
+    {
+        const { container, root } = render(<PlanPill entitlement={{ plan: 'pro', billingCycle: 'oneoff' }} />);
+        const pill = container.querySelector('[data-plan-chip]') as HTMLElement;
+
+        expect(pill.className).toContain('whitespace-nowrap');
+        expect(pill.className).toContain('shrink-0');
+        const spans = pill.querySelectorAll('span');
+        expect(spans.length).toBe(2);
+        spans.forEach(span => expect(span.className).toContain('whitespace-nowrap'));
+        expect(pill.textContent).toContain('Orbital lifetime');
+        act(() => root.unmount());
+    });
+
     it('renders a safe external link when an href is given', () =>
     {
         const { container, root } = render(<PlanPill entitlement={{ plan: 'pro' }} href="https://app.translatewp.ai/account" />);

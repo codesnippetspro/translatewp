@@ -32,4 +32,18 @@ describe('shared button styles', () =>
         expect(TWP_BUTTON_GHOST).toContain('bg-transparent');
         expect(TWP_BUTTON_GHOST).toContain('hover:bg-twp-neutral-100');
     });
+
+    it('no button lets its label wrap: every variant is whitespace-nowrap', () =>
+    {
+        for (const button of [TWP_BUTTON_PRIMARY, TWP_BUTTON_SECONDARY, TWP_BUTTON_PRIMARY_BLOCK, TWP_BUTTON_GHOST]) {
+            expect(button).toContain('whitespace-nowrap');
+        }
+    });
+
+    it('row buttons hold their width so the row wraps, not the label', () =>
+    {
+        for (const button of [TWP_BUTTON_PRIMARY, TWP_BUTTON_SECONDARY, TWP_BUTTON_GHOST]) {
+            expect(button).toContain('shrink-0');
+        }
+    });
 });

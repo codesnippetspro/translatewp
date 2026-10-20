@@ -25,7 +25,7 @@ export const Header = ({ status }: { status?: ConnectStatus } = {}) =>
     const proActive = isProActive(proState);
 
     return (
-        <div className="px-6 py-4 flex items-center justify-between bg-white">
+        <div className="px-6 py-4 flex flex-wrap items-center justify-between gap-2 bg-white">
             <h1 className="m-0! flex items-center leading-none" data-twp-brand>
                 <Lockup height={32} />
                 <span className="screen-reader-text">TranslateWP</span>
