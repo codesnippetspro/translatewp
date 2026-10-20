@@ -31,7 +31,7 @@ const setContext = (context: Record<string, unknown>) =>
     (window as unknown as { TranslateWP: unknown }).TranslateWP = { context };
 };
 
-describe('Settings, Advanced: export your data', () =>
+describe('Settings, Advanced: no export in v1', () =>
 {
     afterEach(async () =>
     {
@@ -40,24 +40,13 @@ describe('Settings, Advanced: export your data', () =>
         document.body.innerHTML = '';
     });
 
-    it('offers the export as one link to the export action, with no Pro lock', async () =>
+    it('does not show a Your data section or an export action even when an export address is present', async () =>
     {
         setContext({ export_url: EXPORT_URL });
         const container = await render();
-        const section = container.querySelector('[data-twp-export]') as HTMLElement;
-
-        const link = section.querySelector('a') as HTMLAnchorElement;
-        expect(link.getAttribute('href')).toBe(EXPORT_URL);
-        expect(link.textContent).toContain('Export your data');
-        expect(section.textContent).not.toMatch(/\bPro\b/);
-        expect(section.querySelector('[data-pro-lock], .twp-pro-badge')).toBeNull();
-    });
-
-    it('leaves the section out when the page has no export address', async () =>
-    {
-        setContext({});
-        const container = await render();
 
         expect(container.querySelector('[data-twp-export]')).toBeNull();
+        expect(container.textContent).not.toContain('Your data');
+        expect(container.textContent).not.toContain('Export your data');
     });
 });

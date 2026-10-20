@@ -23,7 +23,6 @@ export const SettingsAdvanced = () =>
     const deleteOnUninstall = useAdminSettingsStore(state => state.settings['advanced'].delete_on_uninstall);
     const setSetting = useAdminSettingsStore(state => state.setSetting);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
-    const exportUrl = window.TranslateWP?.context?.export_url ?? '';
     const otherTranslationPlugins = window.TranslateWP?.context?.other_translation_plugins ?? [];
 
     const clearCacheMutation = useMutation({
@@ -91,20 +90,6 @@ export const SettingsAdvanced = () =>
                 </p>
                 </div>
             </div>
-            )}
-
-            {exportUrl !== '' && (
-                <div className="flex flex-col gap-4" data-twp-export>
-                    <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Your data', 'translate')}</h3>
-                    <p className="text-sm text-translatewp-muted! m-0">
-                        {__('Download this site\'s translations as one file: every page address, language, source text and translation. The file opens in any spreadsheet and is yours to keep. Available on every plan.', 'translate')}
-                    </p>
-                    <div>
-                        <Button variant="secondary" href={exportUrl}>
-                            {__('Export your data', 'translate')}
-                        </Button>
-                    </div>
-                </div>
             )}
 
             <div className="flex flex-col gap-4">
