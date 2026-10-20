@@ -6,6 +6,8 @@ class SiteConnection {
 
 	public const RETURN_ROUTE_PATH       = 'translatewp-connect/return';
 	public const NETWORK_RETURN_ROUTE_PATH = 'translatewp-connect/network-return';
+	public const RETURN_ROUTE_NAME         = 'translatewp-connect-return';
+	public const NETWORK_RETURN_ROUTE_NAME = 'translatewp-connect-network-return';
 	private const RETURN_URL_PATH        = 'translatewp-connect/return/';
 	private const NETWORK_RETURN_URL_PATH = 'translatewp-connect/network-return/';
 	private const STATE_PATTERN          = '/^[A-Za-z0-9_-]{43}$/';
@@ -320,11 +322,22 @@ class SiteConnection {
 	}
 
 	public static function return_url(): string {
-		return home_url( '/' . ltrim( self::RETURN_URL_PATH, '/' ) );
+		return self::route_url( self::RETURN_URL_PATH, self::RETURN_ROUTE_NAME );
 	}
 
 	public static function network_return_url(): string {
-		return home_url( '/' . ltrim( self::NETWORK_RETURN_URL_PATH, '/' ) );
+		return self::route_url( self::NETWORK_RETURN_URL_PATH, self::NETWORK_RETURN_ROUTE_NAME );
+	}
+
+	/**
+	 * Plain permalinks have no rewrite rules, so the route answers only to its query variable there.
+	 */
+	private static function route_url( string $path, string $route_name ): string {
+		if ( '' === get_option( 'permalink_structure', null ) ) {
+			return add_query_arg( 'route_name', $route_name, home_url( '/' ) );
+		}
+
+		return home_url( '/' . ltrim( $path, '/' ) );
 	}
 
 	public static function return_request_path_from_url( string $return_url ): string {
