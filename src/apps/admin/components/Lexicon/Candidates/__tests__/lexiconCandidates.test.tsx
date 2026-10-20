@@ -137,6 +137,32 @@ describe('lexicon candidates', () =>
         expect(mockApi.actOnLexiconCandidate).toHaveBeenLastCalledWith(candidate().id, 'never');
     });
 
+    it('keeps review details collapsed while the term and decision actions stay available', async () =>
+    {
+        mockApi.getLexiconCandidates.mockResolvedValue({ candidates: [candidate()] });
+        const added: CandidatePrefill[] = [];
+        const container = await render(prefill => added.push(prefill));
+        const row = container.querySelector('[data-candidate]') as HTMLElement;
+        const details = row.querySelector('details') as HTMLDetailsElement;
+
+        expect(details).not.toBeNull();
+        expect(details.open).toBe(false);
+        expect(details.querySelector('summary')?.textContent).toBe('Details');
+        expect(details.textContent).toContain(candidate().reason);
+        expect(details.textContent).toContain('proposed Saal');
+        expect(details.textContent).toContain('The hall seats forty.');
+        expect(buttonNamed(row, 'Add to Lexicon')?.closest('details')).toBeNull();
+        expect(buttonNamed(row, 'Skip this scan')?.closest('details')).toBeNull();
+        expect(buttonNamed(row, 'Never suggest on this site')?.closest('details')).toBeNull();
+
+        details.open = true;
+        expect(details.querySelector('a')?.getAttribute('href')).toBe('https://example.test/rooms');
+        await act(async () => { buttonNamed(row, 'Add to Lexicon')?.click(); });
+        expect(added[0].term).toBe('Hall');
+        expect(mockApi.actOnLexiconCandidate).not.toHaveBeenCalled();
+        expect(mockApi.startLexiconScan).not.toHaveBeenCalled();
+    });
+
     it('dismissed suggestions can be shown and restored', async () =>
     {
         mockApi.getLexiconCandidates.mockImplementation(async (status?: string) => ({ candidates: status === 'never' ? [candidate({ status: 'never' })] : [] }));
