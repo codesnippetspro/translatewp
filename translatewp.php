@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TranslateWP
  * Plugin URI:        https://translatewp.ai/
- * Description:       AI translation for WordPress. Unlimited websites, unlimited languages, zero word-count billing.
+ * Description:       Translate WordPress with AI, guide its wording with your Lexicon, and add a language switcher. Translations follow changes to your content.
  * Version:           1.0.0
  * Author:            Code Snippets
  * Author URI:        https://codesnippets.pro/
