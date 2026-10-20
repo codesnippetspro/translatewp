@@ -3,6 +3,7 @@
 TranslateWP includes contributions made before this repository was established.
 This file preserves those credits alongside the contributors recorded in the
 current Git history. Earlier commit counts are not reproduced here.
+Historical attribution does not imply review or approval of the current release.
 
 ## Historical contributors
 
