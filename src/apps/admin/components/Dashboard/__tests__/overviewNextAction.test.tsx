@@ -195,6 +195,9 @@ describe('the Overview next action, resolved and rendered', () =>
             const link = linkTo(container, '#indexing/pending-pages');
             expect(link?.textContent).toBe('See the pages still pending');
             expect(linkTo(container, '#indexing')).toBeUndefined();
+            const inProgressBlock = state !== states[0];
+            expect(link?.classList.contains('self-end')).toBe(inProgressBlock);
+            if (inProgressBlock) expect(link?.parentElement?.classList.contains('flex-col')).toBe(true);
             document.body.innerHTML = '';
         }
     });
