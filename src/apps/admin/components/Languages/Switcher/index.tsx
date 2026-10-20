@@ -84,6 +84,10 @@ export const LanguagesSwitcher = () =>
     // stored value stands; leaving the field remounts it on the stored value.
     const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0 });
 
+    // While the loading-border picker is open the preview shows the loading ring,
+    // presentationally only: no translation starts and no loading flag is saved.
+    const [loadingPreview, setLoadingPreview] = useState(false);
+
     const snapBack = (key: MetricKey) => (event: { target: { value: string } }) =>
     {
         if (event.target.value === '' || !Number.isFinite(Number(event.target.value))) {
@@ -183,10 +187,9 @@ export const LanguagesSwitcher = () =>
                         <p className='text-sm text-translatewp-muted! m-0' data-background-color-note>{__('With Transparent, the background colour is used for the open language list, which stays frosted so it reads over the page.', 'translate')}</p>
                     )}
 
-                    <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0">
+                    <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-primary-colors>
                         <ColorPicker label={__('Text color', 'translate')} value={settings.text_color} onChange={(value) => updateSetting('text_color', value)} />
                         <ColorPicker label={__('Background color', 'translate')} value={settings.background_color} onChange={(value) => updateSetting('background_color', value)} />
-                        <ColorPicker label={__('Border color', 'translate')} value={settings.border_color} onChange={(value) => updateSetting('border_color', value)} />
                     </div>
                     <Unavailable when={native} reason={__('The native dropdown\'s list is drawn by the browser, which chooses its own highlight.', 'translate')}>
                         <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-highlight-colors>
@@ -194,6 +197,10 @@ export const LanguagesSwitcher = () =>
                             <ColorPicker label={__('Highlight background', 'translate')} value={settings.highlight_bg} onChange={(value) => updateSetting('highlight_bg', value)} />
                         </div>
                     </Unavailable>
+                    <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-border-colors>
+                        <ColorPicker label={__('Border color', 'translate')} value={settings.border_color} onChange={(value) => updateSetting('border_color', value)} />
+                        <ColorPicker label={__('Loading border color', 'translate')} value={settings.loading_border_color} onChange={(value) => updateSetting('loading_border_color', value)} onOpenChange={setLoadingPreview} />
+                    </div>
                 </div>
             </div>
             <SupportTranslatewp />
@@ -201,7 +208,7 @@ export const LanguagesSwitcher = () =>
             <div className="flex min-w-0 flex-col gap-6">
             <div className="sticky top-[var(--wp-admin--admin-bar--height,32px)] z-10" data-switcher-preview-column>
                 <div className="rounded-lg border border-translatewp-border bg-white/45 p-5 backdrop-blur-lg backdrop-saturate-150 [&_[data-twp-switcher-preview]]:bg-translatewp-neutral/5! [&_[data-twp-switcher-preview]]:border-translatewp-border/60! [&_[data-twp-switcher-preview]]:justify-center">
-                    <SwitcherPreview />
+                    <SwitcherPreview previewLoading={loadingPreview} />
                 </div>
             </div>
             <div className="rounded-lg border border-translatewp-border p-5">

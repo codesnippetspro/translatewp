@@ -303,6 +303,10 @@ class TranslateWP extends Script {
         ];
         $raw_languages = is_array( Options::get( 'languages' ) ) ? Options::get( 'languages' ) : [];
         $switcher      = array_merge( $default_switcher, is_array( $raw_languages['switcher'] ?? null ) ? $raw_languages['switcher'] : [] );
+        // A site saved before the loading border had its own colour keeps the highlight colour its ring already showed.
+        if ( empty( $switcher['loading_border_color'] ) ) {
+            $switcher['loading_border_color'] = $switcher['highlight_bg'];
+        }
         // Branding stays on a Terrestrial site; an Orbital site hides it unless it chose to show it.
         // The Orbital plan's choice, made in the free plugin: it holds with or without the Pro addon.
         $switcher['hide_branding'] = ! empty( ProEligibility::cached()['entitled'] ) && false !== ( $switcher['hide_branding'] ?? true );

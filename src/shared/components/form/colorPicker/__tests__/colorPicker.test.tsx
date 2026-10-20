@@ -86,6 +86,25 @@ describe('ColorPicker text field', () =>
         expect(document.querySelector('.components-color-picker')).not.toBeNull();
     });
 
+    it('reports the open state to onOpenChange when the swatch toggles', async () =>
+    {
+        const onOpenChange = jest.fn();
+        const container = await render(<ColorPicker label="Loading border color" value="#0E3ECD" onChange={jest.fn()} onOpenChange={onOpenChange} />);
+        const swatch = container.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement;
+
+        await act(async () =>
+        {
+            swatch.click();
+        });
+        expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+        await act(async () =>
+        {
+            swatch.click();
+        });
+        expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    });
+
     it('keeps a value that is not a hex colour out of the settings and shows the hint', async () =>
     {
         const onChange = jest.fn();

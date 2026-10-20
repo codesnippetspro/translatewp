@@ -20,9 +20,10 @@ export interface ColorPickerProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    onOpenChange?: (open: boolean) => void;
 }
 
-export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) =>
+export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPickerProps) =>
 {
     // The text field holds whatever is typed; only a hex colour reaches the settings.
     const [text, setText] = useState(value);
@@ -50,6 +51,7 @@ export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) =>
             <Dropdown
                 className="shrink-0"
                 popoverProps={COLOR_POPOVER_PROPS}
+                onToggle={onOpenChange}
                 renderToggle={({ isOpen, onToggle }) => (
                     <button
                         type="button"

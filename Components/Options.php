@@ -21,6 +21,7 @@ namespace TranslateWP\Components;
  *      - background_style: 'solid' | 'transparent' | 'glass' (default solid; glass is a frosted, see-through surface)
  *      - highlight_text: string
  *      - highlight_bg: string
+ *      - loading_border_color: string (hex, optional alpha; the ring shown while translating; defaults to highlight_bg)
  *      - offset: int (px corner inset; default 32)
  *      - icon_size: int (px closed-trigger icon; default 24)
  *      - padding: int (px padding around icon; default 12)

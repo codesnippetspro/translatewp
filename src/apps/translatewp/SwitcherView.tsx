@@ -28,6 +28,8 @@ export type SwitcherViewProps = {
     noticeAction?: { label: string; href: string };
     /** A language switch is in flight: the trigger shows it and reads as busy. */
     isTranslating?: boolean;
+    /** Settings preview only: shows the loading ring without any real translation or busy state. */
+    previewLoading?: boolean;
     /** inline: placed in the page; preview: the settings preview, drawn inside its box. */
     variant?: 'floating' | 'inline' | 'preview';
     onOpenChange: (open: boolean) => void;
@@ -49,6 +51,7 @@ export function SwitcherView({
     notice,
     noticeAction,
     isTranslating = false,
+    previewLoading = false,
     variant = 'floating',
     onOpenChange,
     onLanguageSelect,
@@ -146,6 +149,9 @@ export function SwitcherView({
     const surface = switcherSurface(switcher?.background_style, bgColor, textColor, borderColor);
     const highlightBg = switcher?.highlight_bg || '#0e3ecd';
     const highlightText = switcher?.highlight_text || '#FFFFFF';
+    // The loading ring kept the highlight colour before it had its own; an
+    // unset loading colour still reads as that highlight so a saved site looks unchanged.
+    const loadingBorder = switcher?.loading_border_color || highlightBg;
     const { insetPx, iconSizePx, triggerSizePx } = resolveSwitcherChrome(switcher ?? {});
     const paddingPx = (triggerSizePx - iconSizePx) / 2;
     // The flag and name trigger is wider than it is tall, so the edge clamps
@@ -472,7 +478,7 @@ export function SwitcherView({
                     inset: -3px !important;
                     padding: 2px !important;
                     border-radius: calc(0.5rem + 3px) !important;
-                    background: conic-gradient(from calc(var(--twp-sweep-start, 0deg) + var(--twp-sweep)), transparent 0deg, transparent 180deg, ${ highlightBg } 300deg, transparent 360deg) !important;
+                    background: conic-gradient(from calc(var(--twp-sweep-start, 0deg) + var(--twp-sweep)), transparent 0deg, transparent 180deg, ${ loadingBorder } 300deg, transparent 360deg) !important;
                     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
                     -webkit-mask-composite: xor !important;
                     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
@@ -491,7 +497,7 @@ export function SwitcherView({
                 @media (prefers-reduced-motion: reduce) {
                     .twp-trigger::after {
                         animation: none !important;
-                        background: ${ highlightBg } !important;
+                        background: ${ loadingBorder } !important;
                     }
                     .twp-trigger[data-translating="true"]::after {
                         opacity: 0.5 !important;
@@ -827,7 +833,7 @@ export function SwitcherView({
                         aria-expanded={isOpen}
                         aria-haspopup="true"
                         aria-busy={isTranslating || undefined}
-                        data-translating={isTranslating ? 'true' : undefined}
+                        data-translating={isTranslating || previewLoading ? 'true' : undefined}
                         title={triggerBindings?.title ?? (isTranslating ? __('Translating…', 'translate') : undefined)}
                         className="twp-trigger"
                         ref={triggerRef}

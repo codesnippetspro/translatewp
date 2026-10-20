@@ -37,6 +37,7 @@ export type PublicSwitcherSettings = {
     background_style?: SwitcherBackgroundStyle;
     highlight_text?: string;
     highlight_bg?: string;
+    loading_border_color?: string;
     offset?: number;
     icon_size?: number;
     padding?: number;

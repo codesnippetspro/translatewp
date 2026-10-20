@@ -40,6 +40,7 @@ export type SwitcherSettings = {
     background_style: SwitcherBackgroundStyle;
     highlight_text: string;
     highlight_bg: string;
+    loading_border_color: string;
     offset: number;
     icon_size: number;
     padding: number;
@@ -136,6 +137,7 @@ const DEFAULT_SETTINGS: AdminSettingsMap = {
         background_style: 'solid',
         highlight_text: '#FFFFFF',
         highlight_bg: '#0e3ecd',
+        loading_border_color: '#0e3ecd',
         offset: DEFAULT_SWITCHER_OFFSET,
         icon_size: DEFAULT_SWITCHER_ICON_SIZE,
         padding: DEFAULT_SWITCHER_PADDING,
@@ -261,6 +263,11 @@ const normalizeSwitcherSettings = (value: unknown): SwitcherSettings =>
         highlight_bg: typeof incomingSettings.highlight_bg === 'string'
             ? incomingSettings.highlight_bg
             : legacyHighlightColor ?? DEFAULT_SETTINGS['languages.switcher'].highlight_bg,
+        loading_border_color: typeof incomingSettings.loading_border_color === 'string'
+            ? incomingSettings.loading_border_color
+            : (typeof incomingSettings.highlight_bg === 'string'
+                ? incomingSettings.highlight_bg
+                : legacyHighlightColor ?? DEFAULT_SETTINGS['languages.switcher'].loading_border_color),
         offset: normalizeNonNegativeInt(incomingSettings.offset, DEFAULT_SWITCHER_OFFSET),
         icon_size: normalizeNonNegativeInt(incomingSettings.icon_size, DEFAULT_SWITCHER_ICON_SIZE),
         padding: normalizeNonNegativeInt(incomingSettings.padding, DEFAULT_SWITCHER_PADDING),

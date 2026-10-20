@@ -99,6 +99,7 @@ class NetworkScope {
 				),
 				self::field( 'languages.switcher.highlight_text', __( 'Highlight text color', 'translate' ), 'color', '#FFFFFF' ),
 				self::field( 'languages.switcher.highlight_bg', __( 'Highlight background', 'translate' ), 'color', '#0e3ecd' ),
+				self::field( 'languages.switcher.loading_border_color', __( 'Loading border color', 'translate' ), 'color', '#0e3ecd' ),
 				self::field( 'languages.switcher.icon_size', __( 'Switcher icon size', 'translate' ), 'number', 24 ),
 				self::field( 'languages.switcher.padding', __( 'Switcher padding', 'translate' ), 'number', 12 ),
 				self::field( 'languages.switcher.offset', __( 'Switcher offset', 'translate' ), 'number', 24 ),

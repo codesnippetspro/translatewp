@@ -20,7 +20,7 @@ const FALLBACK_LANGUAGES: LanguageItem[] = [{ locale: 'en_US', slug: 'en', activ
  * or colour change shows before it is saved. Choosing a language here does
  * nothing; it opens and closes like the real one.
  */
-export const SwitcherPreview = () =>
+export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: boolean } = {}) =>
 {
     const stored = useAdminSettingsStore(state => state.settings['languages.switcher']);
     const switcher = { ...stored, type: renderedSwitcherType(stored.type) };
@@ -49,6 +49,7 @@ export const SwitcherPreview = () =>
                     selectedLocale={selectedLocale}
                     isOpen={isOpen}
                     notice={null}
+                    previewLoading={previewLoading}
                     variant={switcher.type === 'side_tab' ? 'preview' : 'inline'}
                     onOpenChange={setIsOpen}
                     onLanguageSelect={() => setIsOpen(false)}
