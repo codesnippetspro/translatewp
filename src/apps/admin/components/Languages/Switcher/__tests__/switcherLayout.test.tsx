@@ -27,12 +27,18 @@ const useViewport = (desktop: boolean) =>
     })) as unknown as typeof window.matchMedia;
 };
 
-// jsdom has no layout, so each section reports a height by its name.
+const GAP = 24;
+
+// jsdom has no layout: a section reports its height by name, and a column the
+// height of its sections plus the gaps between them, as the browser lays it out.
 const useHeights = (heights: Record<string, number>) =>
 {
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement)
     {
-        const height = heights[this.dataset.switcherSection ?? ''] ?? 0;
+        const children = Array.from(this.children) as HTMLElement[];
+        const height = this.dataset.switcherColumn !== undefined
+            ? children.reduce((total, child) => total + (heights[child.dataset.switcherSection ?? ''] ?? 0), 0) + GAP * Math.max(0, children.length - 1)
+            : heights[this.dataset.switcherSection ?? ''] ?? 0;
         return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: height, width: 0, height, toJSON: () => ({}) } as DOMRect;
     };
 };
@@ -91,6 +97,18 @@ describe('Settings, Switcher: layout', () =>
         columns = Array.from(left.querySelector('[data-switcher-layout]')?.children ?? []);
         expect(left.querySelectorAll('[data-switcher-section="pending-message"]')).toHaveLength(1);
         expect(sections(columns[0])).toEqual(['where', 'flag-style', 'background', 'colors', 'pending-message']);
+    });
+
+    it('counts the gaps between boxes, so a column with more boxes is not mistaken for the emptier one', async () =>
+    {
+        useViewport(true);
+        // Sections alone: left 400, right 390. With the gaps: left 472, right 510.
+        useHeights({ where: 100, 'flag-style': 100, background: 100, colors: 100, preview: 65, type: 65, 'show-selected': 65, sizes: 65, 'language-names': 65, support: 65, 'pending-message': 50 });
+        const container = await render();
+        const columns = Array.from(container.querySelector('[data-switcher-layout]')?.children ?? []);
+
+        expect(sections(columns[0])).toEqual(['where', 'flag-style', 'background', 'colors', 'pending-message']);
+        expect(container.querySelectorAll('[data-switcher-section="pending-message"]')).toHaveLength(1);
     });
 
     it('reads as one column on a phone: where it shows, the sticky preview, the rest, Support TranslateWP last', async () =>

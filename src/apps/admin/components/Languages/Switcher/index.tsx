@@ -56,9 +56,6 @@ const useDesktop = (): boolean =>
     return desktop;
 };
 
-const stackedHeight = (column: HTMLElement | null): number =>
-    Array.from(column?.children ?? []).reduce((total, child) => total + child.getBoundingClientRect().height, 0);
-
 const FLAG_EXAMPLES = ['en-us', 'de', 'ja'];
 const flagExamples = (iconStyle: 'rectangle' | 'square' | 'circle') => <>{FLAG_EXAMPLES.map(locale => <span key={locale}>{getCountryFlagFromLocale(locale, { iconStyle })}</span>)}</>;
 
@@ -128,7 +125,8 @@ export const LanguagesSwitcher = () =>
         if (!desktop || translatingMessageSide !== null) {
             return;
         }
-        setTranslatingMessageSide(stackedHeight(rightColumn.current) < stackedHeight(leftColumn.current) ? 'right' : 'left');
+        const height = (column: HTMLElement | null) => column?.getBoundingClientRect().height ?? 0;
+        setTranslatingMessageSide(height(rightColumn.current) < height(leftColumn.current) ? 'right' : 'left');
     }, [desktop, translatingMessageSide]);
 
     const snapBack = (key: MetricKey) => (event: { target: { value: string } }) =>
@@ -384,7 +382,7 @@ export const LanguagesSwitcher = () =>
 
     const support = <SupportTranslatewp />;
     const column = (side: 'left' | 'right') => (
-        <div className="flex min-w-0 flex-col gap-6" ref={side === 'left' ? leftColumn : rightColumn}>
+        <div className="flex min-w-0 flex-col gap-6" ref={side === 'left' ? leftColumn : rightColumn} data-switcher-column={side}>
             {side === 'left' ? (
                 <>
                     {whereItShows}
