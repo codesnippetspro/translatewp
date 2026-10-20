@@ -57,11 +57,11 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
     const evidence = showAll ? candidate.evidence : candidate.evidence.slice(0, 2);
 
     return (
-        <li className="flex flex-col gap-3 py-4" data-candidate={candidate.id}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-1">
-                    <p className="m-0 text-base font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
-                    <p className="m-0 text-sm text-translatewp-muted">{candidate.reason}</p>
+        <li className="m-0 flex min-w-0 flex-col gap-1 py-2" data-candidate={candidate.id}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
+                    <p className="m-0 break-words text-sm font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
+                    <p className="m-0 truncate text-xs text-translatewp-muted" title={candidate.reason}>{candidate.reason}</p>
                 </div>
                 <span className="shrink-0 rounded-sm bg-translatewp-selection px-2 py-1 text-xs font-semibold text-translatewp-neutral" title={__('How sure the review is that this term needs your decision', 'translate')}>
                     {
@@ -69,62 +69,68 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                         sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
                     }
                 </span>
-            </div>
-
-            {Object.values(candidate.languages).every(language => !language.rendering && !language.proposed) ? (
-                <p className="m-0 text-sm text-translatewp-muted" data-not-seen>{__('Not seen in any translation yet.', 'translate')}</p>
-            ) : (
-            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
-                {Object.entries(candidate.languages).filter(([, language]) => language.rendering || language.proposed).map(([locale, language]) => (
-                    <li key={locale} data-language={locale} className="flex flex-wrap gap-2 text-translatewp-neutral">
-                        <span className="font-semibold">{getLanguageNameFromLocale(locale) ?? locale}:</span>
-                        <span>{language.rendering ?? __('not seen yet', 'translate')}</span>
-                        {language.proposed && <span className="text-translatewp-muted">{
-                            /* translators: %s: Proposed translation of the candidate term. */
-                            sprintf(__('proposed %s', 'translate'), language.proposed)
-                        }</span>}
-                        {!dismissed && language.status === 'never' && <span className="text-translatewp-muted">{__('Dismissed', 'translate')}</span>}
-                    </li>
-                ))}
-            </ul>
-            )}
-
-            {evidence.length > 0 && (
-                <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-translatewp-muted">
-                    {evidence.map((entry, index) => (
-                        <li key={`${entry.url}-${index}`}>
-                            <q>{entry.sentence}</q>
-                            {entry.url && <> <a href={entry.url} target="_blank" rel="noreferrer" className="text-translatewp-primary">{__('open page', 'translate')}</a></>}
-                        </li>
-                    ))}
-                    {candidate.evidence.length > 2 && !showAll && (
-                        <li><button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-sm text-translatewp-primary" onClick={() => setShowAll(true)}>{
-                            /* translators: %d: Total number of occurrences of the candidate term. */
-                            sprintf(__('Show all %d occurrences', 'translate'), candidate.evidence.length)
-                        }</button></li>
+                <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+                    {dismissed ? (
+                        <>
+                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
+                            {Object.keys(candidate.languages).length > 1 && dismissedLanguages(candidate).map(locale => (
+                                <Button key={locale} variant="tertiary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore', locale)}>{
+                                    /* translators: %s: Target language name. */
+                                    sprintf(__('Restore %s', 'translate'), getLanguageNameFromLocale(locale) ?? locale)
+                                }</Button>
+                            ))}
+                        </>
+                    ) : (
+                        <>
+                            <Button variant="primary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
+                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('skip')}>{__('Skip this scan', 'translate')}</Button>
+                            <Button variant="tertiary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('never')}>{__('Never suggest on this site', 'translate')}</Button>
+                        </>
                     )}
-                </ul>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-                {dismissed ? (
-                    <>
-                        <Button variant="secondary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
-                        {Object.keys(candidate.languages).length > 1 && dismissedLanguages(candidate).map(locale => (
-                            <Button key={locale} variant="tertiary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('restore', locale)}>{
-                                /* translators: %s: Target language name. */
-                                sprintf(__('Restore %s', 'translate'), getLanguageNameFromLocale(locale) ?? locale)
-                            }</Button>
-                        ))}
-                    </>
-                ) : (
-                    <>
-                        <Button variant="primary" className="rounded-sm! text-sm!" disabled={busy} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
-                        <Button variant="secondary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('skip')}>{__('Skip this scan', 'translate')}</Button>
-                        <Button variant="tertiary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('never')}>{__('Never suggest on this site', 'translate')}</Button>
-                    </>
-                )}
+                </div>
             </div>
+
+            <details className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                <summary className="w-fit cursor-pointer text-translatewp-primary">{__('Details', 'translate')}</summary>
+                <div className="flex flex-col gap-2 py-2">
+                    <p className="m-0 text-sm text-translatewp-muted">{candidate.reason}</p>
+                    {Object.values(candidate.languages).every(language => !language.rendering && !language.proposed) ? (
+                        <p className="m-0 text-sm text-translatewp-muted" data-not-seen>{__('Not seen in any translation yet.', 'translate')}</p>
+                    ) : (
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
+                        {Object.entries(candidate.languages).filter(([, language]) => language.rendering || language.proposed).map(([locale, language]) => (
+                            <li key={locale} data-language={locale} className="flex flex-wrap gap-2 text-translatewp-neutral">
+                                <span className="font-semibold">{getLanguageNameFromLocale(locale) ?? locale}:</span>
+                                <span>{language.rendering ?? __('not seen yet', 'translate')}</span>
+                                {language.proposed && <span className="text-translatewp-muted">{
+                                    /* translators: %s: Proposed translation of the candidate term. */
+                                    sprintf(__('proposed %s', 'translate'), language.proposed)
+                                }</span>}
+                                {!dismissed && language.status === 'never' && <span className="text-translatewp-muted">{__('Dismissed', 'translate')}</span>}
+                            </li>
+                        ))}
+                    </ul>
+                    )}
+
+                    {evidence.length > 0 && (
+                        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-translatewp-muted">
+                            {evidence.map((entry, index) => (
+                                <li key={`${entry.url}-${index}`}>
+                                    <q>{entry.sentence}</q>
+                                    {entry.url && <> <a href={entry.url} target="_blank" rel="noopener noreferrer" className="text-translatewp-primary">{__('open page', 'translate')}</a></>}
+                                </li>
+                            ))}
+                            {candidate.evidence.length > 2 && !showAll && (
+                                <li><button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-sm text-translatewp-primary" onClick={() => setShowAll(true)}>{
+                                    /* translators: %d: Total number of occurrences of the candidate term. */
+                                    sprintf(__('Show all %d occurrences', 'translate'), candidate.evidence.length)
+                                }</button></li>
+                            )}
+                        </ul>
+                    )}
+
+                </div>
+            </details>
         </li>
     );
 };
