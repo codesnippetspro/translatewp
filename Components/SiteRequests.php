@@ -264,10 +264,12 @@ class SiteRequests {
 	private static function decode_response( $response, string $path = '' ) {
 		if ( is_wp_error( $response ) ) {
 			ActionLog::record( sprintf( 'Service request %s failed: %s', $path, $response->get_error_code() ), 'error' );
+			// A transport failure carries no HTTP status: the service gave no
+			// answer, so callers can tell it apart from a gateway error.
 			return new \WP_Error(
 				'remote_error',
 				$response->get_error_message(),
-				[ 'status' => 502 ]
+				[]
 			);
 		}
 
