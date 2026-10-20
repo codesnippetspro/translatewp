@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-// TranslateWP in the toolbar: under the site name, on the site and in
-// wp-admin, and under each site in My Sites, opening the admin page the user has there;
-// no entry where the user has none.
+// TranslateWP in the toolbar: under the site name on the site only, and under
+// each site in My Sites, opening the admin page the user has there; no entry
+// where the user has none.
 
 use TranslateWP\Functionality\AdminBar;
 
@@ -118,13 +118,14 @@ assert_true( str_ends_with( (string) site_name_link(), 'page=translatewp' ), 'be
 
 fresh( ADMIN );
 $GLOBALS['wp_test_is_admin'] = true;
-assert_true( str_ends_with( (string) site_name_link(), 'page=translatewp' ), 'in wp-admin an administrator gets the same entry' );
+assert_true( null === site_name_link(), 'in wp-admin the site name menu has no TranslateWP entry, even for an administrator' );
 fresh( EDITOR );
 $GLOBALS['wp_test_is_admin'] = true;
 editor_holds( [ 'manage_lexicon' ] );
-assert_true( str_ends_with( (string) site_name_link(), 'page=translatewp-lexicon' ), 'in wp-admin a Lexicon-only user opens the Lexicon' );
-editor_holds( [ 'edit_translations', 'retranslate' ] );
-assert_true( null === site_name_link(), 'in wp-admin Edit and Retranslate alone still get no entry' );
+assert_true( null === site_name_link(), 'in wp-admin a Lexicon-only user gets no site name entry either' );
+fresh( EDITOR );
+editor_holds( [ 'manage_lexicon' ] );
+assert_true( str_ends_with( (string) site_name_link(), 'page=translatewp-lexicon' ), 'on the site the same Lexicon-only user keeps the entry' );
 
 fresh( ADMIN );
 $GLOBALS['wp_test_current_user']       = 0;
