@@ -16,7 +16,7 @@ export const OptionRow = ({ label, description, isSelected }: OptionRowProps) =>
             <span className={`${OPTION_ROW_LABEL_CLASS} ${isSelected ? 'text-translatewp-primary!' : 'text-translatewp-neutral!'}`}>
                 {label}
             </span>
-            <span className={OPTION_ROW_DESCRIPTION_CLASS}>{description}</span>
+            <span className={OPTION_ROW_DESCRIPTION_CLASS} data-option-description>{description}</span>
         </div>
 
         <Check data-option-check aria-hidden="true" className={`mt-0.5 w-4.5 h-4.5 shrink-0 text-translatewp-primary!${isSelected ? '' : ' invisible'}`} />

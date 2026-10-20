@@ -14,6 +14,28 @@ jest.mock('@tanstack/react-query', () => ({
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
+const originalMatchMedia = window.matchMedia;
+const originalRect = HTMLElement.prototype.getBoundingClientRect;
+
+const useViewport = (desktop: boolean) =>
+{
+    window.matchMedia = ((query: string) => ({
+        matches: desktop,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+};
+
+// jsdom has no layout, so each section reports a height by its name.
+const useHeights = (heights: Record<string, number>) =>
+{
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement)
+    {
+        const height = heights[this.dataset.switcherSection ?? ''] ?? 0;
+        return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: height, width: 0, height, toJSON: () => ({}) } as DOMRect;
+    };
+};
 
 const render = async (): Promise<HTMLElement> =>
 {
@@ -25,27 +47,63 @@ const render = async (): Promise<HTMLElement> =>
     return container;
 };
 
+const sections = (element: Element | null | undefined): string[] =>
+    Array.from(element?.querySelectorAll<HTMLElement>('[data-switcher-section]') ?? []).map(section => section.dataset.switcherSection ?? '');
+
 afterEach(async () =>
 {
     await act(async () => { root?.unmount(); });
     root = null;
     document.body.innerHTML = '';
+    window.matchMedia = originalMatchMedia;
+    HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
 
 describe('Settings, Switcher: layout', () =>
 {
-    it('puts where it shows first and the preview column second', async () =>
+    it('lays out two desktop columns in the owner\'s order with Support TranslateWP last', async () =>
     {
+        useViewport(true);
         const container = await render();
         const columns = Array.from(container.querySelector('[data-switcher-layout]')?.children ?? []);
 
         expect(columns).toHaveLength(2);
-        expect(columns[0].textContent).toContain('Where it shows');
-        expect(columns[1].querySelector('[data-switcher-preview-column]')).not.toBeNull();
-        expect(columns[1].querySelector('[data-switcher-sizes]')).not.toBeNull();
-        expect(columns[0].querySelector('[data-switcher-sizes]')).toBeNull();
-        expect(columns[1].querySelector('[data-switcher-background]')).not.toBeNull();
-        expect(columns[0].querySelector('[data-switcher-language-names]')).not.toBeNull();
+        expect(sections(columns[0]).filter(name => name !== 'pending-message'))
+            .toEqual(['where', 'flag-style', 'background', 'colors']);
+        expect(sections(columns[1]).filter(name => name !== 'pending-message'))
+            .toEqual(['preview', 'type', 'show-selected', 'sizes', 'language-names', 'support']);
+        expect(columns[1].querySelector('[data-switcher-preview-column]')?.className).toMatch(/\bsticky\b/);
+    });
+
+    it('shows the translating message once, at the end of the column with more free room', async () =>
+    {
+        useViewport(true);
+        useHeights({ where: 600, 'flag-style': 260, background: 230, colors: 320, 'language-names': 240, preview: 200, type: 200, 'show-selected': 210, sizes: 200, support: 100, 'pending-message': 160 });
+        const right = await render();
+        let columns = Array.from(right.querySelector('[data-switcher-layout]')?.children ?? []);
+        expect(right.querySelectorAll('[data-switcher-section="pending-message"]')).toHaveLength(1);
+        expect(sections(columns[1])).toEqual(['preview', 'type', 'show-selected', 'sizes', 'language-names', 'pending-message', 'support']);
+
+        await act(async () => { root?.unmount(); });
+        document.body.innerHTML = '';
+        useHeights({ where: 300, 'flag-style': 100, background: 100, colors: 200, 'language-names': 300, preview: 300, type: 300, 'show-selected': 300, sizes: 200, support: 100, 'pending-message': 150 });
+        const left = await render();
+        columns = Array.from(left.querySelector('[data-switcher-layout]')?.children ?? []);
+        expect(left.querySelectorAll('[data-switcher-section="pending-message"]')).toHaveLength(1);
+        expect(sections(columns[0])).toEqual(['where', 'flag-style', 'background', 'colors', 'pending-message']);
+    });
+
+    it('reads as one column on a phone: where it shows, the sticky preview, the rest, Support TranslateWP last', async () =>
+    {
+        useViewport(false);
+        const container = await render();
+        const layout = container.querySelector('[data-switcher-layout]');
+
+        expect(sections(layout)).toEqual([
+            'where', 'preview', 'type', 'show-selected', 'flag-style', 'background', 'colors', 'sizes', 'language-names', 'pending-message', 'support',
+        ]);
+        expect(Array.from(layout?.children ?? []).map(child => (child as HTMLElement).dataset.switcherSection)).toEqual(sections(layout));
+        expect(layout?.querySelector('[data-switcher-preview-column]')?.className).toMatch(/\bsticky\b/);
     });
 
     it('starts every option card at the top and keeps room for the check mark, so its text stays put when the choice changes', async () =>
@@ -61,6 +119,18 @@ describe('Settings, Switcher: layout', () =>
             const check = card.querySelector('[data-option-check]');
             expect(check).not.toBeNull();
             expect(check?.getAttribute('class') ?? '').toMatch(card.getAttribute('aria-checked') === 'true' ? /^(?!.*\binvisible\b)/ : /\binvisible\b/);
+        }
+    });
+
+    it('keeps the switcher type and show selected language descriptions about the same length', async () =>
+    {
+        const container = await render();
+        for (const group of ['switcher-type', 'show-selected-language'])
+        {
+            const lengths = Array.from(container.querySelectorAll(`[data-option-cards="${group}"] [role="radio"]`))
+                .map(card => (card.querySelector('[data-option-description]')?.textContent ?? '').length);
+            expect(lengths).toHaveLength(3);
+            expect(Math.max(...lengths) - Math.min(...lengths)).toBeLessThanOrEqual(24);
         }
     });
 });
