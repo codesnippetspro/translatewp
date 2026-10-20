@@ -33,6 +33,16 @@ if ( ! function_exists( 'add_action' ) ) {
 	}
 }
 
+if ( ! function_exists( 'get_option' ) ) {
+	function get_option( $name, $default = false ) {
+		if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
+			$key = substr( $name, strlen( 'translatewp_' ) );
+			return $GLOBALS['wp_test_options_store'][ $key ] ?? $default;
+		}
+		return $default;
+	}
+}
+
 if ( ! function_exists( 'wp_parse_url' ) ) {
 	function wp_parse_url( $url, $component = -1 ) {
 		return parse_url( $url, $component );
@@ -113,15 +123,6 @@ if ( ! function_exists( 'remove_submenu_page' ) ) {
 }
 if ( ! function_exists( 'esc_html__' ) ) {
 	function esc_html__( $text, $domain = 'default' ) { return $text; }
-}
-if ( ! function_exists( 'get_option' ) ) {
-	function get_option( $name, $default = false ) {
-		if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
-			$key = substr( $name, strlen( 'translatewp_' ) );
-			return $GLOBALS['wp_test_options_store'][ $key ] ?? $default;
-		}
-		return $default;
-	}
 }
 $menus = new TranslateWP\Functionality\Admin\Menus( 'translatewp', '0.0.0-test' );
 $menus->add_admin_menu();
