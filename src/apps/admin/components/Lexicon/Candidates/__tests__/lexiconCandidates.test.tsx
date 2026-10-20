@@ -163,6 +163,62 @@ describe('lexicon candidates', () =>
         expect(mockApi.startLexiconScan).not.toHaveBeenCalled();
     });
 
+    it('paginates ten suggestions and clamps after removing the last item on the last page', async () =>
+    {
+        let candidates = Array.from({ length: 11 }, (_, index) => candidate({
+            id: `candidate-${index}`, sourceText: `Term ${index + 1}`,
+        }));
+        mockApi.getLexiconCandidates.mockImplementation(async (status?: string) => ({
+            candidates: status === 'new' ? candidates : [],
+        }));
+        mockApi.actOnLexiconCandidate.mockImplementation(async (id: string) =>
+        {
+            candidates = candidates.filter(item => item.id !== id);
+            return { candidate: candidate({ status: 'skipped' }) };
+        });
+        const container = await render();
+
+        expect(container.querySelectorAll('[data-candidate]')).toHaveLength(10);
+        expect(container.textContent).toContain('Page 1 of 2 (11 suggestions)');
+        expect(buttonNamed(container, 'Previous')?.disabled).toBe(true);
+        await act(async () => { buttonNamed(container, 'Next')?.click(); });
+        expect(container.querySelectorAll('[data-candidate]')).toHaveLength(1);
+        expect(container.querySelector('[data-candidate]')?.textContent).toContain('Term 11');
+        expect(buttonNamed(container, 'Next')?.disabled).toBe(true);
+
+        await act(async () => { buttonNamed(container, 'Skip this scan')?.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(container.querySelectorAll('[data-candidate]')).toHaveLength(10);
+        expect(container.querySelector('[data-candidate="candidate-10"]')).toBeNull();
+        expect(mockApi.startLexiconScan).not.toHaveBeenCalled();
+    });
+
+    it('pages dismissed suggestions independently of active suggestions', async () =>
+    {
+        mockApi.getLexiconCandidates.mockImplementation(async (status?: string) => ({
+            candidates: Array.from({ length: 11 }, (_, index) => candidate({
+                id: `${status}-${index}`, sourceText: `${status} term ${index + 1}`,
+                status: status === 'never' ? 'never' : 'new',
+            })),
+        }));
+        const container = await render();
+        await act(async () => { buttonNamed(container, 'Next')?.click(); });
+        await act(async () => { buttonNamed(container, 'Dismissed suggestions')?.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+        expect(container.querySelectorAll('[data-candidate^="new-"]')).toHaveLength(1);
+        expect(container.querySelector('[data-candidate="new-10"]')).not.toBeNull();
+        expect(container.querySelectorAll('[data-candidate^="never-"]')).toHaveLength(10);
+        const nextButtons = [...container.querySelectorAll('button')].filter(b => b.textContent === 'Next');
+        await act(async () => { nextButtons[1].click(); });
+        expect(container.querySelectorAll('[data-candidate^="never-"]')).toHaveLength(1);
+        expect(container.querySelector('[data-candidate="never-10"]')).not.toBeNull();
+        expect(mockApi.actOnLexiconCandidate).not.toHaveBeenCalled();
+        expect(mockApi.startLexiconScan).not.toHaveBeenCalled();
+    });
+
     it('dismissed suggestions can be shown and restored', async () =>
     {
         mockApi.getLexiconCandidates.mockImplementation(async (status?: string) => ({ candidates: status === 'never' ? [candidate({ status: 'never' })] : [] }));
