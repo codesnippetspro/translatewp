@@ -19,6 +19,19 @@ const PORTAL = {
     error: '#F00',
 };
 
+// The portal's neutral surface scale (translatewp-app src/app/globals.css
+// @theme): the tones the ported chip and button surfaces sit on. The chrome
+// blue stays the product brand accent (translatewp-primary), not the portal's
+// second blue, so only the non-blue neutrals are mirrored here. White is
+// written short per the lint rule; the portal value #ffffff is the same.
+const PORTAL_TWP = {
+    'neutral-0': '#fff',
+    'neutral-100': '#f0f0ee',
+    'neutral-200': '#e4e4e4',
+    'neutral-500': '#6e6e6e',
+    'neutral-800': '#303030',
+};
+
 const theme = readFileSync(join(__dirname, '..', 'tailwind.css'), 'utf8');
 const switcher = readFileSync(join(__dirname, '..', '..', 'apps', 'translatewp', 'SwitcherView.tsx'), 'utf8');
 
@@ -27,6 +40,11 @@ describe('the plugin colour tokens', () =>
     it.each(Object.entries(PORTAL))('%s equals the portal value', (role, value) =>
     {
         expect(theme).toMatch(new RegExp(`--color-translatewp-${role}: ${value};`));
+    });
+
+    it.each(Object.entries(PORTAL_TWP))('twp %s equals the portal value', (role, value) =>
+    {
+        expect(theme).toMatch(new RegExp(`--color-twp-${role}: ${value};`));
     });
 
     it('the visitor switcher border is the border token value', () =>

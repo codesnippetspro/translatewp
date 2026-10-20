@@ -4,6 +4,7 @@ import { useEffect, useState } from '@wordpress/element';
 import { Lock, Check } from 'lucide-react';
 
 import { getConnectStatus, type ConnectStatus } from '@/shared/api/connect';
+import { TWP_BUTTON_PRIMARY_BLOCK, TWP_BUTTON_GHOST } from '@/shared/components/buttonStyles';
 import { ProInstallAction } from '@/shared/components/pro/ProInstallAction';
 import { getProState, proNextStep } from '@/shared/lib/pro/proState';
 import type { ProState } from '@/shared/lib/pro/proState';
@@ -115,7 +116,7 @@ export const ProModal = ({ isOpen, onClose, feature, state: liveState, onProRead
                                 step={nextStep}
                                 onDone={onProReady}
                                 label={nextStep === 'install' ? __('Install now', 'translate') : __('Activate now', 'translate')}
-                                className="inline-flex items-center justify-center w-full h-11 rounded-md border-0 text-sm font-semibold bg-translatewp-primary! text-white! cursor-pointer hover:opacity-90 disabled:opacity-60"
+                                className={`h-11 ${TWP_BUTTON_PRIMARY_BLOCK}`}
                             />
                         ) : (
                             <Button
@@ -123,7 +124,7 @@ export const ProModal = ({ isOpen, onClose, feature, state: liveState, onProRead
                                 href={state.upgradeUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="justify-center! h-11! rounded-md! text-sm! font-semibold! bg-translatewp-primary! border-translatewp-primary! text-white! hover:bg-translatewp-primary! hover:opacity-90"
+                                className={`h-11! ${TWP_BUTTON_PRIMARY_BLOCK}`}
                             >
                                 {__('Upgrade now', 'translate')}
                             </Button>
@@ -132,7 +133,7 @@ export const ProModal = ({ isOpen, onClose, feature, state: liveState, onProRead
                         <Button
                             variant="tertiary"
                             onClick={onClose}
-                            className="justify-center! h-9! rounded-md! text-sm! text-translatewp-muted!"
+                            className={`h-9! ${TWP_BUTTON_GHOST}`}
                         >
                             {__('Maybe later', 'translate')}
                         </Button>

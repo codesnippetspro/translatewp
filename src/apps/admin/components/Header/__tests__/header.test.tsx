@@ -94,7 +94,8 @@ describe('admin header upsell', () =>
 
         expect(container.textContent).not.toContain('Upgrade to PRO');
         const chip = container.querySelector('a[data-plan-chip]') as HTMLAnchorElement;
-        expect(chip.textContent).toBe("You're on the Orbital plan");
+        expect(chip.textContent).toContain('Current plan');
+        expect(chip.textContent).toContain('Orbital');
         expect(chip.href).toBe('https://portal.example.test/account');
         expect(chip.target).toBe('_blank');
         act(() => root.unmount());
@@ -138,7 +139,8 @@ describe('admin header upsell', () =>
 
         expect(container.textContent).not.toContain('Upgrade to PRO');
         const chip = container.querySelector('a[data-plan-chip]') as HTMLAnchorElement;
-        expect(chip.textContent).toBe("You're on the Orbital plan");
+        expect(chip.textContent).toContain('Current plan');
+        expect(chip.textContent).toContain('Orbital');
         expect(chip.href).toBe('https://app.translatewp.ai/');
         expect(chip.target).toBe('_blank');
         act(() => root.unmount());

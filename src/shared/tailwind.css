@@ -16,6 +16,14 @@
     --color-translatewp-cta: #2E7D57;
     --color-translatewp-cta-hover: #276B4A;
     --color-translatewp-error: #F00;
+
+    --color-twp-neutral-0: #fff;
+    --color-twp-neutral-100: #f0f0ee;
+    --color-twp-neutral-200: #e4e4e4;
+    --color-twp-neutral-500: #6e6e6e;
+    --color-twp-neutral-800: #303030;
+
+    --ease-twp: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .translatewp-app-root {
