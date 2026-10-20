@@ -277,27 +277,40 @@ export function SwitcherView({
                     height: 16px !important;
                     border-radius: 9999px !important;
                     background: #C9CDD3 !important;
+                    border: 1px solid rgba(0, 0, 0, 0.18) !important;
+                    box-sizing: border-box !important;
                     position: relative !important;
                     flex: none !important;
                 }
                 .twp-admin-switch[data-on="true"] {
                     background: ${ highlightBg } !important;
+                    border-color: ${ highlightBg } !important;
+                }
+                /* On the highlighted row the solid track colour matches the row
+                   background, so the track switches to a translucent-white fill with a
+                   white outline to keep reading as a toggle. */
+                .twp-admin-item:hover .twp-admin-switch,
+                .twp-admin-item:focus-visible .twp-admin-switch,
+                .twp-admin-item[aria-pressed="true"] .twp-admin-switch {
+                    background: rgba(255, 255, 255, 0.25) !important;
+                    border-color: rgba(255, 255, 255, 0.95) !important;
                 }
                 .twp-admin-item[aria-disabled="true"] {
                     cursor: not-allowed !important;
                 }
                 .twp-admin-switch[data-locked="true"] {
-                    opacity: 0.6 !important;
+                    opacity: 0.9 !important;
                 }
                 .twp-admin-switch::after {
                     content: '' !important;
                     position: absolute !important;
                     top: 2px !important;
                     left: 2px !important;
-                    width: 12px !important;
-                    height: 12px !important;
+                    width: 10px !important;
+                    height: 10px !important;
                     border-radius: 9999px !important;
                     background: #FFFFFF !important;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
                     transition: transform 120ms ease !important;
                 }
                 .twp-admin-switch[data-on="true"]::after {
@@ -584,7 +597,7 @@ export function SwitcherView({
                     opacity: 0.85 !important;
                     box-sizing: border-box !important;
                 }
-                .twp-admin-item:hover, .twp-admin-item[aria-pressed="true"] {
+                .twp-admin-item:hover, .twp-admin-item:focus-visible, .twp-admin-item[aria-pressed="true"] {
                     background-color: ${ highlightBg } !important;
                     color: ${ highlightText } !important;
                     opacity: 1 !important;

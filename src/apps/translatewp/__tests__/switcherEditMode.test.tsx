@@ -253,8 +253,15 @@ it('a Terrestrial site renders Support TranslateWP as a toggle switched on, disa
 	expect(row.classList.contains('twp-admin-item')).toBe(true);
 	expect(row.classList.contains('twp-admin-locked')).toBe(false);
 	const css = container.querySelector('style')?.textContent ?? '';
-	const hoverRule = css.match(/\.twp-admin-item:hover[^{]*\{([^}]*)\}/)?.[1] ?? '';
+	const hoverRule = css.match(/\.twp-admin-item:hover, \.twp-admin-item:focus-visible[^{]*\{([^}]*)\}/)?.[1] ?? '';
 	expect(hoverRule).toMatch(/background-color/);
+	// The switch track carries its own outline and gets a legible treatment on the
+	// highlighted row, so it reads as a toggle in both the resting and hovered state.
+	const trackRule = css.match(/\.twp-admin-switch \{([^}]*)\}/)?.[1] ?? '';
+	expect(trackRule).toMatch(/border:/);
+	const switchHoverRule = css.match(/\.twp-admin-item:hover \.twp-admin-switch[^{]*\{([^}]*)\}/)?.[1] ?? '';
+	expect(switchHoverRule).toMatch(/rgba\(255, 255, 255/);
+	expect(css).toMatch(/\.twp-admin-item:focus-visible/);
 	// Clicking and keyboard activation do not mutate or call save.
 	await act(async () => { row.click(); });
 	expect(updateAdminData).not.toHaveBeenCalled();
