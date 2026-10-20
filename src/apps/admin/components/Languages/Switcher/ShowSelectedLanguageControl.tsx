@@ -10,17 +10,17 @@ const TRIGGER_OPTIONS: { value: TriggerValue; label: string; description: string
     {
         value: 'name_flag',
         label: __('Flag and name', 'translate'),
-        description: __('Show the selected language flag and its name, for example English.', 'translate'),
+        description: __('The current language\'s flag and name, like English.', 'translate'),
     },
     {
         value: 'flag',
         label: __('Flag only', 'translate'),
-        description: __('Show only the selected language flag.', 'translate'),
+        description: __('Just the current language\'s flag, without its name.', 'translate'),
     },
     {
         value: 'icon',
         label: __('Icon only', 'translate'),
-        description: __('Show the TranslateWP icon.', 'translate'),
+        description: __('The TranslateWP icon, without a flag or name.', 'translate'),
     },
 ];
 

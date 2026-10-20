@@ -56,7 +56,7 @@ describe('Settings, Switcher: the Side tab', () =>
         expect(typeCards(container).map(card => card.textContent)).toEqual([
             expect.stringContaining('Dropdown'), expect.stringContaining('Native dropdown'), expect.stringContaining('Side tab'),
         ]);
-        expect(sideTabCard(container).textContent).toContain('Switchers you place in the page stay dropdowns.');
+        expect(sideTabCard(container).textContent).toContain('Placed switchers stay dropdowns.');
         await act(async () => { sideTabCard(container).click(); });
         expect(switcher().type).toBe('side_tab');
     });
