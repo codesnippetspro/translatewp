@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5d3a5b8ec4fd21ab6a0a05d019b2cfad",
+    "content-hash": "9e338ffdff87e3a6b2e6687799a3e85f",
     "packages": [
         {
             "name": "joanrodas/plubo-routes",
@@ -849,7 +849,7 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=7.4"
+        "php": ">=8.0"
     },
     "platform-dev": {},
     "plugin-api-version": "2.9.0"

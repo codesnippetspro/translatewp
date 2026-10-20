@@ -74,6 +74,8 @@ const prune = dir => {
 }
 prune(resolve(DEST, 'vendor'))
 rmSync(resolve(DEST, 'vendor', 'vendor'), { recursive: true, force: true })
+// Command-line entry points of dependencies (vendor/bin) are not used by the plugin.
+rmSync(resolve(DEST, 'vendor', 'bin'), { recursive: true, force: true })
 
 console.info('[bundle] creating zip')
 const zipName = `${SLUG}.${plugin.version}.zip`
