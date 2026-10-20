@@ -1,7 +1,7 @@
 @import "../../shared/tailwind.css";
 
-#wpcontent {
-    padding-left: 0;
+body.wp-admin #wpcontent {
+    padding-inline: 0;
 }
 
 #wpbody-content {
