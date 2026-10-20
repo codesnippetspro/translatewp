@@ -44,6 +44,8 @@ export interface TranslateWPContext {
     user_email?: string;
     /** The wp-admin action that downloads the site's export file. */
     export_url?: string;
+    /** Names of other translation plugins active on the current site. */
+    other_translation_plugins?: string[];
     settings_scope?: Record<string, boolean>;
     // A Pro inline placement saved for this page only; wins over the
     // site-wide inline_placement in the switcher settings while it exists.
