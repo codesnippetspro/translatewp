@@ -269,7 +269,10 @@ class SiteRequests {
 			return new \WP_Error(
 				'remote_error',
 				$response->get_error_message(),
-				[ 'status' => 502, 'transport' => true ]
+				[
+					'status'    => 502,
+					'transport' => true,
+				]
 			);
 		}
 
