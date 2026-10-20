@@ -2,6 +2,7 @@ import { __ } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 
 import { activatePro, installPro } from '@/shared/api/connect';
+import { TWP_BUTTON_PRIMARY } from '@/shared/components/buttonStyles';
 import { reloadPage } from '@/shared/lib/reloadPage';
 
 interface ProInstallActionProps
@@ -12,7 +13,7 @@ interface ProInstallActionProps
     onDone?: () => void;
 }
 
-const DEFAULT_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-sm border-0 bg-translatewp-primary! px-3 py-2 text-sm font-semibold text-white! cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-default';
+const DEFAULT_CLASS = TWP_BUTTON_PRIMARY;
 
 /**
  * One-click install or activation of TranslateWP Pro. Plain async with local
