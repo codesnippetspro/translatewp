@@ -186,6 +186,17 @@ SettingsScope::set_group_state( 'visitor_language', 'default' );
 $management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [ 'step' => 'translation', 'auto_translate' => false ] ) );
 assert_true( false === ( $GLOBALS['wp_test_options_store']['blog_2_translations']['settings']['auto_translate'] ?? null ), 'setup stores the subsite choice when the group is open' );
 
+subsite_admin();
+network_values( [ 'translatewp_translations' => [ 'style' => [ 'formality' => 4, 'creativity' => 7 ] ] ] );
+SettingsScope::set_group_state( 'style_tone', 'locked' );
+$management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [
+	'step'       => 'style-tone',
+	'formality'  => 1,
+	'creativity' => 9,
+] ) );
+assert_true( 4 === Options::get( 'translations.style.formality' ), 'Setup retains network-managed formality' );
+assert_true( 7 === Options::get( 'translations.style.creativity' ), 'Setup retains network-managed precision vs fluency' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "SettingsLockedWriteTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

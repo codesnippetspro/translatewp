@@ -53,6 +53,8 @@ Options::update( 'translations.context.text_context', 'marketing' );
 // Seed style and tone
 Options::update( 'translations.style.type', 'legal' );
 Options::update( 'translations.style.tone', 'professional' );
+Options::update( 'translations.style.formality', 3 );
+Options::update( 'translations.style.creativity', 8 );
 
 // Seed step
 Options::update( 'setup.step', 'context' );
@@ -68,6 +70,8 @@ assert_contains( '"autoTranslate":false', $output, 'setupData must carry saved a
 assert_contains( '"context":"marketing"', $output, 'setupData must carry saved context string' );
 assert_contains( '"style":"legal"', $output, 'setupData must carry the saved style so the wizard preselects it' );
 assert_contains( '"tone":"professional"', $output, 'setupData must carry the saved tone so the wizard preselects it' );
+assert_contains( '"formality":3', $output, 'Setup must restore the saved formality without remapping its tone' );
+assert_contains( '"creativity":8', $output, 'Setup must restore the saved precision vs fluency' );
 assert_true( 1 === preg_match( '#"homeUrl":"https:\\\\?/\\\\?/example\.com\\\\?/"#', $output ), 'setupData must carry the home address for the homepage preview' );
 assert_contains( '"step":"context"', $output, 'setupData must carry saved step string' );
 assert_contains( '"defaultLanguage":"es-es"', $output, 'setupData defaultLanguage must be the saved default entry, not the WP locale' );

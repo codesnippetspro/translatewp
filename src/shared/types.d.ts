@@ -95,6 +95,8 @@ declare global {
             proposedContext?: string;
             style?: string;
             tone?: string;
+            formality?: number;
+            creativity?: number;
             /** The site was read (spine extracted) at least once. */
             siteRead?: boolean;
             step?: string;

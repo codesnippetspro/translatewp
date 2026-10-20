@@ -16,8 +16,11 @@ export const isRestartedSetup = (): boolean => window.setupData?.step === 'done'
 export const contextChangedSinceLoad = (context: string): boolean =>
     context.trim() !== (window.setupData?.context ?? '').trim();
 
-export const styleChangedSinceLoad = (style: string, tone: string): boolean =>
-    style !== (window.setupData?.style ?? style) || tone !== (window.setupData?.tone ?? tone);
+export const styleChangedSinceLoad = (values: { style: string; tone: string; formality: number; creativity: number }): boolean =>
+    values.style !== (window.setupData?.style ?? values.style)
+    || values.tone !== (window.setupData?.tone ?? values.tone)
+    || values.formality !== (window.setupData?.formality ?? 5)
+    || values.creativity !== (window.setupData?.creativity ?? 5);
 
 const LEADS = {
     scan: () => __('Reading the site again replaces the context, style and tone, and the site is translated again with them.', 'translate'),
