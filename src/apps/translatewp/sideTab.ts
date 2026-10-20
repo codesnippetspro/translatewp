@@ -55,6 +55,15 @@ export function sideTabFromDrop(drop: SwitcherDrop & { device: 'desktop' | 'mobi
 export const sideTabHalf = (place: SideTabPosition): 'start' | 'end' => place.offset < 50 ? 'start' : 'end';
 
 const TAB_RADIUS = '0.5rem';
+// The translating ring (.twp-trigger::after) overhangs the trigger by RING_OVERHANG and is
+// RING_THICK wide; these mirror the base ring in SwitcherView so the docked edge drops the
+// same rendered geometry the page-facing edges keep.
+const RING_OVERHANG = '3px';
+const RING_THICK = '2px';
+const SIDES = ['top', 'right', 'bottom', 'left'] as const;
+const perSide = (docked: SideTabEdge, atDocked: string, atOthers: string): string =>
+	SIDES.map(side => (side === docked ? atDocked : atOthers)).join(' ');
+const ringRadius = (radius: string): string => radius.replaceAll(TAB_RADIUS, `calc(${TAB_RADIUS} + ${RING_OVERHANG})`);
 const GAP = '0.25rem';
 /** The least space a switcher's list keeps from the side of the screen. */
 export const LIST_SCREEN_MARGIN = '0.5rem';
@@ -125,8 +134,10 @@ const edgeRules = (edgeAttr: string, halfAttr: string, shareVar: string, tabWidt
 ${at}[${halfAttr}="${half}"] .twp-popover-stack { ${box(list.place.top, list.place.right, list.place.bottom, list.place.left)} margin: ${list.margin} !important; align-items: ${list.align} !important; }`;
 	}).join('\n');
 	const dot = DOT[edge];
+	const ring = `inset: ${perSide(edge, '0', `-${RING_OVERHANG}`)} !important; padding: ${perSide(edge, '0', RING_THICK)} !important; border-radius: ${ringRadius(tab.radius)} !important;`;
 	return `${at} { --twp-p: calc(var(${shareVar}) / 100); ${box(tab.place.top, tab.place.right, tab.place.bottom, tab.place.left)} transform: ${tab.transform} !important; }
-${at} .twp-trigger, ${at} .twp-trigger[data-drag-handle="true"] { border-radius: ${tab.radius} !important; }
+${at} .twp-trigger, ${at} .twp-trigger[data-drag-handle="true"] { border-radius: ${tab.radius} !important; border-${edge}-width: 0 !important; }
+${at} .twp-trigger::after { ${ring} }
 ${at} .twp-dropdown { animation: twp-tab-slide-${edge} 150ms ease-out !important; }
 ${at} .twp-drag-dot { ${box(dot.top, dot.right, dot.bottom, dot.left)} }
 ${lists}`;

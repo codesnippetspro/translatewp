@@ -69,3 +69,27 @@ describe('side tab drag handle', () => {
 		expect(sideTabCss(120)).toContain(`.twp-container.twp-side-tab[data-edge="${edge}"] .twp-drag-dot { ${box} }`);
 	});
 });
+
+describe('side tab docked edge', () => {
+	it.each([
+		['bottom', '0.5rem 0.5rem 0 0', 'border-bottom-width'],
+		['top', '0 0 0.5rem 0.5rem', 'border-top-width'],
+		['left', '0 0.5rem 0.5rem 0', 'border-left-width'],
+		['right', '0.5rem 0 0 0.5rem', 'border-right-width'],
+	])('rounds only the page-facing corners and drops the border flush with the %s edge', (edge, radius, borderSide) => {
+		expect(sideTabCss(120)).toContain(`.twp-container.twp-side-tab[data-edge="${edge}"] .twp-trigger, .twp-container.twp-side-tab[data-edge="${edge}"] .twp-trigger[data-drag-handle="true"] { border-radius: ${radius} !important; ${borderSide}: 0 !important; }`);
+	});
+
+	it.each([
+		['bottom', '-3px -3px 0 -3px', '2px 2px 0 2px', 'calc(0.5rem + 3px) calc(0.5rem + 3px) 0 0'],
+		['top', '0 -3px -3px -3px', '0 2px 2px 2px', '0 0 calc(0.5rem + 3px) calc(0.5rem + 3px)'],
+		['left', '-3px -3px -3px 0', '2px 2px 2px 0', '0 calc(0.5rem + 3px) calc(0.5rem + 3px) 0'],
+		['right', '-3px 0 -3px -3px', '2px 0 2px 2px', 'calc(0.5rem + 3px) 0 0 calc(0.5rem + 3px)'],
+	])('traces the translating ring to the %s docked corners with no segment on the docked edge', (edge, inset, pad, radius) => {
+		expect(sideTabCss(120)).toContain(`.twp-container.twp-side-tab[data-edge="${edge}"] .twp-trigger::after { inset: ${inset} !important; padding: ${pad} !important; border-radius: ${radius} !important; }`);
+	});
+
+	it('applies the same docked-edge geometry on a phone-width screen', () => {
+		expect(sideTabCss(120)).toContain('.twp-container.twp-side-tab[data-mobile-edge="bottom"] .twp-trigger::after { inset: -3px -3px 0 -3px !important; padding: 2px 2px 0 2px !important; border-radius: calc(0.5rem + 3px) calc(0.5rem + 3px) 0 0 !important; }');
+	});
+});
