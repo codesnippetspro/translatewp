@@ -128,6 +128,16 @@ assert_true( 'context_scan_unreachable' === ( $status['reason'] ?? '' ), 'A tran
 $log_text = \TranslateWP\Components\ActionLog::text();
 assert_true( false !== strpos( $log_text, 'context_scan_unreachable' ), 'The action log must carry the failure class, got ' . $log_text );
 
+// --- SiteRequests keeps a transport error as 502 and marks it as no-answer ---
+wp_test_reset( scan_site_options() );
+$GLOBALS['wp_test_scan_response'] = new WP_Error( 'http_request_failed', 'dns failure' );
+$transport_error = \TranslateWP\Components\SiteRequests::post( '/v1/scanning/context', [], 5 );
+$GLOBALS['wp_test_scan_response'] = null;
+assert_true( $transport_error instanceof WP_Error, 'A transport failure must surface as a WP_Error' );
+$transport_data = $transport_error instanceof WP_Error ? (array) $transport_error->get_error_data() : [];
+assert_true( 502 === (int) ( $transport_data['status'] ?? 0 ), 'A transport error must keep HTTP 502 for callers that answer it, got ' . wp_json_encode( $transport_data ) );
+assert_true( true === ( $transport_data['transport'] ?? false ), 'A transport error must carry the no-answer marker' );
+
 // --- Classification by HTTP status and the API failure code ---
 function scan_fail_reason_for( $response ): string {
 	wp_test_reset( scan_site_options() );

@@ -351,7 +351,7 @@ class Scanning extends BaseApiEndpoints {
         $payload = is_array( $data['payload'] ?? null ) ? $data['payload'] : [];
         $code    = is_string( $payload['code'] ?? null ) ? $payload['code'] : '';
 
-        if ( 0 === $status ) {
+        if ( ! empty( $data['transport'] ) || 0 === $status ) {
             $reason = 'context_scan_unreachable';
         } elseif ( 'scan_timeout' === $code || 504 === $status ) {
             $reason = 'context_scan_timeout';
