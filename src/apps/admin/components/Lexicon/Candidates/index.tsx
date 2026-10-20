@@ -62,7 +62,7 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
     return (
         <li className="m-0! flex min-w-0 flex-col gap-1 py-2" data-candidate={candidate.id}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
+                <div className="flex min-w-0 flex-1 basis-40 flex-col gap-1">
                     <p className="m-0 break-words text-sm font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
                     <p className="m-0 truncate text-xs text-translatewp-muted" title={candidate.reason}>{candidate.reason}</p>
                 </div>
