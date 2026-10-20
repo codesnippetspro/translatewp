@@ -43,8 +43,8 @@ describe('PlanPill', () =>
         const pill = container.querySelector('[data-plan-chip]') as HTMLElement;
 
         expect(pill.tagName).toBe('SPAN');
-        expect(pill.className).toContain('border-twp-primary-500');
-        expect(pill.className).toContain('bg-twp-primary-500/5');
+        expect(pill.className).toContain('border-translatewp-primary');
+        expect(pill.className).toContain('bg-translatewp-primary/5');
         expect(pill.className).toContain('rounded-full');
         expect(pill.textContent).toContain('Current plan');
         expect(pill.textContent).toContain('Orbital');

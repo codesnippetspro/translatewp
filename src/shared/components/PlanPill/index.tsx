@@ -6,7 +6,7 @@ import { planLabel, type PlanEntitlement } from '@/shared/lib/plan/planLabel';
 // rounded chip with a muted "Current plan" label and the bold plan name. A
 // paid plan is framed in the primary tone; the free plan stays neutral. When
 // an href is given the chip is a link to the portal account.
-const FRAME_PAID = 'border-twp-primary-500 bg-twp-primary-500/5';
+const FRAME_PAID = 'border-translatewp-primary bg-translatewp-primary/5';
 const FRAME_FREE = 'border-twp-neutral-200 bg-twp-neutral-0';
 
 // shrink-0 + whitespace-nowrap: the chip keeps its width and its label stays on
@@ -24,8 +24,8 @@ export const PlanPill = ({ entitlement, href, className = '' }: PlanPillProps) =
 {
     const paid = entitlement.plan !== 'free';
     const frame = paid ? FRAME_PAID : FRAME_FREE;
-    const labelTone = paid ? 'text-twp-primary-500!' : 'text-twp-neutral-500!';
-    const planTone = paid ? 'text-twp-primary-500!' : 'text-twp-neutral-800!';
+    const labelTone = paid ? 'text-translatewp-primary!' : 'text-twp-neutral-500!';
+    const planTone = paid ? 'text-translatewp-primary!' : 'text-twp-neutral-800!';
 
     const inner = (
         <>
@@ -38,7 +38,7 @@ export const PlanPill = ({ entitlement, href, className = '' }: PlanPillProps) =
 
     if (href) {
         return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className={`${classes} hover:bg-twp-primary-500/10`} data-plan-chip>
+            <a href={href} target="_blank" rel="noopener noreferrer" className={`${classes} hover:bg-translatewp-primary/10`} data-plan-chip>
                 {inner}
             </a>
         );
