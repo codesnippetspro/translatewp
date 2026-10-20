@@ -334,6 +334,11 @@ class Admin extends BaseApiEndpoints {
             $existing = Options::get( 'languages.seo', [] );
             $patch    = $this->sanitize_languages_seo_patch( is_array( $data ) ? $data : [] );
             $data     = $this->merge_associative( is_array( $existing ) ? $existing : [], $patch );
+            // The submitted bot list is the whole list: a deep merge would keep
+            // a removed crawler, so a save carrying bots replaces the stored map.
+            if ( isset( $patch['ai_crawlers']['bots'] ) ) {
+                $data['ai_crawlers']['bots'] = $patch['ai_crawlers']['bots'];
+            }
         }
 
         if ( 'languages.switcher' === $option ) {
@@ -1028,13 +1033,31 @@ class Admin extends BaseApiEndpoints {
 		if ( array_key_exists( 'bots', $ai_crawlers ) && is_array( $ai_crawlers['bots'] ) ) {
 			$configured_locales = $this->configured_locales();
 			$sanitized_bots     = [];
+			$listed_by_lower    = [];
+			foreach ( self::SEO_ALLOWED_BOTS as $listed_bot ) {
+				$listed_by_lower[ strtolower( $listed_bot ) ] = $listed_bot;
+			}
+			$seen = [];
 
 			foreach ( $ai_crawlers['bots'] as $bot_name => $bot_settings ) {
-				$bot_name = sanitize_text_field( (string) $bot_name );
-
-				if ( ! in_array( $bot_name, self::SEO_ALLOWED_BOTS, true ) || ! is_array( $bot_settings ) ) {
+				if ( ! is_array( $bot_settings ) ) {
 					continue;
 				}
+
+				$bot_name = self::sanitize_bot_name( (string) $bot_name );
+				if ( '' === $bot_name ) {
+					continue;
+				}
+
+				// A name that matches a listed crawler, in any case, is that
+				// listed crawler; the first entry for a name wins so a
+				// duplicate never adds a second row.
+				$lower    = strtolower( $bot_name );
+				$bot_name = $listed_by_lower[ $lower ] ?? $bot_name;
+				if ( isset( $seen[ $lower ] ) ) {
+					continue;
+				}
+				$seen[ $lower ] = true;
 
 				$default_decision = self::SEO_BOT_DEFAULT_DECISIONS[0];
 				if ( in_array( $bot_settings['default'] ?? null, self::SEO_BOT_DEFAULT_DECISIONS, true ) ) {
@@ -1068,6 +1091,22 @@ class Admin extends BaseApiEndpoints {
 		}
 
 		return $patch;
+	}
+
+	/**
+	 * A crawler name, listed or site-supplied, that is safe to store and to
+	 * write into robots.txt as `User-agent: <name>`. Returns '' to refuse an
+	 * empty, over-long value, or one carrying a control character, line break,
+	 * comment marker or a leading colon, any of which could add a robots.txt
+	 * line or break the field.
+	 */
+	private static function sanitize_bot_name( string $name ): string {
+		$name = trim( $name );
+		if ( 1 !== preg_match( '/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/', $name ) ) {
+			return '';
+		}
+
+		return $name;
 	}
 
 	/** The model profile per translation language, as the fingerprint keys on it. */

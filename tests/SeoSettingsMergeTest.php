@@ -128,7 +128,11 @@ $admin->update_data(
 							'es-es' => 'not-a-real-decision',
 						],
 					],
-					'UnknownBot123' => [
+					'CustomBot123'        => [
+						'default'   => 'deny',
+						'languages' => [],
+					],
+					"Bad\nName"           => [
 						'default'   => 'deny',
 						'languages' => [],
 					],
@@ -139,7 +143,8 @@ $admin->update_data(
 );
 
 $stored_bots = Options::get( 'languages.seo.ai_crawlers.bots', [] );
-assert_true( ! isset( $stored_bots['UnknownBot123'] ), 'Unknown bot names must be stripped' );
+assert_true( isset( $stored_bots['CustomBot123'] ), 'A valid site-supplied crawler name must be kept as a custom crawler' );
+assert_true( ! isset( $stored_bots["Bad\nName"] ), 'A crawler name with a line break must be stripped' );
 assert_true( isset( $stored_bots['GPTBot'] ), 'Allowed bot names must be kept' );
 assert_true(
 	'allow' === ( $stored_bots['GPTBot']['default'] ?? null ),
