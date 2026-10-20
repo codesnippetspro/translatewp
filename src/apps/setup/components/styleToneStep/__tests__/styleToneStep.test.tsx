@@ -34,6 +34,36 @@ afterEach(async () =>
 
 describe('the style and tone step', () =>
 {
+    it('shows the stored slider values and lets the owner adjust them', async () =>
+    {
+        useSetupStore.setState({ formality: 8, creativity: 2 });
+        const container = await render();
+        const formality = container.querySelector('input[aria-label="Formality"]') as HTMLInputElement;
+        const creativity = container.querySelector('input[aria-label="Precision vs fluency"]') as HTMLInputElement;
+
+        expect(formality).not.toBeNull();
+        expect(creativity).not.toBeNull();
+        expect(formality.value).toBe('8');
+        expect(creativity.value).toBe('2');
+        await act(async () =>
+        {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(formality, '6');
+            formality.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        expect(useSetupStore.getState().formality).toBe(6);
+    });
+
+    it('maps a new tone to its level while preserving a later manual adjustment', async () =>
+    {
+        useSetupStore.setState({ tone: 'friendly', formality: 6 });
+        const container = await render();
+        const formal = container.querySelector('[role="radiogroup"] input[value="formal"]') as HTMLInputElement;
+        await act(async () => { formal.click(); });
+        expect(useSetupStore.getState().formality).toBe(9);
+        await act(async () => { useSetupStore.getState().setFormality(3); });
+        expect(useSetupStore.getState().formality).toBe(3);
+    });
+
     it('preselects the style and tone the wizard holds', async () =>
     {
         await act(async () => { useSetupStore.setState({ style: 'technical', tone: 'formal' }); });

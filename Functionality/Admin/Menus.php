@@ -264,6 +264,8 @@ class Menus {
 				'proposedContext' => (string) ( is_array( Options::get( 'translations.context.scan_result' ) ) ? ( Options::get( 'translations.context.scan_result' )['context'] ?? '' ) : '' ),
 				'style'           => (string) Options::get( 'translations.style.type', 'neutral' ),
 				'tone'            => (string) Options::get( 'translations.style.tone', 'friendly' ),
+				'formality'       => (int) Options::get( 'translations.style.formality', 5 ),
+				'creativity'      => (int) Options::get( 'translations.style.creativity', 5 ),
 				'step'            => is_string( $saved_step ) ? $saved_step : '',
 				'homeUrl'         => home_url( '/' ),
 				'siteRead'        => ( new IndexQueue() )->read_counts()['pages'] > 0,

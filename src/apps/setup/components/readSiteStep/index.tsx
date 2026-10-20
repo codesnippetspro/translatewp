@@ -72,7 +72,7 @@ const ELAPSED_TICK_MS = 100;
 // The proposal lands under whatever the owner already wrote, never over it.
 export const ReadSiteStep = () =>
 {
-    const { context, setContext, setProposedContext, setDefaultLanguage, setStyle, setTone, siteRead, setSiteRead, setSpinePages } = useSetupStore();
+    const { context, setContext, setProposedContext, setDefaultLanguage, siteRead, setSiteRead, setSpinePages } = useSetupStore();
     const [phase, setPhase] = useState<IndexPhase | 'idle'>('idle');
     const [progress, setProgress] = useState<ExtractionProgress | null>(null);
     const [total, setTotal] = useState(0);
@@ -100,10 +100,14 @@ export const ReadSiteStep = () =>
             // The read knows the language the pages are written in better than
             // the WordPress locale; a wizard run again keeps the saved choice.
             if (contextScan.result.language && !isRestartedSetup()) setDefaultLanguage(contextScan.result.language);
-            if (contextScan.result.style) setStyle(contextScan.result.style);
-            if (contextScan.result.tone) setTone(contextScan.result.tone);
+            useSetupStore.setState(current => ({
+                style: contextScan.result.style ?? current.style,
+                tone: contextScan.result.tone ?? current.tone,
+                formality: contextScan.result.formality ?? current.formality,
+                creativity: contextScan.result.creativity ?? current.creativity,
+            }));
         }
-    }, [contextScan, setContext, setProposedContext, setDefaultLanguage, setStyle, setTone]);
+    }, [contextScan, setContext, setProposedContext, setDefaultLanguage]);
 
     const readSite = async () =>
     {

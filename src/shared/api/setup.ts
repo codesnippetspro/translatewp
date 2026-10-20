@@ -80,6 +80,8 @@ export type SaveStepInput = {
     context?: string;
     style?: string;
     tone?: string;
+    formality?: number;
+    creativity?: number;
 };
 
 export const saveSetupStep = async (input: SaveStepInput) =>
@@ -96,6 +98,8 @@ export const saveSetupStep = async (input: SaveStepInput) =>
             context:          input.context,
             style:            input.style,
             tone:             input.tone,
+            formality:        input.formality,
+            creativity:       input.creativity,
         }
     });
 }

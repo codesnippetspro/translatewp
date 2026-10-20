@@ -57,6 +57,18 @@ const resetStore = async (context = ''): Promise<void> =>
 
 describe('the read-site step while both passes run', () =>
 {
+    it('keeps both scan-proposed levels when the proposal also changes the tone', async () =>
+    {
+        mockScan.state = {
+            phase: 'done', context: 'A bakery', applied: true, pages: 8, lexiconSuggestions: [],
+            result: { context: 'A bakery', style: 'neutral', tone: 'formal', formality: 3, creativity: 8 },
+        };
+        await render();
+        expect(useSetupStore.getState().tone).toBe('formal');
+        expect(useSetupStore.getState().formality).toBe(3);
+        expect(useSetupStore.getState().creativity).toBe(8);
+    });
+
     beforeEach(async () =>
     {
         mockRunReadSite.mockReset();
