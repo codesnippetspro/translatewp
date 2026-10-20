@@ -77,7 +77,7 @@ describe('Settings, Switcher: layout', () =>
         expect(sections(columns[0]).filter(name => name !== 'pending-message'))
             .toEqual(['where', 'flag-style', 'background', 'colors']);
         expect(sections(columns[1]).filter(name => name !== 'pending-message'))
-            .toEqual(['preview', 'type', 'show-selected', 'sizes', 'language-names', 'support']);
+            .toEqual(['preview', 'type', 'show-selected', 'language-names', 'sizes', 'support']);
         expect(columns[1].querySelector('[data-switcher-preview-column]')?.className).toMatch(/\bsticky\b/);
     });
 
@@ -88,7 +88,7 @@ describe('Settings, Switcher: layout', () =>
         const right = await render();
         let columns = Array.from(right.querySelector('[data-switcher-layout]')?.children ?? []);
         expect(right.querySelectorAll('[data-switcher-section="pending-message"]')).toHaveLength(1);
-        expect(sections(columns[1])).toEqual(['preview', 'type', 'show-selected', 'sizes', 'language-names', 'pending-message', 'support']);
+        expect(sections(columns[1])).toEqual(['preview', 'type', 'show-selected', 'language-names', 'sizes', 'pending-message', 'support']);
 
         await act(async () => { root?.unmount(); });
         document.body.innerHTML = '';
@@ -118,7 +118,7 @@ describe('Settings, Switcher: layout', () =>
         const layout = container.querySelector('[data-switcher-layout]');
 
         expect(sections(layout)).toEqual([
-            'where', 'preview', 'type', 'show-selected', 'flag-style', 'background', 'colors', 'sizes', 'language-names', 'pending-message', 'support',
+            'where', 'preview', 'type', 'show-selected', 'flag-style', 'background', 'colors', 'language-names', 'sizes', 'pending-message', 'support',
         ]);
         expect(Array.from(layout?.children ?? []).map(child => (child as HTMLElement).dataset.switcherSection)).toEqual(sections(layout));
         expect(layout?.querySelector('[data-switcher-preview-column]')?.className).toMatch(/\bsticky\b/);
