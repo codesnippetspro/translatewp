@@ -59,8 +59,8 @@ const IndexingDetailLink = () => (
     </a>
 );
 
-const PendingPagesLink = () => (
-    <a href={buildAdminUrl('', `indexing/${PENDING_PAGES_SECTION}`)} className="text-sm text-translatewp-primary underline">
+const PendingPagesLink = ({ className = '' }: { className?: string }) => (
+    <a href={buildAdminUrl('', `indexing/${PENDING_PAGES_SECTION}`)} className={`text-sm text-translatewp-primary underline ${className}`.trim()}>
         {__('See the pages still pending', 'translate')}
     </a>
 );
@@ -332,7 +332,7 @@ export const OverviewNextAction = () =>
                         <span className="text-sm text-translatewp-muted">
                             {__('Their text was no longer in the translation cache; it is being sent again. Nothing to do.', 'translate')}
                         </span>
-                        <PendingPagesLink />
+                        <PendingPagesLink className="self-end text-right" />
                     </div>
                 );
 
@@ -351,7 +351,7 @@ export const OverviewNextAction = () =>
                                 action.total
                             )}
                         </span>
-                        <PendingPagesLink />
+                        <PendingPagesLink className="self-end text-right" />
                     </div>
                 );
 
@@ -365,7 +365,7 @@ export const OverviewNextAction = () =>
                                 action.count
                             )}
                         </span>
-                        <PendingPagesLink />
+                        <PendingPagesLink className="self-end text-right" />
                     </div>
                 );
 
