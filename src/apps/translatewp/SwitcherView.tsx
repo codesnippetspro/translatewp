@@ -283,6 +283,12 @@ export function SwitcherView({
                 .twp-admin-switch[data-on="true"] {
                     background: ${ highlightBg } !important;
                 }
+                .twp-admin-item[aria-disabled="true"] {
+                    cursor: not-allowed !important;
+                }
+                .twp-admin-switch[data-locked="true"] {
+                    opacity: 0.6 !important;
+                }
                 .twp-admin-switch::after {
                     content: '' !important;
                     position: absolute !important;
@@ -962,19 +968,25 @@ export function SwitcherView({
                                     { editing && can.settings && (
                                         <button
                                             type="button"
-                                            className={`twp-admin-item${entitled ? '' : ' twp-admin-locked'}`}
+                                            className="twp-admin-item"
                                             role="switch"
                                             aria-checked={!brandingHidden}
-                                            disabled={!entitled || brandingSaving}
+                                            // A Terrestrial row carries aria-disabled, not the disabled
+                                            // attribute, so the row keeps its hover highlight and tooltip.
+                                            disabled={entitled && brandingSaving}
+                                            aria-disabled={entitled ? undefined : true}
                                             title={entitled ? undefined : __('Always on with Terrestrial. Pro lets you turn it off.', 'translate')}
                                             data-twp-support-branding
                                             onClick={() => { void toggleBranding(); }}
                                         >
-                                            <span className="twp-item-icon">{ entitled ? <Heart size={14} /> : <Lock size={14} /> }</span>
+                                            <span className="twp-item-icon"><Heart size={14} /></span>
                                             <span>{ __('Support TranslateWP', 'translate') }</span>
-                                            { entitled
-                                                ? <span className="twp-admin-switch" aria-hidden="true" data-on={brandingHidden ? 'false' : 'true'} />
-                                                : <span className="twp-pro-tag">Pro</span> }
+                                            <span
+                                                className="twp-admin-switch"
+                                                aria-hidden="true"
+                                                data-on={brandingHidden ? 'false' : 'true'}
+                                                data-locked={entitled ? undefined : 'true'}
+                                            />
                                         </button>
                                     ) }
                                 </>
