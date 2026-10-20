@@ -7,7 +7,7 @@ use TranslateWP\Entities\CPTs\Lexicon;
 class TranslationAiSettings {
 
 	private const FREE_STYLES = [ 'neutral', 'marketing', 'technical' ];
-	private const FREE_TONES  = [ 'friendly', 'professional', 'casual', 'formal' ];
+	private const FREE_TONES  = [ 'neutral', 'friendly', 'professional', 'casual', 'formal' ];
 
 	public const LENGTHS             = [ 'match', 'shorter', 'longer' ];
 	public const CULTURAL_ADAPTATION = [ 'keep', 'adapt' ];

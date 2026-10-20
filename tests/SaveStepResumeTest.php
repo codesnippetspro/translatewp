@@ -96,6 +96,9 @@ $management->save_step( $request );
 assert_true( 'technical' === Options::get( 'translations.style.type', '' ), 'A style that is no preset must not be saved' );
 assert_true( 'formal' === Options::get( 'translations.style.tone', '' ), 'A tone that is no preset must not be saved' );
 
+$management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [ 'step' => 'style-tone', 'tone' => 'neutral' ] ) );
+assert_true( 'neutral' === Options::get( 'translations.style.tone', '' ), 'The style and tone step must save the Neutral tone' );
+
 foreach ( [ -1, 11, 'invalid', [], true ] as $invalid_level ) {
 	Options::update( 'setup.step', 'style-tone' );
 	$result = $management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [

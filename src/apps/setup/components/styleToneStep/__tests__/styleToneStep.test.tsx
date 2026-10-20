@@ -55,13 +55,23 @@ describe('the style and tone step', () =>
 
     it('maps a new tone to its level while preserving a later manual adjustment', async () =>
     {
-        useSetupStore.setState({ tone: 'friendly', formality: 6 });
+        useSetupStore.setState({ tone: 'friendly', formality: 8 });
         const container = await render();
-        const formal = container.querySelector('[role="radiogroup"] input[value="formal"]') as HTMLInputElement;
-        await act(async () => { formal.click(); });
-        expect(useSetupStore.getState().formality).toBe(9);
+        const neutral = container.querySelector('[role="radiogroup"][aria-label="Preset tone"] input[value="neutral"]') as HTMLInputElement;
+        await act(async () => { neutral.click(); });
+        expect(useSetupStore.getState().formality).toBe(5);
         await act(async () => { useSetupStore.getState().setFormality(3); });
         expect(useSetupStore.getState().formality).toBe(3);
+    });
+
+    it('keeps a saved Formal tone chosen, last, so a restarted setup does not change it', async () =>
+    {
+        await act(async () => { useSetupStore.setState({ tone: 'formal', formality: 9 }); });
+        const container = await render();
+
+        expect(values(container, 'Preset tone')).toEqual(['neutral', 'friendly', 'professional', 'casual', 'formal']);
+        expect(checked(container, 'Preset tone')).toBe('formal');
+        expect(useSetupStore.getState().formality).toBe(9);
     });
 
     it('preselects the style and tone the wizard holds', async () =>
@@ -79,7 +89,7 @@ describe('the style and tone step', () =>
         const container = await render();
 
         expect(values(container, 'Preset style')).toEqual(['neutral', 'marketing', 'technical']);
-        expect(values(container, 'Preset tone')).toEqual(['friendly', 'professional', 'casual', 'formal']);
+        expect(values(container, 'Preset tone')).toEqual(['neutral', 'friendly', 'professional', 'casual']);
         expect([...container.querySelectorAll('[data-preset-locked]')].map(chip => chip.getAttribute('data-preset-locked'))).toEqual(['legal', 'medical', 'playful', 'luxury']);
         for (const row of container.querySelectorAll('[data-preset-pro-row]')) {
             expect((row.textContent?.match(/Pro/g) ?? []).length).toBe(1);

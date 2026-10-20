@@ -9,6 +9,7 @@ import {
     PRESET_EXAMPLES,
     PRESET_LABELS,
     PRESET_OPTIONS,
+    RETIRED_PRESET_OPTIONS,
     type PresetKind,
     type PresetOption,
 } from '@/apps/admin/components/Translations/Style/presetExamples';
@@ -36,7 +37,8 @@ export const PresetChoice = ({ kind, selected, onChange, extraOptions = [] }: Pr
     const { data: connectStatus } = useQuery(getConnectStatusQueryOptions());
     const proActive = isProActive(getProState(connectStatus));
     // Without Pro the Orbital presets sit on the Pro row with Custom (CustomOption).
-    const options = [...PRESET_OPTIONS[kind].filter(option => !option.pro || proActive), ...extraOptions];
+    const retired = RETIRED_PRESET_OPTIONS[kind].filter(option => option.value === selected);
+    const options = [...PRESET_OPTIONS[kind].filter(option => !option.pro || proActive), ...retired, ...extraOptions];
     const example = PRESET_EXAMPLES[kind][selected];
 
     return (

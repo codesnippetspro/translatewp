@@ -4,7 +4,7 @@ export type ScanContextResponse = {
     context: string;
     language?: string;
     style: 'marketing' | 'neutral' | 'medical' | 'technical' | 'legal';
-    tone: 'friendly' | 'casual' | 'professional' | 'formal';
+    tone: 'neutral' | 'friendly' | 'casual' | 'professional' | 'formal';
     formality: number;
     creativity: number;
 };
