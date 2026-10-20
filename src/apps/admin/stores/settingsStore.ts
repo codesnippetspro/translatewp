@@ -36,6 +36,7 @@ export type SwitcherSettings = {
     icon_style: 'rectangle' | 'square' | 'circle';
     text_color: string;
     background_color: string;
+    border_color: string;
     background_style: SwitcherBackgroundStyle;
     highlight_text: string;
     highlight_bg: string;
@@ -131,6 +132,7 @@ const DEFAULT_SETTINGS: AdminSettingsMap = {
         icon_style: 'rectangle',
         text_color: '#393535',
         background_color: '#FFFFFF',
+        border_color: '#E2E2E4',
         background_style: 'solid',
         highlight_text: '#FFFFFF',
         highlight_bg: '#0e3ecd',

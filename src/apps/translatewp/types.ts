@@ -33,6 +33,7 @@ export type PublicSwitcherSettings = {
     icon_style?: 'rectangle' | 'square' | 'circle';
     text_color?: string;
     background_color?: string;
+    border_color?: string;
     background_style?: SwitcherBackgroundStyle;
     highlight_text?: string;
     highlight_bg?: string;

@@ -26,6 +26,7 @@ function assert_true( bool $condition, string $message ): void {
 const EXPECTED_OFFSET   = 24;
 const EXPECTED_ICON     = 24;
 const EXPECTED_PADDING  = 12;
+const EXPECTED_BORDER   = '#E2E2E4';
 const EXPECTED_URL_STRUCTURE = 'clean';
 
 // --- Copy 1: frontend defaults (Entities/Scripts/TranslateWP.php) ---
@@ -38,6 +39,7 @@ assert_true( EXPECTED_ICON === ( $switcher['icon_size'] ?? null ), 'Frontend def
 assert_true( EXPECTED_PADDING === ( $switcher['padding'] ?? null ), 'Frontend default padding must be ' . EXPECTED_PADDING . ', got ' . ( $switcher['padding'] ?? 'none' ) );
 assert_true( 'full' === ( $switcher['regional_names'] ?? null ), 'Frontend default regional names must be full, got ' . ( $switcher['regional_names'] ?? 'none' ) );
 assert_true( 'name_flag' === ( $switcher['trigger'] ?? null ), 'default switcher trigger is name_flag, got ' . ( $switcher['trigger'] ?? 'none' ) );
+assert_true( EXPECTED_BORDER === ( $switcher['border_color'] ?? null ), 'Frontend default border colour must be ' . EXPECTED_BORDER . ', got ' . ( $switcher['border_color'] ?? 'none' ) );
 $seo = $options['languages']['seo'] ?? [];
 assert_true( EXPECTED_URL_STRUCTURE === ( $seo['url_structure'] ?? null ), 'Frontend default URL structure must be ' . EXPECTED_URL_STRUCTURE . ', got ' . ( $seo['url_structure'] ?? 'none' ) );
 
@@ -57,6 +59,7 @@ assert_true( EXPECTED_ICON === ( $seeded['icon_size'] ?? null ), 'Management see
 assert_true( EXPECTED_PADDING === ( $seeded['padding'] ?? null ), 'Management seed padding must be ' . EXPECTED_PADDING . ', got ' . ( $seeded['padding'] ?? 'none' ) );
 assert_true( 'full' === ( $seeded['regional_names'] ?? null ), 'Management seed regional names must be full, got ' . ( $seeded['regional_names'] ?? 'none' ) );
 assert_true( 'name_flag' === ( $seeded['trigger'] ?? null ), 'Management seed switcher trigger must be name_flag, got ' . ( $seeded['trigger'] ?? 'none' ) );
+assert_true( EXPECTED_BORDER === ( $seeded['border_color'] ?? null ), 'Management seed border colour must be ' . EXPECTED_BORDER . ', got ' . ( $seeded['border_color'] ?? 'none' ) );
 
 // --- A saved switcher without a trigger key reads as the stored trigger, never as missing ---
 wp_test_reset( [ 'languages' => [ 'switcher' => [ 'trigger' => 'icon' ] ] ] );

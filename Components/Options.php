@@ -17,6 +17,7 @@ namespace TranslateWP\Components;
  *      - icon_style: string
  *      - text_color: string
  *      - background_color: string
+ *      - border_color: string (hex, optional alpha; default #E2E2E4)
  *      - background_style: 'solid' | 'transparent' | 'glass' (default solid; glass is a frosted, see-through surface)
  *      - highlight_text: string
  *      - highlight_bg: string
