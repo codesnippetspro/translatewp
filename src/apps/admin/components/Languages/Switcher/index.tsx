@@ -186,6 +186,7 @@ export const LanguagesSwitcher = () =>
                     <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0">
                         <ColorPicker label={__('Text color', 'translate')} value={settings.text_color} onChange={(value) => updateSetting('text_color', value)} />
                         <ColorPicker label={__('Background color', 'translate')} value={settings.background_color} onChange={(value) => updateSetting('background_color', value)} />
+                        <ColorPicker label={__('Border color', 'translate')} value={settings.border_color} onChange={(value) => updateSetting('border_color', value)} />
                     </div>
                     <Unavailable when={native} reason={__('The native dropdown\'s list is drawn by the browser, which chooses its own highlight.', 'translate')}>
                         <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-highlight-colors>

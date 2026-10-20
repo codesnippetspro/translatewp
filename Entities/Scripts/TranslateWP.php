@@ -277,6 +277,7 @@ class TranslateWP extends Script {
             'icon_style'       => 'rectangle',
             'text_color'       => '#393535',
             'background_color' => '#FFFFFF',
+            'border_color'     => '#E2E2E4',
             'background_style' => 'solid',
             'highlight_text'   => '#FFFFFF',
             'highlight_bg'     => \TranslateWP\Functionality\Endpoints\Management::DEFAULT_SWITCHER_HIGHLIGHT_BG,

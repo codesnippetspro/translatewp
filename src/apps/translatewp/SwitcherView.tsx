@@ -142,7 +142,8 @@ export function SwitcherView({
 
     const bgColor = switcher?.background_color || '#FFFFFF';
     const textColor = switcher?.text_color || '#393535';
-    const surface = switcherSurface(switcher?.background_style, bgColor, textColor);
+    const borderColor = switcher?.border_color || '#E2E2E4';
+    const surface = switcherSurface(switcher?.background_style, bgColor, textColor, borderColor);
     const highlightBg = switcher?.highlight_bg || '#0e3ecd';
     const highlightText = switcher?.highlight_text || '#FFFFFF';
     const { insetPx, iconSizePx, triggerSizePx } = resolveSwitcherChrome(switcher ?? {});

@@ -20,14 +20,18 @@ export type SwitcherSurface = {
     fallback: string;
 };
 
-const SOLID_BORDER = '#E2E2E4';
+export const DEFAULT_SWITCHER_BORDER = '#E2E2E4';
 const GLASS_ALPHA = 0.6;
 const FALLBACK_ALPHA = 0.92;
 
+/** The red, green and blue of a hex colour, dropping any alpha channel (#RGBA or #RRGGBBAA). */
 export const rgbOf = (hex: string): [number, number, number] | null =>
 {
     const value = hex.trim().replace(/^#/, '');
-    const full = value.length === 3 ? value.split('').map(digit => digit + digit).join('') : value;
+    const expanded = value.length === 3 || value.length === 4
+        ? value.split('').map(digit => digit + digit).join('')
+        : value;
+    const full = expanded.length === 8 ? expanded.slice(0, 6) : expanded;
     if (!/^[0-9a-f]{6}$/i.test(full)) return null;
     return [0, 2, 4].map(start => parseInt(full.slice(start, start + 2), 16)) as [number, number, number];
 };
@@ -58,7 +62,7 @@ const glass = (background: string): string => [
     'border: 1px solid rgba(255, 255, 255, 0.45) !important',
 ].join(';\n') + ';';
 
-export const switcherSurface = (style: SwitcherBackgroundStyle | undefined, background: string, text: string): SwitcherSurface =>
+export const switcherSurface = (style: SwitcherBackgroundStyle | undefined, background: string, text: string, border: string = DEFAULT_SWITCHER_BORDER): SwitcherSurface =>
 {
     if (style === 'glass' || style === 'transparent')
     {
@@ -85,6 +89,6 @@ export const switcherSurface = (style: SwitcherBackgroundStyle | undefined, back
         };
     }
 
-    const solid = `background-color: ${background} !important;\nborder: 1px solid ${SOLID_BORDER} !important;`;
+    const solid = `background-color: ${background} !important;\nborder: 1px solid ${border} !important;`;
     return { closed: solid, panel: solid, fallback: '' };
 };

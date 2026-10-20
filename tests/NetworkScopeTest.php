@@ -162,6 +162,20 @@ assert_true( '#000002' === ( $GLOBALS['wp_test_options_store']['blog_2_languages
 assert_true( ! isset( SettingsScope::network_values()['translatewp_languages'] ), 'chosen subsites leave the network value alone' );
 assert_true( 'failed' === NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', 'apply_to' => 'chosen', 'sites' => [], 'values' => [ 'languages.switcher.text_color' => '#654321' ] ] ), 'chosen with no subsites saves nothing' );
 
+// --- the border colour inherits and overrides like its sibling colours, alpha kept ---
+network_admin_setup();
+$appearance = scope_group( NetworkScope::page_data(), 'switcher_appearance' );
+assert_true( '#E2E2E4' === ( field( $appearance, 'languages.switcher.border_color' )['value'] ?? null ), 'the border colour field starts from its default when nothing is stored' );
+NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', 'apply_to' => 'all', 'values' => [ 'languages.switcher.border_color' => '#0e3ecd80', 'languages.switcher.text_color' => 'not-a-colour' ] ] );
+assert_true( '#0e3ecd80' === ( SettingsScope::network_values()['translatewp_languages']['switcher']['border_color'] ?? null ), 'a border colour with alpha becomes the network value' );
+foreach ( [ 'languages', 'blog_2_languages', 'blog_3_languages' ] as $key ) {
+	assert_true( '#0e3ecd80' === ( $GLOBALS['wp_test_options_store'][ $key ]['switcher']['border_color'] ?? null ), $key . ' takes the border colour' );
+}
+assert_true( ! array_key_exists( 'text_color', SettingsScope::network_values()['translatewp_languages']['switcher'] ?? [] ), 'a colour that is not hex is dropped' );
+NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'switcher_appearance', 'apply_to' => 'chosen', 'sites' => [ '3' ], 'values' => [ 'languages.switcher.border_color' => '#abc' ] ] );
+assert_true( '#abc' === ( $GLOBALS['wp_test_options_store']['blog_3_languages']['switcher']['border_color'] ?? null ), 'a chosen subsite overrides the border colour' );
+assert_true( '#0e3ecd80' === ( $GLOBALS['wp_test_options_store']['blog_2_languages']['switcher']['border_color'] ?? null ), 'another subsite keeps the inherited border colour' );
+
 // --- network-only values and groups that span two options ---
 network_admin_setup();
 NetworkScope::apply_post( [ 'op' => 'value', 'group' => 'uninstall', 'apply_to' => 'all', 'values' => [ 'advanced.delete_on_uninstall' => '1' ] ] );

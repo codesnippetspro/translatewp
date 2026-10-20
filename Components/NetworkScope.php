@@ -85,6 +85,7 @@ class NetworkScope {
 				),
 				self::field( 'languages.switcher.text_color', __( 'Text color', 'translate' ), 'color', '#393535' ),
 				self::field( 'languages.switcher.background_color', __( 'Background color', 'translate' ), 'color', '#FFFFFF' ),
+				self::field( 'languages.switcher.border_color', __( 'Border color', 'translate' ), 'color', '#E2E2E4' ),
 				self::field(
 					'languages.switcher.background_style',
 					__( 'Background', 'translate' ),
@@ -419,7 +420,7 @@ class NetworkScope {
 			case 'range':
 				return is_numeric( $raw ) ? min( 10, max( 0, (int) $raw ) ) : null;
 			case 'color':
-				return 1 === preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $raw ) ? (string) $raw : null;
+				return 1 === preg_match( '/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', (string) $raw ) ? (string) $raw : null;
 			case 'text':
 				$text = sanitize_text_field( (string) $raw );
 				return function_exists( 'mb_substr' ) ? mb_substr( $text, 0, self::TEXT_MAX ) : substr( $text, 0, self::TEXT_MAX );

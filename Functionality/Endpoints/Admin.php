@@ -835,7 +835,7 @@ class Admin extends BaseApiEndpoints {
 	private const SWITCHER_ICON_STYLES    = [ 'rectangle', 'square', 'circle' ];
 	private const SWITCHER_REGIONAL_NAMES = [ 'full', 'short' ];
 	private const SWITCHER_BACKGROUND_STYLES = [ 'solid', 'transparent', 'glass' ];
-	private const SWITCHER_COLOR_KEYS     = [ 'text_color', 'background_color', 'highlight_text', 'highlight_bg' ];
+	private const SWITCHER_COLOR_KEYS     = [ 'text_color', 'background_color', 'border_color', 'highlight_text', 'highlight_bg' ];
 	private const SWITCHER_PIXEL_KEYS     = [ 'offset', 'icon_size', 'padding' ];
 	private const PENDING_MESSAGE_MAX_LENGTH = 200;
 	private const SWITCHER_PIXEL_MAX   = 500;
@@ -973,7 +973,8 @@ class Admin extends BaseApiEndpoints {
 	}
 
 	/**
-	 * Returns the colour as `#rgb` or `#rrggbb`, or null when the value is not a hex colour.
+	 * Returns the colour as a hex value, with an optional alpha channel
+	 * (`#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`), or null when it is not one.
 	 */
 	private static function hex_color( $value ): ?string {
 		if ( ! is_string( $value ) ) {
@@ -982,7 +983,7 @@ class Admin extends BaseApiEndpoints {
 
 		$value = trim( $value );
 
-		return 1 === preg_match( '/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value ) ? $value : null;
+		return 1 === preg_match( '/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value ) ? $value : null;
 	}
 
 	/**

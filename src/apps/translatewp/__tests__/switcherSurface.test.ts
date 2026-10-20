@@ -58,4 +58,26 @@ describe('the switcher background choices', () =>
         expect(luminanceOf('#FFFFFF')).toBeCloseTo(1);
         expect(luminanceOf('#000000')).toBe(0);
     });
+
+    it('drops the alpha channel when reading a hex colour with transparency', () =>
+    {
+        expect(rgbOf('#0e3ecd80')).toEqual([14, 62, 205]);
+        expect(rgbOf('#f0a8')).toEqual([255, 0, 170]);
+        expect(luminanceOf('#00000080')).toBe(0);
+    });
+
+    it('paints the chosen border colour on the solid surface and defaults to the former grey', () =>
+    {
+        expect(switcherSurface('solid', '#FFFFFF', '#393535').closed).toContain('border: 1px solid #E2E2E4');
+        const surface = switcherSurface('solid', '#FFFFFF', '#393535', '#0e3ecd');
+        expect(surface.closed).toContain('border: 1px solid #0e3ecd');
+        expect(surface.panel).toBe(surface.closed);
+    });
+
+    it('keeps a background colour that carries transparency through to the CSS', () =>
+    {
+        const surface = switcherSurface('solid', '#0e3ecd80', '#393535', '#11223344');
+        expect(surface.closed).toContain('background-color: #0e3ecd80');
+        expect(surface.closed).toContain('border: 1px solid #11223344');
+    });
 });

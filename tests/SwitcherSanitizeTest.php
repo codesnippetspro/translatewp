@@ -64,6 +64,24 @@ $saved = Options::get( 'languages.switcher', [] );
 assert_same_value( $saved['background_color'], '#FFFFFF', 'A value that is not a hex colour must not replace the stored background colour' );
 assert_same_value( $saved['text_color'], '#0E3ECD', 'A hex colour must be saved' );
 
+// --- A colour with an alpha channel round-trips, and a legacy opaque colour stays valid ---
+wp_test_reset( [ 'languages' => [ 'switcher' => $stored ] ] );
+$admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'background_color' => '#0E3ECD80', 'text_color' => '#1a2b3c' ] ) ) );
+$saved = Options::get( 'languages.switcher', [] );
+assert_same_value( $saved['background_color'], '#0E3ECD80', 'A hex colour with an alpha channel must be saved unchanged' );
+assert_same_value( $saved['text_color'], '#1a2b3c', 'A legacy opaque hex colour stays valid' );
+
+// --- The border colour is sanitised like its siblings: alpha kept, a bad value leaves the stored one ---
+wp_test_reset( [ 'languages' => [ 'switcher' => array_merge( $stored, [ 'border_color' => '#E2E2E4' ] ) ] ] );
+$admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'border_color' => '#0e3ecdAA' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['border_color'] ?? null, '#0e3ecdAA', 'A border colour with alpha is stored' );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'border_color' => 'not-a-colour' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['border_color'] ?? null, '#0e3ecdAA', 'A border colour that is not hex leaves the stored one' );
+$admin->update_data( switcher_update_request( array_merge( $stored, [ 'border_color' => '#abc' ] ) ) );
+assert_same_value( Options::get( 'languages.switcher' )['border_color'] ?? null, '#abc', 'A three digit border colour is stored' );
+
 // --- A type or icon style outside the known set is dropped ---
 wp_test_reset( [ 'languages' => [ 'switcher' => $stored ] ] );
 $admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
