@@ -41,6 +41,7 @@ class Admin extends Script {
                     // Where a support ticket's answer goes unless the user changes it.
                     'user_email'           => (string) wp_get_current_user()->user_email,
                     'export_url'           => \TranslateWP\Components\Access::can_administer() ? \TranslateWP\Components\SiteExport::url() : '',
+                    'other_translation_plugins' => \TranslateWP\Components\PluginCoexistence::detected(),
                     'network_settings_url' => is_multisite() && current_user_can( 'manage_network_options' ) ? network_admin_url( 'admin.php?page=translatewp-network-settings' ) . '#settings' : '',
                     'settings_scope'       => (object) \TranslateWP\Components\SettingsScope::subsite_scope(),
                 ],

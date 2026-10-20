@@ -70,14 +70,15 @@ if ( is_file( $built ) ) {
 }
 
 // The real zip, when present, carries no repository housekeeping under
-// vendor/ and no nested vendor/vendor/.
+// vendor/, no Composer command-line entry points in vendor/bin/ and no
+// nested vendor/vendor/.
 if ( is_file( $built ) ) {
 	$zip = new ZipArchive();
 	$zip->open( $built );
 	$stray = [];
 	for ( $i = 0; $i < $zip->numFiles; $i++ ) {
 		$name = (string) $zip->getNameIndex( $i );
-		if ( 1 === preg_match( '#^' . preg_quote( $slug, '#' ) . '/vendor/(vendor/|.*/(\.github/|\.gitignore$|\.gitattributes$|\.editorconfig$))#', $name ) ) {
+		if ( 1 === preg_match( '#^' . preg_quote( $slug, '#' ) . '/vendor/(vendor/|bin/|.*/(\.github/|\.gitignore$|\.gitattributes$|\.editorconfig$))#', $name ) ) {
 			$stray[] = $name;
 		}
 	}

@@ -52,6 +52,10 @@ $bad = ai_settings( true, [ 'audience' => str_repeat( 'x', 300 ), 'length' => 'h
 assert_true( 200 === strlen( $bad['audience'] ?? '' ), 'The audience is cut at 200 characters' );
 assert_true( ! array_key_exists( 'length', $bad ) && ! array_key_exists( 'cultural_adaptation', $bad ), 'An unknown choice is dropped' );
 
+// Neutral is a tone every site may use; a saved Formal keeps going out as it was.
+assert_true( 'neutral' === ( ai_settings( false, [ 'tone' => 'neutral' ] )['tone'] ?? null ), 'Without Pro the Neutral tone goes out' );
+assert_true( 'formal' === ( ai_settings( false, [ 'tone' => 'formal' ] )['tone'] ?? null ), 'A saved Formal tone keeps going out, so its translations are not redone' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "AdvancedStyleTest: {$failures} failure(s)\n" );
 	exit( 1 );

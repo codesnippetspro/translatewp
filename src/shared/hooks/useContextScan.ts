@@ -33,8 +33,16 @@ export function scanFailureMessage(reason: string | undefined): string
     {
         case 'no_scannable_content':
             return __('No published pages or posts were found to read. Publish some content, then scan again.', 'translate');
-        case 'context_scan_unavailable':
+        case 'context_scan_unreachable':
             return __('The site could not reach the scan service. Check that the site can make outgoing requests, then scan again.', 'translate');
+        case 'context_scan_service_unavailable':
+        // A site may still hold the retired code from before the service began
+        // naming the failure; it reads as the service being unavailable, never
+        // as the site's own network.
+        case 'context_scan_unavailable':
+            return __('The scan service is unavailable right now. Try again in a few minutes.', 'translate');
+        case 'context_scan_timeout':
+            return __('The scan took too long. Scan again.', 'translate');
         case 'invalid_scan_response':
             return __('The scan service sent back an answer this site could not use. Scan again in a minute.', 'translate');
         case 'timed_out':

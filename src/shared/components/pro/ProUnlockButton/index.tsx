@@ -3,6 +3,7 @@ import { Button } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { Lock } from 'lucide-react';
 
+import { TWP_BUTTON_PRIMARY } from '@/shared/components/buttonStyles';
 import { ProModal } from '@/shared/components/pro/ProModal';
 
 // The one button every Orbital-only surface offers: it names the feature and
@@ -13,7 +14,7 @@ export const ProUnlockButton = ({ feature, className = '' }: { feature: string; 
 
     return (
         <>
-            <Button variant="primary" className={`rounded-sm! gap-2 w-fit ${className}`.trim()} onClick={() => setIsOpen(true)} data-twp-unlock={feature}>
+            <Button variant="primary" className={`${TWP_BUTTON_PRIMARY} w-fit ${className}`.trim()} onClick={() => setIsOpen(true)} data-twp-unlock={feature}>
                 <Lock size={14} aria-hidden="true" />
                 {sprintf(
                     /* translators: %s: name of the locked feature. */

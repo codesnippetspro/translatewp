@@ -35,7 +35,7 @@ class Connect {
 			SiteConnection::RETURN_ROUTE_PATH,
 			[ SiteConnection::class, 'handle_return' ],
 			[
-				'name'         => 'translatewp-connect-return',
+				'name'         => SiteConnection::RETURN_ROUTE_NAME,
 				'guest'        => false,
 				'logged_in'    => true,
 				'allowed_caps' => [ 'manage_options' ],
@@ -46,7 +46,7 @@ class Connect {
 			SiteConnection::NETWORK_RETURN_ROUTE_PATH,
 			[ SiteConnection::class, 'handle_network_return' ],
 			[
-				'name'         => 'translatewp-connect-network-return',
+				'name'         => SiteConnection::NETWORK_RETURN_ROUTE_NAME,
 				'guest'        => false,
 				'logged_in'    => true,
 				'allowed_caps' => [ 'manage_network_options' ],

@@ -34,6 +34,46 @@ afterEach(async () =>
 
 describe('the style and tone step', () =>
 {
+    it('shows the stored slider values and lets the owner adjust them', async () =>
+    {
+        useSetupStore.setState({ formality: 8, creativity: 2 });
+        const container = await render();
+        const formality = container.querySelector('input[aria-label="Formality"]') as HTMLInputElement;
+        const creativity = container.querySelector('input[aria-label="Precision vs fluency"]') as HTMLInputElement;
+
+        expect(formality).not.toBeNull();
+        expect(creativity).not.toBeNull();
+        expect(formality.value).toBe('8');
+        expect(creativity.value).toBe('2');
+        await act(async () =>
+        {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(formality, '6');
+            formality.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        expect(useSetupStore.getState().formality).toBe(6);
+    });
+
+    it('maps a new tone to its level while preserving a later manual adjustment', async () =>
+    {
+        useSetupStore.setState({ tone: 'friendly', formality: 8 });
+        const container = await render();
+        const neutral = container.querySelector('[role="radiogroup"][aria-label="Preset tone"] input[value="neutral"]') as HTMLInputElement;
+        await act(async () => { neutral.click(); });
+        expect(useSetupStore.getState().formality).toBe(5);
+        await act(async () => { useSetupStore.getState().setFormality(3); });
+        expect(useSetupStore.getState().formality).toBe(3);
+    });
+
+    it('keeps a saved Formal tone chosen, last, so a restarted setup does not change it', async () =>
+    {
+        await act(async () => { useSetupStore.setState({ tone: 'formal', formality: 9 }); });
+        const container = await render();
+
+        expect(values(container, 'Preset tone')).toEqual(['neutral', 'friendly', 'professional', 'casual', 'formal']);
+        expect(checked(container, 'Preset tone')).toBe('formal');
+        expect(useSetupStore.getState().formality).toBe(9);
+    });
+
     it('preselects the style and tone the wizard holds', async () =>
     {
         await act(async () => { useSetupStore.setState({ style: 'technical', tone: 'formal' }); });
@@ -49,7 +89,7 @@ describe('the style and tone step', () =>
         const container = await render();
 
         expect(values(container, 'Preset style')).toEqual(['neutral', 'marketing', 'technical']);
-        expect(values(container, 'Preset tone')).toEqual(['friendly', 'professional', 'casual', 'formal']);
+        expect(values(container, 'Preset tone')).toEqual(['neutral', 'friendly', 'professional', 'casual']);
         expect([...container.querySelectorAll('[data-preset-locked]')].map(chip => chip.getAttribute('data-preset-locked'))).toEqual(['legal', 'medical', 'playful', 'luxury']);
         for (const row of container.querySelectorAll('[data-preset-pro-row]')) {
             expect((row.textContent?.match(/Pro/g) ?? []).length).toBe(1);

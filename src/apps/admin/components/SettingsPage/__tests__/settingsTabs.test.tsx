@@ -36,6 +36,7 @@ describe('Settings page tabs', () =>
         await act(async () => { for (const root of roots.splice(0)) root.unmount(); });
         document.body.innerHTML = '';
         window.history.replaceState(null, '', '/wp-admin/admin.php?page=translatewp');
+        delete (window as { TranslateWP?: unknown }).TranslateWP;
     });
 
     it('registers the six settings tabs and the two dashboard tabs by their ids', () =>
@@ -51,8 +52,9 @@ describe('Settings page tabs', () =>
         expect(container.textContent).not.toContain('Visitor language');
     });
 
-    it('explains other translation plugins on the Advanced tab the coexistence notice links to', async () =>
+    it('explains other translation plugins on the Advanced tab the coexistence notice links to when one is detected', async () =>
     {
+        (window as unknown as { TranslateWP: unknown }).TranslateWP = { context: { other_translation_plugins: ['WPML'] } };
         const container = await renderSettings('#advanced');
         const section = container.querySelector('#other-translation-plugins');
         expect(section?.textContent).toContain('Other translation plugins');

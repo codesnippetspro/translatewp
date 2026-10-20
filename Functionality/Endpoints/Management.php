@@ -178,6 +178,32 @@ class Management extends BaseApiEndpoints {
             return new \WP_Error( 'missing_step', 'Step is required', [ 'status' => 400 ] );
         }
 
+        $style_levels = [];
+        if ( 'style-tone' === $step ) {
+            foreach ( [ 'formality', 'creativity' ] as $key ) {
+                $raw = $request->get_param( $key );
+                if ( null === $raw ) {
+                    continue;
+                }
+                $level = is_int( $raw ) || is_string( $raw )
+                    ? filter_var(
+                        sanitize_text_field( (string) $raw ),
+                        FILTER_VALIDATE_INT,
+                        [
+							'options' => [
+								'min_range' => 0,
+								'max_range' => 10,
+							],
+						]
+                    )
+                    : false;
+                if ( false === $level ) {
+                    return new \WP_Error( 'invalid_style_level', __( 'Choose a slider value from 0 to 10.', 'translate' ), [ 'status' => 400 ] );
+                }
+                $style_levels[ $key ] = $level;
+            }
+        }
+
         $resume_step = sanitize_key( (string) $request->get_param( 'resume_step' ) );
         Options::update( 'setup.step', '' !== $resume_step ? $resume_step : $step );
 
@@ -198,12 +224,15 @@ class Management extends BaseApiEndpoints {
         if ( 'style-tone' === $step ) {
             $style = sanitize_key( (string) $request->get_param( 'style' ) );
             $tone  = sanitize_key( (string) $request->get_param( 'tone' ) );
+            $settings = Options::get( 'translations.style', [] );
+            $settings = is_array( $settings ) ? $settings : [];
             if ( in_array( $style, Scanning::STYLE_PRESETS, true ) ) {
-                Options::update( 'translations.style.type', $style );
+                $settings['type'] = $style;
             }
             if ( in_array( $tone, Scanning::TONE_PRESETS, true ) ) {
-                Options::update( 'translations.style.tone', $tone );
+                $settings['tone'] = $tone;
             }
+            Options::update( 'translations.style', \TranslateWP\Components\SettingsScope::keep_locked( 'translations.style', array_merge( $settings, $style_levels ) ) );
         }
 
         if ( 'translation' === $step ) {
@@ -257,8 +286,10 @@ class Management extends BaseApiEndpoints {
 				'icon_style'       => 'rectangle',
 				'text_color'       => '#393535',
 				'background_color' => '#FFFFFF',
+				'border_color'     => '#E2E2E4',
 				'highlight_text'   => '#FFFFFF',
 				'highlight_bg'     => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
+				'loading_border_color' => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
 				'offset'           => 24,
 				'icon_size'        => 24,
 				'padding'          => 12,

@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { resolveCatalogLocale } from '@/shared/lib/languages';
 import { setupDraftKey } from '@/shared/lib/setupDraft';
 import type { IndexPageEntry } from '@/shared/api/admin';
+import { TONE_FORMALITY } from '@/shared/lib/style/toneFormality';
 
 interface SetupStore {
     spinePages: IndexPageEntry[];
@@ -16,6 +17,8 @@ interface SetupStore {
     proposedContext: string;
     style: string;
     tone: string;
+    formality: number;
+    creativity: number;
     isScanning: boolean;
     // The site has read rows on the server, or the Read your site
     // step finished in this wizard session. Never restored from the browser:
@@ -35,6 +38,8 @@ interface SetupStore {
     setProposedContext: (proposedContext: string) => void;
     setStyle: (style: string) => void;
     setTone: (tone: string) => void;
+    setFormality: (formality: number) => void;
+    setCreativity: (creativity: number) => void;
     setIsScanning: (isScanning: boolean) => void;
 }
 
@@ -64,6 +69,8 @@ export const useSetupStore = create<SetupStore>()(
             context: setupContext,
             style: window.setupData?.style || 'neutral',
             tone: window.setupData?.tone || 'friendly',
+            formality: window.setupData?.formality ?? 5,
+            creativity: window.setupData?.creativity ?? 5,
             isScanning: false,
             siteRead: window.setupData?.siteRead ?? false,
             setSiteRead: (siteRead: boolean) => set({ siteRead }),
@@ -87,7 +94,12 @@ export const useSetupStore = create<SetupStore>()(
             proposedContext: '',
             setProposedContext: (proposedContext: string) => set({ proposedContext }),
             setStyle: (style: string) => set({ style }),
-            setTone: (tone: string) => set({ tone }),
+            setTone: (tone: string) => set(state => ({
+                tone,
+                formality: tone === state.tone ? state.formality : TONE_FORMALITY[tone] ?? state.formality,
+            })),
+            setFormality: (formality: number) => set({ formality }),
+            setCreativity: (creativity: number) => set({ creativity }),
             setIsScanning: (isScanning: boolean) => set({ isScanning }),
         }),
         {

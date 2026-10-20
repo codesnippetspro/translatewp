@@ -1,21 +1,30 @@
-import { useEffect, useId, useRef, useState } from "@wordpress/element";
-import { TextControl, ColorPicker as WPColorPicker } from "@wordpress/components";
+import type { ComponentProps } from "react";
+import { useId, useState } from "@wordpress/element";
+import { TextControl, ColorPicker as WPColorPicker, Dropdown } from "@wordpress/components";
 import { __ } from "@wordpress/i18n";
 
-const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const HEX_COLOR = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export const isHexColor = (value: string): boolean => HEX_COLOR.test(value.trim());
+
+// The popup anchors to its swatch and floats above every overflow ancestor,
+// flipping and sliding so it stays inside the viewport near the admin sidebar.
+export const COLOR_POPOVER_PROPS: ComponentProps<typeof Dropdown>["popoverProps"] = {
+    placement: "bottom-start",
+    flip: true,
+    shift: true,
+    resize: true,
+};
 
 export interface ColorPickerProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    onOpenChange?: (open: boolean) => void;
 }
 
-export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) =>
+export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPickerProps) =>
 {
-    const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
-    const colorPickerRef = useRef<HTMLDivElement | null>(null);
     // The text field holds whatever is typed; only a hex colour reaches the settings.
     const [text, setText] = useState(value);
     const [lastValue, setLastValue] = useState(value);
@@ -35,41 +44,33 @@ export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) =>
         }
     };
 
-    useEffect(() => {
-        if (!isColorPickerOpen) {
-            return;
-        }
-
-        const handlePointerDown = (event: MouseEvent) => {
-            if (!colorPickerRef.current) {
-                return;
-            }
-
-            if (!colorPickerRef.current.contains(event.target as Node)) {
-                setIsColorPickerOpen(false);
-            }
-        };
-
-        document.addEventListener("mousedown", handlePointerDown);
-        return () => {
-            document.removeEventListener("mousedown", handlePointerDown);
-        };
-    }, [isColorPickerOpen]);
-
     return (
         <div className="flex flex-col gap-2">
             <span className='text-sm font-bold text-translatewp-neutral'>{label}</span>
             <div className="flex items-center gap-2">
-            <div
-                ref={colorPickerRef}
-                className="w-10 h-10 rounded-sm cursor-pointer relative border border-translatewp-border!"
-                style={{ backgroundColor: value }}
-                onClick={() => setIsColorPickerOpen(true)}
-            >
-                {isColorPickerOpen && (
-                    <WPColorPicker color={value} onChange={(value) => onChange(value)} className="absolute bottom-12 right-0 border border-translatewp-border! rounded-sm! bg-white" style={{ positionArea: 'y-end' }} />
+            <Dropdown
+                className="shrink-0"
+                popoverProps={COLOR_POPOVER_PROPS}
+                onToggle={onOpenChange}
+                renderToggle={({ isOpen, onToggle }) => (
+                    <button
+                        type="button"
+                        aria-label={label}
+                        aria-haspopup="dialog"
+                        aria-expanded={isOpen}
+                        className="w-10 h-10 rounded-sm cursor-pointer border border-translatewp-border!"
+                        style={{ backgroundColor: value }}
+                        onClick={onToggle}
+                    />
                 )}
-            </div>
+                renderContent={() => (
+                    <WPColorPicker
+                        enableAlpha
+                        color={value}
+                        onChange={(next) => onChange(next)}
+                    />
+                )}
+            />
             <div className="flex flex-col gap-1">
                 <TextControl
                     __next40pxDefaultSize
@@ -82,7 +83,7 @@ export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) =>
                 />
                 {invalid && (
                     <span id={hintId} className="text-xs text-translatewp-error" role="alert">
-                        {__('Use a hex color such as #0E3ECD.', 'translate')}
+                        {__('Use a hex color such as #0E3ECD or #0E3ECD80.', 'translate')}
                     </span>
                 )}
             </div>

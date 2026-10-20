@@ -17,11 +17,30 @@ describe('context scan messages', () =>
     it('turns every failure code into a plain sentence and never shows a raw code', () =>
     {
         expect(scanFailureMessage('no_scannable_content')).toContain('No published pages or posts');
-        expect(scanFailureMessage('context_scan_unavailable')).toContain('could not reach the scan service');
         expect(scanFailureMessage('invalid_scan_response')).toContain('could not use');
         expect(scanFailureMessage('timed_out')).toBe('The scan is taking longer than usual. Scan again.');
         expect(scanFailureMessage('timed_out')).not.toMatch(/\d/);
         expect(scanFailureMessage('something_else')).toBe('The website scan failed. Try again in a minute.');
         expect(scanFailureMessage(undefined)).not.toMatch(/_/);
+    });
+
+    it('only the unreachable message mentions the site checking its outgoing requests', () =>
+    {
+        expect(scanFailureMessage('context_scan_unreachable')).toContain('could not reach the scan service');
+        expect(scanFailureMessage('context_scan_unreachable')).toContain('outgoing requests');
+
+        const service = scanFailureMessage('context_scan_service_unavailable');
+        expect(service).toContain('scan service is unavailable');
+        expect(service).not.toContain('outgoing requests');
+        expect(service).not.toMatch(/provider|hosted|credits/i);
+
+        expect(scanFailureMessage('context_scan_timeout')).toBe('The scan took too long. Scan again.');
+    });
+
+    it('maps the legacy unavailable code to the service-unavailable wording, never the network one', () =>
+    {
+        const legacy = scanFailureMessage('context_scan_unavailable');
+        expect(legacy).toContain('scan service is unavailable');
+        expect(legacy).not.toContain('outgoing requests');
     });
 });

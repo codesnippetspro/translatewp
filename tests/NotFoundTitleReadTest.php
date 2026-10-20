@@ -37,23 +37,23 @@ Options::update( 'languages', [ 'list' => [
 $not_found_url = (string) Indexer::object_url( Indexer::NOT_FOUND_OBJECT_ID, Indexer::NOT_FOUND_OBJECT_TYPE );
 assert_true( false !== strpos( $not_found_url, Indexer::NOT_FOUND_PATH ), 'The 404 page has its own address' );
 
-TranslationStore::record_pending( $not_found_url, 0, 'it', 'lv', [ [ 'hash' => 'h-title', 'markerPayload' => '⟪item_0001⟫Page not found - Deju studija SPACE' ] ] );
-TranslationStore::resolve_pending( $not_found_url, 0, 'it', static fn(): array => [ 'h-title' => '⟪item_0001⟫Pagina non trovata - Deju studija SPACE' ] );
+TranslationStore::record_pending( $not_found_url, 0, 'it', 'lv', [ [ 'hash' => 'h-title', 'markerPayload' => '⟪item_0001⟫Page not found - Harbor Dance Studio' ] ] );
+TranslationStore::resolve_pending( $not_found_url, 0, 'it', static fn(): array => [ 'h-title' => '⟪item_0001⟫Pagina non trovata - Harbor Dance Studio' ] );
 
 $sync = new TranslationStoreSync( 'translatewp', TRANSLATEWP_VERSION );
 
 $_SERVER['REQUEST_URI']   = '/it/does-not-exist/';
 $GLOBALS['wp_test_is_404'] = true;
-$read = $sync->translated_string( 'Page not found - Deju studija SPACE', 'Page not found - Deju studija SPACE', 'it', 0 );
+$read = $sync->translated_string( 'Page not found - Harbor Dance Studio', 'Page not found - Harbor Dance Studio', 'it', 0 );
 assert_true(
-	'Pagina non trovata - Deju studija SPACE' === $read,
+	'Pagina non trovata - Harbor Dance Studio' === $read,
 	'On a missing address the title reads from the 404 page entry, got ' . wp_json_encode( $read )
 );
 
 $GLOBALS['wp_test_is_404'] = false;
-$read = $sync->translated_string( 'Page not found - Deju studija SPACE', 'Page not found - Deju studija SPACE', 'it', 0 );
+$read = $sync->translated_string( 'Page not found - Harbor Dance Studio', 'Page not found - Harbor Dance Studio', 'it', 0 );
 assert_true(
-	'Page not found - Deju studija SPACE' === $read,
+	'Page not found - Harbor Dance Studio' === $read,
 	'On an ordinary address with no entry the source string comes back, got ' . wp_json_encode( $read )
 );
 

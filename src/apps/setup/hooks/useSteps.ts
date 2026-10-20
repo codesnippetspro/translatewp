@@ -71,16 +71,18 @@ export const useSteps = () =>
     const persistCurrentStep = async (): Promise<boolean> =>
     {
         const nextStepId = steps[ currentIndex + 1 ].id;
-        const { defaultLanguage, languages, autoTranslate, context, style, tone } = useSetupStore.getState();
+        const { defaultLanguage, languages, autoTranslate, context, style, tone, formality, creativity } = useSetupStore.getState();
         if (currentStep.id === 'style-tone') {
-            if (isRestartedSetup() && styleChangedSinceLoad(style, tone) && !(await confirmRetranslation('style'))) {
+            if (isRestartedSetup() && styleChangedSinceLoad({ style, tone, formality, creativity }) && !(await confirmRetranslation('style'))) {
                 useSetupStore.setState({
                     style: window.setupData?.style ?? style,
                     tone: window.setupData?.tone ?? tone,
+                    formality: window.setupData?.formality ?? 5,
+                    creativity: window.setupData?.creativity ?? 5,
                 });
                 return false;
             }
-            await saveStep({ step: 'style-tone', resumeStep: nextStepId, style, tone });
+            await saveStep({ step: 'style-tone', resumeStep: nextStepId, style, tone, formality, creativity });
         }
         else if (currentStep.id === 'languages') {
             useSetupStore.getState().setLanguagesSavedAt(Date.now());

@@ -85,6 +85,7 @@ class NetworkScope {
 				),
 				self::field( 'languages.switcher.text_color', __( 'Text color', 'translate' ), 'color', '#393535' ),
 				self::field( 'languages.switcher.background_color', __( 'Background color', 'translate' ), 'color', '#FFFFFF' ),
+				self::field( 'languages.switcher.border_color', __( 'Border color', 'translate' ), 'color', '#E2E2E4' ),
 				self::field(
 					'languages.switcher.background_style',
 					__( 'Background', 'translate' ),
@@ -98,6 +99,7 @@ class NetworkScope {
 				),
 				self::field( 'languages.switcher.highlight_text', __( 'Highlight text color', 'translate' ), 'color', '#FFFFFF' ),
 				self::field( 'languages.switcher.highlight_bg', __( 'Highlight background', 'translate' ), 'color', '#0e3ecd' ),
+				self::field( 'languages.switcher.loading_border_color', __( 'Loading border color', 'translate' ), 'color', '#0e3ecd' ),
 				self::field( 'languages.switcher.icon_size', __( 'Switcher icon size', 'translate' ), 'number', 24 ),
 				self::field( 'languages.switcher.padding', __( 'Switcher padding', 'translate' ), 'number', 12 ),
 				self::field( 'languages.switcher.offset', __( 'Switcher offset', 'translate' ), 'number', 24 ),
@@ -180,14 +182,7 @@ class NetworkScope {
 					__( 'Preset tone', 'translate' ),
 					'select',
 					'friendly',
-					[
-						'friendly'     => __( 'Friendly', 'translate' ),
-						'professional' => __( 'Professional', 'translate' ),
-						'casual'       => __( 'Casual', 'translate' ),
-						'playful'      => __( 'Playful', 'translate' ),
-						'luxury'       => __( 'Luxury', 'translate' ),
-						'formal'       => __( 'Formal', 'translate' ),
-					]
+					self::tone_options()
 				),
 				self::field( 'translations.style.formality', __( 'Formality', 'translate' ), 'range', 5 ),
 				self::field( 'translations.style.creativity', __( 'Precision vs fluency', 'translate' ), 'range', 5 ),
@@ -419,7 +414,7 @@ class NetworkScope {
 			case 'range':
 				return is_numeric( $raw ) ? min( 10, max( 0, (int) $raw ) ) : null;
 			case 'color':
-				return 1 === preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $raw ) ? (string) $raw : null;
+				return 1 === preg_match( '/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', (string) $raw ) ? (string) $raw : null;
 			case 'text':
 				$text = sanitize_text_field( (string) $raw );
 				return function_exists( 'mb_substr' ) ? mb_substr( $text, 0, self::TEXT_MAX ) : substr( $text, 0, self::TEXT_MAX );
@@ -432,6 +427,26 @@ class NetworkScope {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Formal is no longer offered; a network default that saved it keeps it
+	 * listed, last, until the network admin picks another tone.
+	 */
+	private static function tone_options(): array {
+		$options = [
+			'neutral'      => __( 'Neutral', 'translate' ),
+			'friendly'     => __( 'Friendly', 'translate' ),
+			'professional' => __( 'Professional', 'translate' ),
+			'casual'       => __( 'Casual', 'translate' ),
+			'playful'      => __( 'Playful', 'translate' ),
+			'luxury'       => __( 'Luxury', 'translate' ),
+		];
+		if ( 'formal' === self::get_path( SettingsScope::network_values(), 'translations.style.tone' ) ) {
+			$options['formal'] = __( 'Formal', 'translate' );
+		}
+
+		return $options;
 	}
 
 	private static function field_value( array $field ) {

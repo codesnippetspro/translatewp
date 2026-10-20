@@ -5,10 +5,10 @@ namespace TranslateWP\Functionality;
 use TranslateWP\Components\Access;
 
 /**
- * TranslateWP in the toolbar: under the site name, on the site and in
- * wp-admin, and under each site in My Sites on a network, opening the admin
- * page the user has there. A user without an admin page on a site gets no
- * entry for it.
+ * TranslateWP in the toolbar: under the site name on the site itself (not in
+ * wp-admin, where the sidebar menu has it), and under each site in My Sites on
+ * a network, opening the admin page the user has there. A user without an
+ * admin page on a site gets no entry for it.
  */
 class AdminBar {
 
@@ -34,13 +34,13 @@ class AdminBar {
 	}
 
 	/**
-	 * One entry under the site name, beneath the site's own links: a group
-	 * of its own, since the menu's loose entries sit above its groups.
+	 * One entry under the site name on the front end, beneath the site's own
+	 * links: a group of its own, since the menu's loose entries sit above its groups.
 	 *
 	 * @param \WP_Admin_Bar $wp_admin_bar The toolbar being built.
 	 */
 	private function add_site_name_link( \WP_Admin_Bar $wp_admin_bar ): void {
-		if ( ! $wp_admin_bar->get_node( 'site-name' ) ) {
+		if ( is_admin() || ! $wp_admin_bar->get_node( 'site-name' ) ) {
 			return;
 		}
 		$page = Access::admin_page();

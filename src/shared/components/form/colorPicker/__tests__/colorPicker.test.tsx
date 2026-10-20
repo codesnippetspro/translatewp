@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ColorPicker, isHexColor } from '@/shared/components/form/colorPicker';
+import { ColorPicker, COLOR_POPOVER_PROPS, isHexColor } from '@/shared/components/form/colorPicker';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,14 +43,66 @@ describe('ColorPicker text field', () =>
         document.body.innerHTML = '';
     });
 
-    it('accepts three and six digit hex colours only', () =>
+    it('accepts three, four, six and eight digit hex colours, including an alpha channel', () =>
     {
         expect(isHexColor('#0E3ECD')).toBe(true);
         expect(isHexColor('#fff')).toBe(true);
         expect(isHexColor(' #abcdef ')).toBe(true);
+        expect(isHexColor('#0E3ECD80')).toBe(true);
+        expect(isHexColor('#f0a8')).toBe(true);
         expect(isHexColor('ZZZZZZ')).toBe(false);
         expect(isHexColor('#12345')).toBe(false);
+        expect(isHexColor('#1234567')).toBe(false);
         expect(isHexColor('red')).toBe(false);
+    });
+
+    it('anchors the popup to its swatch and flips and shifts to stay on screen', () =>
+    {
+        expect(COLOR_POPOVER_PROPS).toMatchObject({ placement: 'bottom-start', flip: true, shift: true, resize: true });
+    });
+
+    it('round-trips a semi-transparent hex value through the text field', async () =>
+    {
+        const onChange = jest.fn();
+        const container = await render(<ColorPicker label="Background Color" value="#FFFFFF" onChange={onChange} />);
+        const input = container.querySelector('input') as HTMLInputElement;
+
+        await typeInto(input, '#0E3ECD80');
+
+        expect(onChange).toHaveBeenLastCalledWith('#0E3ECD80');
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('opens an alpha-capable colour picker from the swatch', async () =>
+    {
+        const container = await render(<ColorPicker label="Background Color" value="#FFFFFF" onChange={jest.fn()} />);
+        const swatch = container.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement;
+
+        await act(async () =>
+        {
+            swatch.click();
+        });
+
+        expect(document.querySelector('.components-color-picker')).not.toBeNull();
+    });
+
+    it('reports the open state to onOpenChange when the swatch toggles', async () =>
+    {
+        const onOpenChange = jest.fn();
+        const container = await render(<ColorPicker label="Loading border color" value="#0E3ECD" onChange={jest.fn()} onOpenChange={onOpenChange} />);
+        const swatch = container.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement;
+
+        await act(async () =>
+        {
+            swatch.click();
+        });
+        expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+        await act(async () =>
+        {
+            swatch.click();
+        });
+        expect(onOpenChange).toHaveBeenLastCalledWith(false);
     });
 
     it('keeps a value that is not a hex colour out of the settings and shows the hint', async () =>
@@ -62,7 +114,7 @@ describe('ColorPicker text field', () =>
         await typeInto(input, 'ZZZZZZ');
 
         expect(onChange).not.toHaveBeenCalled();
-        expect(container.querySelector('[role="alert"]')?.textContent).toBe('Use a hex color such as #0E3ECD.');
+        expect(container.querySelector('[role="alert"]')?.textContent).toBe('Use a hex color such as #0E3ECD or #0E3ECD80.');
         expect(input.getAttribute('aria-invalid')).toBe('true');
         expect(input.getAttribute('aria-describedby')).toBe(container.querySelector('[role="alert"]')?.id);
 

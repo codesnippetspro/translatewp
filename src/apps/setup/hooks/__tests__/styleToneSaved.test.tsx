@@ -50,7 +50,7 @@ describe('the style and tone step in the wizard order', () =>
     beforeEach(() =>
     {
         mockSave.saveSetupStep.mockReset().mockResolvedValue({ success: true });
-        useSetupStore.setState({ defaultLanguage: 'en-us', languages: [], siteRead: true, context: 'shop', style: 'legal', tone: 'formal' });
+        useSetupStore.setState({ defaultLanguage: 'en-us', languages: [], siteRead: true, context: 'shop', style: 'legal', tone: 'formal', formality: 8, creativity: 2 });
     });
 
     it('follows Read your site and saves the chosen style and tone before Languages', async () =>
@@ -62,7 +62,7 @@ describe('the style and tone step in the wizard order', () =>
         expect(renders[renders.length - 1].currentStep.id).toBe('style-tone');
 
         await act(async () => { await renders[renders.length - 1].nextStep(); });
-        expect(mockSave.saveSetupStep).toHaveBeenLastCalledWith({ step: 'style-tone', resumeStep: 'languages', style: 'legal', tone: 'formal' });
+        expect(mockSave.saveSetupStep).toHaveBeenLastCalledWith({ step: 'style-tone', resumeStep: 'languages', style: 'legal', tone: 'formal', formality: 8, creativity: 2 });
         expect(renders[renders.length - 1].currentStep.id).toBe('languages');
 
         await act(async () => { root.unmount(); });
@@ -76,6 +76,7 @@ describe('a restarted wizard that changes the style or tone', () =>
         mockSave.saveSetupStep.mockReset().mockResolvedValue({ success: true });
         (window as { setupData?: unknown }).setupData = { defaultLanguage: 'en-us', step: 'done', style: 'neutral', tone: 'friendly' };
         useStepStore.setState({ step: 'style-tone', stepError: null });
+        useSetupStore.setState({ formality: 5, creativity: 5 });
     });
 
     afterEach(() =>
@@ -126,6 +127,22 @@ describe('a restarted wizard that changes the style or tone', () =>
 
         expect(request).not.toHaveBeenCalled();
         expect(renders[renders.length - 1].currentStep.id).toBe('languages');
+        await act(async () => { root.unmount(); });
+    });
+
+    it('confirms a slider-only change and restores both levels when cancelled', async () =>
+    {
+        const request = jest.fn().mockResolvedValue(false);
+        useConfirmStore.setState({ request });
+        useSetupStore.setState({ siteRead: true, style: 'neutral', tone: 'friendly', formality: 1, creativity: 9 });
+        const { renders, root } = await renderSteps();
+        await act(async () => { await renders[renders.length - 1].nextStep(); });
+
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(mockSave.saveSetupStep).not.toHaveBeenCalled();
+        expect(useSetupStore.getState().formality).toBe(5);
+        expect(useSetupStore.getState().creativity).toBe(5);
+        expect(renders[renders.length - 1].currentStep.id).toBe('style-tone');
         await act(async () => { root.unmount(); });
     });
 });

@@ -418,6 +418,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_home_url']             = null;
 	$GLOBALS['wp_test_spawn_cron']           = 0;
 	$GLOBALS['wp_test_scan_fail']            = false;
+	$GLOBALS['wp_test_scan_response']        = null;
 	$GLOBALS['wp_test_raw_options']          = [];
 	$GLOBALS['wp_test_bloginfo']             = [];
 	$GLOBALS['wp_test_cat_names']            = [];
@@ -1285,6 +1286,10 @@ function wp_remote_request( string $url, array $args = [] ) {
 			'body'    => is_array( $body ) ? $body : [],
 			'headers' => is_array( $args['headers'] ?? null ) ? $args['headers'] : [],
 		];
+
+		if ( isset( $GLOBALS['wp_test_scan_response'] ) ) {
+			return $GLOBALS['wp_test_scan_response'];
+		}
 
 		if ( ! empty( $GLOBALS['wp_test_scan_fail'] ) ) {
 			return new WP_Error( 'remote_error', 'scan rejected' );

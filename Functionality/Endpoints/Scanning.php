@@ -23,7 +23,7 @@ class Scanning extends BaseApiEndpoints {
     // The front page plus the newest and the oldest SAMPLE_QUERY_SIZE items.
     public const SCAN_PAGE_CAP = 25;
     public const STYLE_PRESETS = [ 'marketing', 'neutral', 'medical', 'technical', 'legal' ];
-    public const TONE_PRESETS  = [ 'friendly', 'casual', 'professional', 'formal' ];
+    public const TONE_PRESETS  = [ 'neutral', 'friendly', 'casual', 'professional', 'formal' ];
     // A scan of a large site takes the model a while; the request waits for it.
     private const SCAN_TIMEOUT_SECONDS = 90;
     public const SCAN_HOOK = 'translatewp_context_scan_run';
@@ -125,6 +125,7 @@ class Scanning extends BaseApiEndpoints {
         Options::update( self::SCAN_STATUS_OPTION, 'pending' );
         Options::update( self::SCAN_RESULT_OPTION, null );
         Options::update( self::SCAN_RETRY_OPTION, false );
+        Options::update( 'translations.context.scan_reason', '' );
         Options::update(
             self::SCAN_PROGRESS_OPTION,
             [
@@ -192,7 +193,7 @@ class Scanning extends BaseApiEndpoints {
                 'context'    => (string) ( $result['context'] ?? '' ),
                 'language'   => (string) ( $result['language'] ?? '' ),
                 'style'      => (string) ( $result['style'] ?? '' ),
-                'tone'       => (string) ( $result['tone'] ?? '' ),
+                'tone'       => self::offered_tone( (string) ( $result['tone'] ?? '' ) ),
                 'formality'  => (int) ( $result['formality'] ?? 5 ),
                 'creativity' => (int) ( $result['creativity'] ?? 5 ),
                 // The scan proposes terms to Pro only; they land only
@@ -286,11 +287,8 @@ class Scanning extends BaseApiEndpoints {
         $scan_result = SiteRequests::post( '/v1/scanning/context', $body, self::SCAN_TIMEOUT_SECONDS );
 
         if ( is_wp_error( $scan_result ) ) {
-            $data   = $scan_result->get_error_data();
-            $status = is_array( $data ) ? (int) ( $data['status'] ?? 0 ) : 0;
-            // No status (transport) or a service-side failure: try again later.
-            // A 4xx answer is a response this site cannot use.
-            $this->fail_scan( $status >= 400 && $status < 500 ? 'invalid_scan_response' : 'context_scan_unavailable' );
+            [ $reason, $status ] = $this->classify_scan_failure( $scan_result );
+            $this->fail_scan( $reason, $status );
             return;
         }
 
@@ -301,7 +299,7 @@ class Scanning extends BaseApiEndpoints {
 
         $scanned_context    = sanitize_textarea_field( (string) $scan_result['context'] );
         $scanned_style      = sanitize_text_field( (string) $scan_result['style'] );
-        $scanned_tone       = sanitize_text_field( (string) $scan_result['tone'] );
+        $scanned_tone       = self::offered_tone( sanitize_text_field( (string) $scan_result['tone'] ) );
         $scanned_formality  = (int) $scan_result['formality'];
         $scanned_creativity = (int) $scan_result['creativity'];
 
@@ -335,6 +333,39 @@ class Scanning extends BaseApiEndpoints {
 
         Options::update( self::SCAN_RESULT_OPTION, $scan_result );
         Options::update( self::SCAN_STATUS_OPTION, 'done' );
+        Options::update( 'translations.context.scan_reason', '' );
+    }
+
+    /**
+     * The failure the plugin reports from a service error. No HTTP status is a
+     * transport failure (no answer); a service or provider error and a 5xx read
+     * as the service being unavailable; the API's own failure code is
+     * authoritative when it sends one.
+     *
+     * @return array{0:string,1:int} The reason and the HTTP status (0 = none).
+     */
+    private function classify_scan_failure( \WP_Error $error ): array {
+        $data    = $error->get_error_data();
+        $data    = is_array( $data ) ? $data : [];
+        $status  = (int) ( $data['status'] ?? 0 );
+        $payload = is_array( $data['payload'] ?? null ) ? $data['payload'] : [];
+        $code    = is_string( $payload['code'] ?? null ) ? $payload['code'] : '';
+
+        if ( ! empty( $data['transport'] ) || 0 === $status ) {
+            $reason = 'context_scan_unreachable';
+        } elseif ( 'scan_timeout' === $code || 504 === $status ) {
+            $reason = 'context_scan_timeout';
+        } elseif ( 'scan_output_unusable' === $code ) {
+            $reason = 'invalid_scan_response';
+        } elseif ( 'scan_service_unavailable' === $code || $status >= 500 ) {
+            $reason = 'context_scan_service_unavailable';
+        } elseif ( $status >= 400 ) {
+            $reason = 'invalid_scan_response';
+        } else {
+            $reason = 'context_scan_service_unavailable';
+        }
+
+        return [ $reason, $status ];
     }
 
     /**
@@ -343,8 +374,11 @@ class Scanning extends BaseApiEndpoints {
      * once: the wizard is waiting, and on a host without a working cron
      * loopback the status route runs it once it is overdue.
      */
-    private function fail_scan( string $reason ): void {
-        \TranslateWP\Components\ActionLog::record( 'Site context scan failed: ' . $reason, 'error' );
+    private function fail_scan( string $reason, int $status = 0 ): void {
+        \TranslateWP\Components\ActionLog::record(
+            sprintf( 'Site context scan failed: %s%s', $reason, $status > 0 ? ' (HTTP ' . $status . ')' : '' ),
+            'error'
+        );
         if ( ! Options::get( self::SCAN_RETRY_OPTION, false ) ) {
             Options::update( self::SCAN_RETRY_OPTION, true );
             if ( ! wp_next_scheduled( self::SCAN_HOOK ) ) {
@@ -504,6 +538,14 @@ class Scanning extends BaseApiEndpoints {
         }
 
         return false;
+    }
+
+    /**
+     * Formal is no longer offered as a tone; a scan that proposes it is
+     * offered as Neutral, and the formality it proposes is kept apart.
+     */
+    public static function offered_tone( string $tone ): string {
+        return 'formal' === $tone ? 'neutral' : $tone;
     }
 
     private function is_valid_scan_result( $scan_result ): bool {

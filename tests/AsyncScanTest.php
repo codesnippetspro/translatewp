@@ -89,7 +89,7 @@ $scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
 $scanning->run_scan();
 $scanning->run_scan();
 $status = $scanning->scan_status( make_request( 'GET' ) );
-assert_true( 'failed' === ( $status['status'] ?? '' ) && 'context_scan_unavailable' === ( $status['reason'] ?? '' ), 'An unconnected site must fail as unavailable, got ' . wp_json_encode( $status ) );
+assert_true( 'failed' === ( $status['status'] ?? '' ) && 'context_scan_service_unavailable' === ( $status['reason'] ?? '' ), 'An unconnected site must fail as service unavailable, got ' . wp_json_encode( $status ) );
 
 // --- Once the site holds translations the scan is a proposal: nothing is written ---
 wp_test_reset( scan_site_options() );
@@ -122,7 +122,65 @@ $scanning->run_scan();
 assert_true( false === wp_next_scheduled( 'translatewp_context_scan_run' ), 'Second failure must not re-schedule' );
 $status = $scanning->scan_status( make_request( 'GET' ) );
 assert_true( 'failed' === ( $status['status'] ?? '' ), 'Second failure must mark the scan failed, got ' . wp_json_encode( $status ) );
-assert_true( 'context_scan_unavailable' === ( $status['reason'] ?? '' ), 'Failed status must carry the reason' );
+assert_true( 'context_scan_unreachable' === ( $status['reason'] ?? '' ), 'A transport failure with no HTTP status must read as unreachable, got ' . wp_json_encode( $status ) );
+
+// --- The failure class and HTTP status land in the action log, no body ---
+$log_text = \TranslateWP\Components\ActionLog::text();
+assert_true( false !== strpos( $log_text, 'context_scan_unreachable' ), 'The action log must carry the failure class, got ' . $log_text );
+
+// --- SiteRequests keeps a transport error as 502 and marks it as no-answer ---
+wp_test_reset( scan_site_options() );
+$GLOBALS['wp_test_scan_response'] = new WP_Error( 'http_request_failed', 'dns failure' );
+$transport_error = \TranslateWP\Components\SiteRequests::post( '/v1/scanning/context', [], 5 );
+$GLOBALS['wp_test_scan_response'] = null;
+assert_true( $transport_error instanceof WP_Error, 'A transport failure must surface as a WP_Error' );
+$transport_data = $transport_error instanceof WP_Error ? (array) $transport_error->get_error_data() : [];
+assert_true( 502 === (int) ( $transport_data['status'] ?? 0 ), 'A transport error must keep HTTP 502 for callers that answer it, got ' . wp_json_encode( $transport_data ) );
+assert_true( true === ( $transport_data['transport'] ?? false ), 'A transport error must carry the no-answer marker' );
+
+// --- Classification by HTTP status and the API failure code ---
+function scan_fail_reason_for( $response ): string {
+	wp_test_reset( scan_site_options() );
+	seed_published_posts();
+	$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+	$GLOBALS['wp_test_scan_response'] = $response;
+	$scanning->run_scan();
+	$GLOBALS['wp_test_scheduled'] = [];
+	$scanning->run_scan();
+	$GLOBALS['wp_test_scan_response'] = null;
+	$status = $scanning->scan_status( make_request( 'GET' ) );
+	return (string) ( $status['reason'] ?? '' );
+}
+
+function api_error_response( int $code, array $body ): array {
+	return [ 'response' => [ 'code' => $code ], 'body' => wp_json_encode( $body ) ];
+}
+
+assert_true( 'context_scan_service_unavailable' === scan_fail_reason_for( api_error_response( 503, [ 'error' => 'x', 'code' => 'scan_service_unavailable' ] ) ), 'A 503 scan_service_unavailable must read as service unavailable' );
+assert_true( 'context_scan_timeout' === scan_fail_reason_for( api_error_response( 504, [ 'error' => 'x', 'code' => 'scan_timeout' ] ) ), 'A 504 scan_timeout must read as timeout' );
+assert_true( 'invalid_scan_response' === scan_fail_reason_for( api_error_response( 502, [ 'error' => 'x', 'code' => 'scan_output_unusable' ] ) ), 'A 502 scan_output_unusable must read as an unusable answer' );
+assert_true( 'invalid_scan_response' === scan_fail_reason_for( api_error_response( 422, [ 'error' => 'bad body' ] ) ), 'A 4xx must read as an unusable answer' );
+// Today's production API: a plain 502 with no code must not blame the site's network.
+assert_true( 'context_scan_service_unavailable' === scan_fail_reason_for( api_error_response( 502, [ 'error' => 'Context scan unavailable' ] ) ), 'A plain 502 with no code must read as service unavailable, not unreachable' );
+assert_true( 'context_scan_unreachable' === scan_fail_reason_for( new WP_Error( 'http_request_failed', 'dns failure' ) ), 'A transport error with no answer must read as unreachable' );
+
+// --- A successful scan clears an earlier failure reason (stale reason fix) ---
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+\TranslateWP\Components\Options::update( 'translations.context.scan_reason', 'context_scan_service_unavailable' );
+$scanning->run_scan();
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'done' === ( $status['status'] ?? '' ), 'A clean run after a stale reason must finish done, got ' . wp_json_encode( $status ) );
+assert_true( '' === (string) \TranslateWP\Components\Options::get( 'translations.context.scan_reason', '' ), 'A successful scan must clear the earlier failure reason' );
+
+// --- Starting a scan clears an earlier failure reason at once ---
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+\TranslateWP\Components\Options::update( 'translations.context.scan_reason', 'context_scan_unreachable' );
+$scanning->scan_context( make_request( 'POST' ) );
+assert_true( '' === (string) \TranslateWP\Components\Options::get( 'translations.context.scan_reason', '' ), 'Starting a scan must clear the earlier failure reason' );
 
 // --- A transient failure retries at once ---
 wp_test_reset( scan_site_options() );
@@ -323,6 +381,48 @@ $scanning->run_scan();
 assert_true( 0 === lexicon_term_count(), 'A Pro proposal scan adds no terms by itself' );
 $applied = $scanning->apply_scan_lexicon( make_request( 'POST' ) );
 assert_true( 2 === ( $applied['added'] ?? null ) && 2 === lexicon_term_count(), 'On Pro, apply-lexicon adds the proposed terms, got ' . wp_json_encode( $applied ) );
+
+// --- Formal is no longer a tone preset: a scan that still proposes it is offered as Neutral, with its own formality ---
+function scan_answer( string $tone, int $formality ): array {
+	return [
+		'response' => [ 'code' => 200 ],
+		'body'     => wp_json_encode(
+			[
+				'context'    => 'A site about translation',
+				'language'   => 'en',
+				'style'      => 'neutral',
+				'tone'       => $tone,
+				'formality'  => $formality,
+				'creativity' => 5,
+			]
+		),
+	];
+}
+
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$GLOBALS['wp_test_scan_response'] = scan_answer( 'formal', 8 );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$scanning->run_scan();
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'done' === ( $status['status'] ?? '' ) && 'neutral' === ( $status['tone'] ?? '' ) && 8 === ( $status['formality'] ?? null ), 'A scan proposing Formal must be offered as Neutral with its own formality, got ' . wp_json_encode( $status ) );
+assert_true( 'neutral' === \TranslateWP\Components\Options::get( 'translations.style.tone', '' ) && 8 === (int) \TranslateWP\Components\Options::get( 'translations.style.formality', 0 ), 'An applied scan proposing Formal must save Neutral and keep the scanned formality' );
+
+wp_test_reset( scan_site_options() );
+seed_published_posts();
+$GLOBALS['wp_test_scan_response'] = scan_answer( 'neutral', 5 );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$scanning->run_scan();
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'done' === ( $status['status'] ?? '' ) && 'neutral' === ( $status['tone'] ?? '' ), 'A scan answering Neutral is a valid result, got ' . wp_json_encode( $status ) );
+
+// A scan result stored before the change still reads as Neutral.
+wp_test_reset( scan_site_options() );
+\TranslateWP\Components\Options::update( 'translations.context.scan_status', 'done' );
+\TranslateWP\Components\Options::update( 'translations.context.scan_result', [ 'context' => 'Saved', 'style' => 'neutral', 'tone' => 'formal', 'formality' => 9, 'creativity' => 5, 'applied' => false ] );
+$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+$status = $scanning->scan_status( make_request( 'GET' ) );
+assert_true( 'neutral' === ( $status['tone'] ?? '' ) && 9 === ( $status['formality'] ?? null ), 'A stored scan proposing Formal must read as Neutral with its own formality, got ' . wp_json_encode( $status ) );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "AsyncScanTest: {$failures} assertion(s) failed\n" );

@@ -10,11 +10,13 @@ import { useSetupStore } from '@/apps/setup/stores/setupStore';
 import { getProState, isProActive } from '@/shared/lib/pro/proState';
 import { takePendingPreset } from '@/shared/lib/pro/pendingPreset';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
+import { Range } from '@/shared/components/form/range';
+import { ManagedByNetwork } from '@/shared/components/managedByNetwork';
 
 
 export const StyleToneStep = () =>
 {
-    const { style, tone, setStyle, setTone } = useSetupStore();
+    const { style, tone, formality, creativity, setStyle, setTone, setFormality, setCreativity } = useSetupStore();
     // The wizard holds style and tone in its own store, so the Pro custom
     // panel (which edits the saved settings) has no place here: with Pro the
     // Orbital presets are simply offered; custom text lives in Settings.
@@ -41,6 +43,7 @@ export const StyleToneStep = () =>
                 </p>
             </div>
 
+            <ManagedByNetwork group="style_tone">
             <div className="flex flex-col gap-3">
                 <h3 className="text-sm! font-semibold m-0">{__('Style', 'translate')}</h3>
                 {proActive
@@ -54,6 +57,36 @@ export const StyleToneStep = () =>
                     ? <PresetChoice kind="tone" selected={tone} onChange={setTone} />
                     : <CustomOption feature={__('Custom tone', 'translate')} slot="translationTone" kind="tone" selected={tone} onChange={setTone} />}
             </div>
+
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-3">
+                    <h3 className="text-sm! font-semibold m-0">{__('Precision vs fluency', 'translate')}</h3>
+                    <Range
+                        label={__('Precision vs fluency', 'translate')}
+                        beginningLabel={__('Precise (literal)', 'translate')}
+                        endingLabel={__('Creative (fluid)', 'translate')}
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={creativity}
+                        onChange={setCreativity}
+                    />
+                </div>
+                <div className="flex flex-col gap-3">
+                    <h3 className="text-sm! font-semibold m-0">{__('Formality', 'translate')}</h3>
+                    <Range
+                        label={__('Formality', 'translate')}
+                        beginningLabel={__('Informal', 'translate')}
+                        endingLabel={__('Formal', 'translate')}
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={formality}
+                        onChange={setFormality}
+                    />
+                </div>
+            </div>
+            </ManagedByNetwork>
         </div>
     );
 };

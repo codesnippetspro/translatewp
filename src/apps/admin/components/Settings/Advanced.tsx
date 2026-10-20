@@ -13,7 +13,7 @@ import { ManagedByNetwork } from '@/shared/components/managedByNetwork';
 
 const CONFIRM_PHRASE = 'RESET';
 
-/** Settings > Advanced: the translation cache, the uninstall rule and the full reset. */
+/** Settings > Advanced: the translation cache, the other-plugins notice, the uninstall rule and the full reset. */
 export const SettingsAdvanced = () =>
 {
     const queryClient = useQueryClient();
@@ -23,7 +23,7 @@ export const SettingsAdvanced = () =>
     const deleteOnUninstall = useAdminSettingsStore(state => state.settings['advanced'].delete_on_uninstall);
     const setSetting = useAdminSettingsStore(state => state.setSetting);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
-    const exportUrl = window.TranslateWP?.context?.export_url ?? '';
+    const otherTranslationPlugins = window.TranslateWP?.context?.other_translation_plugins ?? [];
 
     const clearCacheMutation = useMutation({
         mutationFn: clearSiteCache,
@@ -78,6 +78,7 @@ export const SettingsAdvanced = () =>
                 </div>
             </div>
 
+            {otherTranslationPlugins.length > 0 && (
             <div id="other-translation-plugins" className="flex flex-col gap-4">
                 <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Other translation plugins', 'translate')}</h3>
                 <div className="flex flex-col gap-3 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3" role="note">
@@ -89,19 +90,6 @@ export const SettingsAdvanced = () =>
                 </p>
                 </div>
             </div>
-
-            {exportUrl !== '' && (
-                <div className="flex flex-col gap-4" data-twp-export>
-                    <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Your data', 'translate')}</h3>
-                    <p className="text-sm text-translatewp-muted! m-0">
-                        {__('Download this site\'s translations as one file: every page address, language, source text and translation. The file opens in any spreadsheet and is yours to keep. Available on every plan.', 'translate')}
-                    </p>
-                    <div>
-                        <Button variant="secondary" href={exportUrl}>
-                            {__('Export your data', 'translate')}
-                        </Button>
-                    </div>
-                </div>
             )}
 
             <div className="flex flex-col gap-4">

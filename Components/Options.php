@@ -17,9 +17,11 @@ namespace TranslateWP\Components;
  *      - icon_style: string
  *      - text_color: string
  *      - background_color: string
+ *      - border_color: string (hex, optional alpha; default #E2E2E4)
  *      - background_style: 'solid' | 'transparent' | 'glass' (default solid; glass is a frosted, see-through surface)
  *      - highlight_text: string
  *      - highlight_bg: string
+ *      - loading_border_color: string (hex, optional alpha; the ring shown while translating; defaults to highlight_bg)
  *      - offset: int (px corner inset; default 32)
  *      - icon_size: int (px closed-trigger icon; default 24)
  *      - padding: int (px padding around icon; default 12)
@@ -59,7 +61,7 @@ namespace TranslateWP\Components;
  *      - translate_protected_pages: boolean
  *      - preserve_html_attributes: boolean
  *      - translate_comments, translate_menus, translate_widgets: boolean (page areas; on unless switched off)
- *      - visible_roles: string[] (Pro; empty means everyone sees translations)
+ *      - visible_roles: string[] (retired: a stored value is ignored and every visitor sees translations)
  *      - preserve_branded_terms: boolean
  *      - localized_date_time_formats: boolean
  *      - enable_units_conversion: boolean

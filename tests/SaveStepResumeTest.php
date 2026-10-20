@@ -76,10 +76,14 @@ $request = new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', 
 	'resume_step' => 'languages',
 	'style'       => 'technical',
 	'tone'        => 'formal',
+	'formality'   => 2,
+	'creativity'  => 9,
 ] );
 $management->save_step( $request );
 assert_true( 'technical' === Options::get( 'translations.style.type', '' ), 'The style and tone step must save the chosen style' );
 assert_true( 'formal' === Options::get( 'translations.style.tone', '' ), 'The style and tone step must save the chosen tone' );
+assert_true( 2 === Options::get( 'translations.style.formality' ), 'Setup must save the chosen formality' );
+assert_true( 9 === Options::get( 'translations.style.creativity' ), 'Setup must save precision vs fluency' );
 assert_true( 'languages' === Options::get( 'setup.step', '' ), 'Advancing style and tone must resume at languages' );
 
 // --- a value that is no preset changes nothing ---
@@ -91,6 +95,21 @@ $request = new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', 
 $management->save_step( $request );
 assert_true( 'technical' === Options::get( 'translations.style.type', '' ), 'A style that is no preset must not be saved' );
 assert_true( 'formal' === Options::get( 'translations.style.tone', '' ), 'A tone that is no preset must not be saved' );
+
+$management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [ 'step' => 'style-tone', 'tone' => 'neutral' ] ) );
+assert_true( 'neutral' === Options::get( 'translations.style.tone', '' ), 'The style and tone step must save the Neutral tone' );
+
+foreach ( [ -1, 11, 'invalid', [], true ] as $invalid_level ) {
+	Options::update( 'setup.step', 'style-tone' );
+	$result = $management->save_step( new WP_REST_Request( 'POST', '/translatewp/v1/management/save-step', [
+		'step'        => 'style-tone',
+		'resume_step' => 'languages',
+		'formality'   => $invalid_level,
+	] ) );
+	assert_true( $result instanceof WP_Error, 'An invalid slider value must be refused' );
+	assert_true( 'style-tone' === Options::get( 'setup.step' ), 'An invalid slider must not advance setup' );
+	assert_true( 2 === Options::get( 'translations.style.formality' ), 'An invalid slider must preserve its saved value' );
+}
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "SaveStepResumeTest: {$failures} assertion(s) failed\n" );

@@ -28,7 +28,7 @@ const SWITCHER_TYPE_OPTIONS: SwitcherTypeOption[] = [
     {
         value: 'side_tab',
         label: __('Side tab', 'translate'),
-        description: __('A tab on the edge of the screen; the languages slide out from it. Switchers you place in the page stay dropdowns.', 'translate'),
+        description: __('Languages slide out of an edge tab. Placed switchers stay dropdowns.', 'translate'),
         pro: true,
     },
 ];

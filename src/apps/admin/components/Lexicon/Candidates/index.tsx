@@ -49,6 +49,9 @@ const dismissedLanguages = (candidate: LexiconCandidate): string[] =>
 const activeLanguages = (candidate: LexiconCandidate): string[] =>
     Object.entries(candidate.languages).filter(([, language]) => language.status !== 'never').map(([locale]) => locale);
 
+const CANDIDATES_PER_PAGE = 10;
+type CandidateDecision = { id: string; action: CandidateAction; language?: string };
+
 const percent = (confidence: number): string => `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`;
 
 const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate: LexiconCandidate; dismissed: boolean; onAct: (action: CandidateAction, language?: string) => void; onAdd: () => void; busy: boolean }) =>
@@ -57,11 +60,11 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
     const evidence = showAll ? candidate.evidence : candidate.evidence.slice(0, 2);
 
     return (
-        <li className="flex flex-col gap-3 py-4" data-candidate={candidate.id}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-1">
-                    <p className="m-0 text-base font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
-                    <p className="m-0 text-sm text-translatewp-muted">{candidate.reason}</p>
+        <li className="m-0! flex min-w-0 flex-col gap-1 py-2" data-candidate={candidate.id}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="flex min-w-0 flex-1 basis-40 flex-col gap-1">
+                    <p className="m-0 break-words text-sm font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
+                    <p className="m-0 truncate text-xs text-translatewp-muted" title={candidate.reason}>{candidate.reason}</p>
                 </div>
                 <span className="shrink-0 rounded-sm bg-translatewp-selection px-2 py-1 text-xs font-semibold text-translatewp-neutral" title={__('How sure the review is that this term needs your decision', 'translate')}>
                     {
@@ -69,63 +72,126 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                         sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
                     }
                 </span>
-            </div>
-
-            {Object.values(candidate.languages).every(language => !language.rendering && !language.proposed) ? (
-                <p className="m-0 text-sm text-translatewp-muted" data-not-seen>{__('Not seen in any translation yet.', 'translate')}</p>
-            ) : (
-            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
-                {Object.entries(candidate.languages).filter(([, language]) => language.rendering || language.proposed).map(([locale, language]) => (
-                    <li key={locale} data-language={locale} className="flex flex-wrap gap-2 text-translatewp-neutral">
-                        <span className="font-semibold">{getLanguageNameFromLocale(locale) ?? locale}:</span>
-                        <span>{language.rendering ?? __('not seen yet', 'translate')}</span>
-                        {language.proposed && <span className="text-translatewp-muted">{
-                            /* translators: %s: Proposed translation of the candidate term. */
-                            sprintf(__('proposed %s', 'translate'), language.proposed)
-                        }</span>}
-                        {!dismissed && language.status === 'never' && <span className="text-translatewp-muted">{__('Dismissed', 'translate')}</span>}
-                    </li>
-                ))}
-            </ul>
-            )}
-
-            {evidence.length > 0 && (
-                <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-translatewp-muted">
-                    {evidence.map((entry, index) => (
-                        <li key={`${entry.url}-${index}`}>
-                            <q>{entry.sentence}</q>
-                            {entry.url && <> <a href={entry.url} target="_blank" rel="noreferrer" className="text-translatewp-primary">{__('open page', 'translate')}</a></>}
-                        </li>
-                    ))}
-                    {candidate.evidence.length > 2 && !showAll && (
-                        <li><button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-sm text-translatewp-primary" onClick={() => setShowAll(true)}>{
-                            /* translators: %d: Total number of occurrences of the candidate term. */
-                            sprintf(__('Show all %d occurrences', 'translate'), candidate.evidence.length)
-                        }</button></li>
+                <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+                    {dismissed ? (
+                        <>
+                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
+                            {Object.keys(candidate.languages).length > 1 && dismissedLanguages(candidate).map(locale => (
+                                <Button key={locale} variant="tertiary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore', locale)}>{
+                                    /* translators: %s: Target language name. */
+                                    sprintf(__('Restore %s', 'translate'), getLanguageNameFromLocale(locale) ?? locale)
+                                }</Button>
+                            ))}
+                        </>
+                    ) : (
+                        <>
+                            <Button variant="primary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
+                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('skip')}>{__('Skip this scan', 'translate')}</Button>
+                            <Button variant="tertiary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('never')}>{__('Never suggest on this site', 'translate')}</Button>
+                        </>
                     )}
-                </ul>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-                {dismissed ? (
-                    <>
-                        <Button variant="secondary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
-                        {Object.keys(candidate.languages).length > 1 && dismissedLanguages(candidate).map(locale => (
-                            <Button key={locale} variant="tertiary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('restore', locale)}>{
-                                /* translators: %s: Target language name. */
-                                sprintf(__('Restore %s', 'translate'), getLanguageNameFromLocale(locale) ?? locale)
-                            }</Button>
-                        ))}
-                    </>
-                ) : (
-                    <>
-                        <Button variant="primary" className="rounded-sm! text-sm!" disabled={busy} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
-                        <Button variant="secondary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('skip')}>{__('Skip this scan', 'translate')}</Button>
-                        <Button variant="tertiary" className="rounded-sm! text-sm!" disabled={busy} onClick={() => onAct('never')}>{__('Never suggest on this site', 'translate')}</Button>
-                    </>
-                )}
+                </div>
             </div>
+
+            <details className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                <summary
+                    className="w-fit cursor-pointer text-translatewp-primary"
+                    aria-label={sprintf(
+                        /* translators: %s: suggested term. */
+                        __('Details for %s', 'translate'), candidate.sourceText
+                    )}
+                >{__('Details', 'translate')}</summary>
+                <div className="flex flex-col gap-2 py-2">
+                    <p className="m-0 text-sm text-translatewp-muted">{candidate.reason}</p>
+                    {Object.values(candidate.languages).every(language => !language.rendering && !language.proposed) ? (
+                        <p className="m-0 text-sm text-translatewp-muted" data-not-seen>{__('Not seen in any translation yet.', 'translate')}</p>
+                    ) : (
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
+                        {Object.entries(candidate.languages).filter(([, language]) => language.rendering || language.proposed).map(([locale, language]) => (
+                            <li key={locale} data-language={locale} className="flex flex-wrap gap-2 text-translatewp-neutral">
+                                <span className="font-semibold">{getLanguageNameFromLocale(locale) ?? locale}:</span>
+                                <span>{language.rendering ?? __('not seen yet', 'translate')}</span>
+                                {language.proposed && <span className="text-translatewp-muted">{
+                                    /* translators: %s: Proposed translation of the candidate term. */
+                                    sprintf(__('proposed %s', 'translate'), language.proposed)
+                                }</span>}
+                                {!dismissed && language.status === 'never' && <span className="text-translatewp-muted">{__('Dismissed', 'translate')}</span>}
+                            </li>
+                        ))}
+                    </ul>
+                    )}
+
+                    {evidence.length > 0 && (
+                        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-translatewp-muted">
+                            {evidence.map((entry, index) => (
+                                <li key={`${entry.url}-${index}`}>
+                                    <q>{entry.sentence}</q>
+                                    {entry.url && <> <a href={entry.url} target="_blank" rel="noopener noreferrer" className="text-translatewp-primary">{__('open page', 'translate')}</a></>}
+                                </li>
+                            ))}
+                            {candidate.evidence.length > 2 && !showAll && (
+                                <li><button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-sm text-translatewp-primary" onClick={() => setShowAll(true)}>{
+                                    /* translators: %d: Total number of occurrences of the candidate term. */
+                                    sprintf(__('Show all %d occurrences', 'translate'), candidate.evidence.length)
+                                }</button></li>
+                            )}
+                        </ul>
+                    )}
+
+                </div>
+            </details>
         </li>
+    );
+};
+
+const CandidateList = ({ candidates, dismissed, busy, onAct, onAdd }: {
+    candidates: LexiconCandidate[];
+    dismissed: boolean;
+    busy: boolean;
+    onAct: (decision: CandidateDecision) => void;
+    onAdd: (candidate: LexiconCandidate) => void;
+}) =>
+{
+    const [page, setPage] = useState(1);
+    const pages = Math.max(1, Math.ceil(candidates.length / CANDIDATES_PER_PAGE));
+    const currentPage = Math.min(page, pages);
+    const start = (currentPage - 1) * CANDIDATES_PER_PAGE;
+
+    return (
+        <div className="flex min-w-0 flex-col gap-3">
+            <ol className="m-0! list-none divide-y divide-translatewp-border p-0!">
+                {candidates.slice(start, start + CANDIDATES_PER_PAGE).map(candidate => (
+                    <CandidateRow
+                        key={candidate.id}
+                        candidate={candidate}
+                        dismissed={dismissed}
+                        busy={busy}
+                        onAct={(action, language) => onAct({ id: candidate.id, action, language })}
+                        onAdd={() => onAdd(candidate)}
+                    />
+                ))}
+            </ol>
+            {pages > 1 && (
+                <nav
+                    className="flex flex-wrap items-center justify-between gap-3"
+                    aria-label={dismissed ? __('Dismissed suggestions pages', 'translate') : __('Suggested terms pages', 'translate')}
+                >
+                    <span className="text-sm text-translatewp-muted" role="status">{sprintf(
+                        /* translators: 1: current page, 2: total pages, 3: total suggestions. */
+                        __('Page %1$d of %2$d (%3$d suggestions)', 'translate'),
+                        currentPage, pages, candidates.length
+                    )}</span>
+                    <div className="flex items-center gap-2">
+                        <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={currentPage === 1 || busy} onClick={() => setPage(currentPage - 1)}>
+                            {__('Previous', 'translate')}
+                        </Button>
+                        <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={currentPage === pages || busy} onClick={() => setPage(currentPage + 1)}>
+                            {__('Next', 'translate')}
+                        </Button>
+                    </div>
+                </nav>
+            )}
+        </div>
     );
 };
 
@@ -150,7 +216,7 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
 
     const startMutation = useMutation({ mutationFn: startLexiconScan, onSuccess: refresh });
     const actMutation = useMutation({
-        mutationFn: ({ id, action, language }: { id: string; action: CandidateAction; language?: string }) => (language ? actOnLexiconCandidate(id, action, language) : actOnLexiconCandidate(id, action)),
+        mutationFn: ({ id, action, language }: CandidateDecision) => (language ? actOnLexiconCandidate(id, action, language) : actOnLexiconCandidate(id, action)),
         onSuccess: refresh,
     });
 
@@ -182,23 +248,19 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
                 <p className="m-0 text-sm text-translatewp-muted">{__('Nothing waits for your decision.', 'translate')}</p>
             )}
             {candidates.length > 0 && (
-                <ol className="m-0 list-none divide-y divide-translatewp-border p-0">
-                    {candidates.map(candidate => (
-                        <CandidateRow
-                            key={candidate.id}
-                            candidate={candidate}
-                            dismissed={false}
-                            busy={actMutation.isPending}
-                            onAct={(action, language) => actMutation.mutate({ id: candidate.id, action, language })}
-                            onAdd={() => onAdd({
-                                candidateId: candidate.id,
-                                term: candidate.sourceText,
-                                description: candidate.reason,
-                                languages: activeLanguages(candidate),
-                            })}
-                        />
-                    ))}
-                </ol>
+                <CandidateList
+                    key={scan?.id ?? 'new'}
+                    candidates={candidates}
+                    dismissed={false}
+                    busy={actMutation.isPending}
+                    onAct={decision => actMutation.mutate(decision)}
+                    onAdd={candidate => onAdd({
+                        candidateId: candidate.id,
+                        term: candidate.sourceText,
+                        description: candidate.reason,
+                        languages: activeLanguages(candidate),
+                    })}
+                />
             )}
 
             <div className="flex flex-col gap-2">
@@ -209,11 +271,13 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
                     <p className="m-0 text-sm text-translatewp-muted">{__('No suggestion is dismissed on this site.', 'translate')}</p>
                 )}
                 {showDismissed && dismissed.length > 0 && (
-                    <ol className="m-0 list-none divide-y divide-translatewp-border p-0">
-                        {dismissed.map(candidate => (
-                            <CandidateRow key={candidate.id} candidate={candidate} dismissed busy={actMutation.isPending} onAct={(action, language) => actMutation.mutate({ id: candidate.id, action, language })} onAdd={() => undefined} />
-                        ))}
-                    </ol>
+                    <CandidateList
+                        candidates={dismissed}
+                        dismissed
+                        busy={actMutation.isPending}
+                        onAct={decision => actMutation.mutate(decision)}
+                        onAdd={() => undefined}
+                    />
                 )}
             </div>
         </div>
