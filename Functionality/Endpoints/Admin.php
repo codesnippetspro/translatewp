@@ -48,8 +48,6 @@ class Admin extends BaseApiEndpoints {
 
 	private const SEO_BOT_LANGUAGE_DECISIONS = [ 'allow', 'deny', 'inherit' ];
 
-	private const SEO_CUSTOM_BOT_MAX_LENGTH = 128;
-
 	private const SEO_BOOLEAN_KEYS = [
 		'force_lowercase',
 		'remember_last_choice',
@@ -1104,10 +1102,7 @@ class Admin extends BaseApiEndpoints {
 	 */
 	private static function sanitize_bot_name( string $name ): string {
 		$name = trim( $name );
-		if ( '' === $name || mb_strlen( $name ) > self::SEO_CUSTOM_BOT_MAX_LENGTH ) {
-			return '';
-		}
-		if ( preg_match( '/[\x00-\x1f\x7f]/', $name ) || false !== strpos( $name, '#' ) || 0 === strpos( $name, ':' ) ) {
+		if ( 1 !== preg_match( '/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/', $name ) ) {
 			return '';
 		}
 

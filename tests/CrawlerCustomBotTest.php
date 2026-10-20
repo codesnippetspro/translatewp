@@ -89,7 +89,7 @@ $at_cap = str_repeat( 'b', 128 );
 $stored = save_bots( [ $at_cap => [ 'default' => 'allow' ] ] );
 assert_true( isset( $stored[ $at_cap ] ), 'A User-Agent of exactly 128 characters is accepted' );
 
-// --- Control characters, line breaks and comment markers are refused ---
+// --- Anything outside an RFC 9309 product token is refused ---
 wp_test_reset( [ 'languages' => [ 'list' => $languages ] ] );
 $stored = save_bots(
 	[
@@ -98,9 +98,35 @@ $stored = save_bots(
 		"Carriage\rReturn"  => [ 'default' => 'allow' ],
 		'Hash#Bot'          => [ 'default' => 'allow' ],
 		':LeadingColon'     => [ 'default' => 'allow' ],
+		'*'                 => [ 'default' => 'allow' ],
+		'Google*'           => [ 'default' => 'allow' ],
+		'bad bot'           => [ 'default' => 'allow' ],
+		'a<b'               => [ 'default' => 'allow' ],
+		'"x"'               => [ 'default' => 'allow' ],
+		'$'                 => [ 'default' => 'allow' ],
+		'-leading'          => [ 'default' => 'allow' ],
+		'.leading'          => [ 'default' => 'allow' ],
 	]
 );
-assert_true( [] === $stored, 'Line breaks, control characters, # and a leading colon are all refused' );
+assert_true( [] === $stored, 'A wildcard, space, quote, structural or non-alphanumeric-leading name is refused' );
+
+// --- A real product token with a leading digit, dots, hyphens and underscores is accepted ---
+wp_test_reset( [ 'languages' => [ 'list' => $languages ] ] );
+$stored = save_bots(
+	[
+		'Meta-ExternalAgent' => [ 'default' => 'allow', 'languages' => [] ],
+		'cohere-ai'          => [ 'default' => 'deny', 'languages' => [] ],
+	]
+);
+assert_true( isset( $stored['Meta-ExternalAgent'] ), 'Meta-ExternalAgent is a valid product token and is accepted' );
+assert_true( isset( $stored['cohere-ai'] ), 'cohere-ai is a valid product token and is accepted' );
+
+// --- Every listed crawler name passes the allowlist ---
+foreach ( [ 'GPTBot', 'ClaudeBot', 'Claude-Web', 'PerplexityBot', 'Google-Extended', 'CCBot', 'Bytespider', 'Amazonbot', 'Applebot-Extended' ] as $listed ) {
+	wp_test_reset( [ 'languages' => [ 'list' => $languages ] ] );
+	$stored = save_bots( [ $listed => [ 'default' => 'allow', 'languages' => [] ] ] );
+	assert_true( isset( $stored[ $listed ] ), "Listed crawler {$listed} must pass the allowlist" );
+}
 
 // --- A duplicate of a listed crawler, in any case, does not add a second row ---
 wp_test_reset( [ 'languages' => [ 'list' => $languages ] ] );
