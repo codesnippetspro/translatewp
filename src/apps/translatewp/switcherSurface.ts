@@ -55,11 +55,16 @@ export const luminanceOf = (hex: string): number =>
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
-const glass = (background: string): string => [
-    `background-color: ${rgba(background, GLASS_ALPHA, 'rgba(255, 255, 255, 0.6)')} !important`,
+const glassBackground = (background: string, defaultAlpha: number): string =>
+    /^#(?:[0-9a-f]{4}|[0-9a-f]{8})$/i.test(background.trim())
+        ? background.trim()
+        : rgba(background, defaultAlpha, `rgba(255, 255, 255, ${defaultAlpha})`);
+
+const glass = (background: string, border: string): string => [
+    `background-color: ${glassBackground(background, GLASS_ALPHA)} !important`,
     'backdrop-filter: blur(14px) saturate(160%) !important',
     '-webkit-backdrop-filter: blur(14px) saturate(160%) !important',
-    'border: 1px solid rgba(255, 255, 255, 0.45) !important',
+    `border: 1px solid ${border} !important`,
 ].join(';\n') + ';';
 
 export const switcherSurface = (style: SwitcherBackgroundStyle | undefined, background: string, text: string, border: string = DEFAULT_SWITCHER_BORDER): SwitcherSurface =>
@@ -69,21 +74,21 @@ export const switcherSurface = (style: SwitcherBackgroundStyle | undefined, back
         // Light text gets a soft drop shadow, as on a photo; dark text a faint light edge.
         const shadow = luminanceOf(text) < 0.4 ? '0 0 2px rgba(255, 255, 255, 0.7)' : '0 1px 2px rgba(0, 0, 0, 0.45)';
         const closed = style === 'glass'
-            ? glass(background)
+            ? glass(background, border)
             : [
                 'background-color: transparent !important',
                 `border: 1px solid ${rgba(text, 0.45, 'rgba(0, 0, 0, 0.35)')} !important`,
                 `text-shadow: ${shadow} !important`,
                 'box-shadow: none !important',
             ].join(';\n') + ';';
-        const opaque = rgba(background, FALLBACK_ALPHA, 'rgba(255, 255, 255, 0.92)');
+        const fallbackBackground = glassBackground(background, FALLBACK_ALPHA);
 
         return {
             closed,
-            panel: glass(background),
+            panel: glass(background, border),
             fallback: `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
                 ${style === 'glass' ? '.twp-trigger, .twp-native-select, .twp-native-admin,' : ''} .twp-dropdown, .twp-toast {
-                    background-color: ${opaque} !important;
+                    background-color: ${fallbackBackground} !important;
                 }
             }`,
         };

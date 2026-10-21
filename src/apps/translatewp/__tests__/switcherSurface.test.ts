@@ -80,4 +80,33 @@ describe('the switcher background choices', () =>
         expect(surface.closed).toContain('background-color: #0e3ecd80');
         expect(surface.closed).toContain('border: 1px solid #11223344');
     });
+
+    it('uses the chosen matte border on the closed control and open panel', () =>
+    {
+        const surface = switcherSurface('glass', '#FFFFFF', '#393535', '#11223344');
+        for (const part of [surface.closed, surface.panel])
+        {
+            expect(part).toContain('border: 1px solid #11223344');
+        }
+    });
+
+    it.each(['#0e3ecd80', '#f0a8', '#12345600', '#123456ff'])(
+        'keeps the selected matte background alpha for %s, including without blur', (background) =>
+        {
+            const surface = switcherSurface('glass', background, '#393535');
+            for (const part of [surface.closed, surface.panel, surface.fallback])
+            {
+                expect(part).toContain(`background-color: ${background}`);
+            }
+        },
+    );
+
+    it('keeps explicit colours on the frosted panel of a transparent trigger', () =>
+    {
+        const surface = switcherSurface('transparent', '#11223344', '#393535', '#f008');
+        expect(surface.closed).toContain('background-color: transparent');
+        expect(surface.panel).toContain('background-color: #11223344');
+        expect(surface.panel).toContain('border: 1px solid #f008');
+        expect(surface.fallback).toContain('background-color: #11223344');
+    });
 });
