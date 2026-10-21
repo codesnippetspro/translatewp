@@ -1,19 +1,3 @@
-# TranslateWP
-
-- **Contributors:** codesnippetspro, 0aksmith, ver3, johnpixle, carolinaop, tallblokeuk, lightbulbman, alberttarress, joanrodas
-- **Donate link:** https://translatewp.ai/
-- **Tags:** translation, multilingual, language switcher, localization, ai translation
-- **Requires at least:** 6.0
-- **Tested up to:** 7.1
-- **Requires PHP:** 8.0
-- **Stable tag:** 1.0.0
-- **License:** GPLv3 or later
-- **License URI:** https://www.gnu.org/licenses/gpl-3.0.html
-
-Translate WordPress with AI, guide its wording with your Lexicon, and add a language switcher. Translations follow changes to your content.
-
-## Description
-
 **TranslateWP** helps you make your WordPress site available in more languages. Connect your site, choose your translation languages and add a language switcher. AI translates your page content using your site's context and writing preferences.
 
 Prepare translations ahead of visits or translate content when it is requested. Finished translations are reused, and changes to your source content are picked up for translation again. Your original pages stay in place: no duplicate pages, no translation tables.
