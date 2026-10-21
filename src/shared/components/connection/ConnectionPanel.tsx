@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
     activateProMutationOptions,
-    beginConnectMutationOptions,
     disconnectSiteMutationOptions,
     installProMutationOptions,
 } from '@/shared/mutation-options/connect';
@@ -19,7 +18,9 @@ import { isGroupLocked } from '@/shared/lib/settingsScope';
 import { UpgradeTimeline } from '@/shared/components/connection/UpgradeTimeline';
 import { getProState } from '@/shared/lib/pro/proState';
 import { reloadPage } from '@/shared/lib/reloadPage';
+import { beginConnect } from '@/shared/api/connect';
 import type { ProPanelState, UpgradeStage } from '@/shared/api/connect';
+import { ConnectTabStatus, useConnectStart } from '@/shared/lib/connect/useConnectStart';
 
 type ProStatusProps = {
     pro: ProPanelState;
@@ -234,30 +235,20 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
 
 export const ConnectSiteButton = ({ label }: { label: string }) =>
 {
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const beginMutation = useMutation({
-        ...beginConnectMutationOptions(),
-        onError: () => setErrorMessage(__('Connection could not be started. Try again.', 'translate')),
-        onSuccess: (result) => {
-            window.location.assign(result.redirectUrl);
-        },
-    });
+    const { start, isPending, tabState, errorMessage } = useConnectStart(beginConnect);
 
     return (
         <>
             <Button
                 variant="primary"
                 className="rounded-sm!"
-                disabled={beginMutation.isPending}
-                isBusy={beginMutation.isPending}
-                onClick={() =>
-                {
-                    setErrorMessage(null);
-                    beginMutation.mutate();
-                }}
+                disabled={isPending}
+                isBusy={isPending}
+                onClick={start}
             >
                 {label}
             </Button>
+            <ConnectTabStatus state={tabState} />
             {errorMessage && (
                 <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage}</p>
             )}
@@ -271,13 +262,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     const { data, isLoading } = useQuery(getConnectStatusQueryOptions());
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const beginConnectMutation = useMutation({
-        ...beginConnectMutationOptions(),
-        onError: () => setErrorMessage(__('Connection could not be started. Try again.', 'translate')),
-        onSuccess: (result) => {
-            window.location.assign(result.redirectUrl);
-        },
-    });
+    const connect = useConnectStart(beginConnect);
 
     const disconnectMutation = useMutation({
         ...disconnectSiteMutationOptions(),
@@ -325,7 +310,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
         disconnectMutation.mutate(undefined, {
             onSuccess: () =>
             {
-                beginConnectMutation.mutate();
+                connect.start();
             },
         });
     };
@@ -380,8 +365,8 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
                         <Button
                             variant="secondary"
                             className="rounded-sm!"
-                            disabled={beginConnectMutation.isPending || disconnectMutation.isPending}
-                            isBusy={beginConnectMutation.isPending}
+                            disabled={connect.isPending || disconnectMutation.isPending}
+                            isBusy={connect.isPending}
                             onClick={() => { void handleSwitchAccount(); }}
                         >
                             {__('Connect a different account', 'translate')}
@@ -424,8 +409,9 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
                     )}
                 </>
             ))}
-            {errorMessage && (
-                <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage}</p>
+            <ConnectTabStatus state={connect.tabState} />
+            {(errorMessage ?? connect.errorMessage) && (
+                <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage ?? connect.errorMessage}</p>
             )}
         </div>
     );
