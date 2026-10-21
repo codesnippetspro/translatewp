@@ -123,6 +123,19 @@ describe('Connecting from a framed admin (WordPress Playground)', () =>
         expect(container.textContent).toContain('Connection could not be started. Try again.');
     });
 
+    it('rechecks the connection after the blocked-tab link is used and the admin comes back', async () =>
+    {
+        mockFramed.mockReturnValue(true);
+        open.mockReturnValue(null);
+        const { container, queryClient } = await render();
+        const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+        await click(container);
+        await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ['connectStatus'] });
+    });
+
     it('rechecks the connection when the admin comes back to this tab', async () =>
     {
         mockFramed.mockReturnValue(true);

@@ -1,4 +1,3 @@
-/** Whether this admin page runs inside another page's frame, as in WordPress Playground. */
 export const isFramed = (): boolean =>
 {
     try {

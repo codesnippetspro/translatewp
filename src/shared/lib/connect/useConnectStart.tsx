@@ -11,13 +11,6 @@ export type ConnectTabState =
     | { kind: 'new-tab' }
     | { kind: 'blocked'; url: string };
 
-/**
- * Starts a connect. A framed admin (WordPress Playground) signs in in a new
- * top-level tab, because the identity provider refuses to load in a frame and
- * leaving the frame would end the in-browser site. The tab is opened during the
- * click so the browser counts it as the user's own, then pointed at the
- * one-use address once the site has issued it.
- */
 export const useConnectStart = (mutationFn: StartConnect) =>
 {
     const queryClient = useQueryClient();
@@ -27,7 +20,7 @@ export const useConnectStart = (mutationFn: StartConnect) =>
 
     useEffect(() =>
     {
-        if ('new-tab' !== tabState.kind) {
+        if ('idle' === tabState.kind) {
             return undefined;
         }
         const recheck = () =>
@@ -51,6 +44,7 @@ export const useConnectStart = (mutationFn: StartConnect) =>
         setTabState({ kind: 'idle' });
 
         const framed = isFramed();
+        // Opened before the async request so the browser still treats it as the click's own popup.
         const tab = framed ? window.open('', '_blank') : null;
         if (tab) {
             tab.opener = null;
