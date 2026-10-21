@@ -5,7 +5,7 @@
  * Description:       Translate WordPress with AI, guide its wording with your Lexicon, and add a language switcher. Translations follow changes to your content.
  * Version:           1.0.1
  * Author:            Code Snippets
- * Author URI:        https://codesnippets.pro/
+ * Author URI:        https://translatewp.ai/
  * License:           GPL-3.0+
  * License URI:       http://www.gnu.org/licenses/gpl-3.0.txt
  * Requires at least: 6.0
