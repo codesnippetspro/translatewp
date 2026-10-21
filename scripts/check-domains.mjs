@@ -9,10 +9,10 @@ const root = resolve(rootIndex < 0 ? '.' : args[rootIndex + 1]);
 const host = (prefix, suffix) => `${prefix ? `${prefix}.` : ''}translatewp.${suffix}`;
 const allowed = new Set([
     ...['', 'www', 'app', 'api', 'admin', 'analytics'].map(prefix => host(prefix, 'ai')),
-    ...((shipped || args.includes('--public')) ? [] : ['', 'app', 'api', 'admin'].map(prefix => host(prefix, 'zip'))),
+    ...shipped || args.includes('--public') ? [] : ['', 'app', 'api', 'admin'].map(prefix => host(prefix, 'zip')),
 ]);
 const fileExtensions = new Set(['php', 'js', 'css', 'json', 'tsx', 'ts', 'pot', 'asset']);
-const codeSymbol = /^(?:(?:[a-z0-9_$]+\.)+TranslateWP\.[a-zA-Z0-9_.]+|TranslateWP\.(?:options|context|frontend|settingsUrl|canManage|can)(?:\.[a-zA-Z0-9_]+)*|translatewp\.(?:(?:frontend\.)?slot(?:\.[a-zA-Z0-9-]+)*|frontend\.slotsChanged|admin\.pricingScheduler|languages|inUse|status))$/;
+const codeSymbol = /^(?:(?:window|globalThis|self)\.(?:TranslateWP|translatewp)\.(?:host|frontend|options|context|settingsUrl|canManage|can|languages|inUse|status)(?:\.[a-zA-Z0-9_]+)*|TranslateWP\.(?:options|context|frontend|settingsUrl|canManage|can)(?:\.[a-zA-Z0-9_]+)*|translatewp\.(?:(?:frontend\.)?slot(?:\.[a-zA-Z0-9-]+)*|frontend\.slotsChanged|admin\.pricingScheduler|languages|inUse|status))$/;
 const normalize = text => text.replace(/\0/g, '').replace(/\\u([a-f0-9]{4})|\\x([a-f0-9]{2})/gi, (_, unicode, hex) => String.fromCharCode(parseInt(unicode || hex, 16)))
     .replace(/(?:%[a-f0-9]{2})+/gi, encoded => {
         try { return decodeURIComponent(encoded); } catch { return encoded; }
