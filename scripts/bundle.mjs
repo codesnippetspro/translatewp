@@ -43,6 +43,8 @@ const run = (command, args, options = {}) => {
 	}
 }
 
+run('node', ['scripts/check-domains.mjs'])
+
 console.info('[bundle] building assets')
 run('npm', ['run', 'build'])
 
@@ -76,6 +78,8 @@ prune(resolve(DEST, 'vendor'))
 rmSync(resolve(DEST, 'vendor', 'vendor'), { recursive: true, force: true })
 // Command-line entry points of dependencies (vendor/bin) are not used by the plugin.
 rmSync(resolve(DEST, 'vendor', 'bin'), { recursive: true, force: true })
+
+run('node', ['scripts/check-domains.mjs', '--root', DEST, '--shipped'])
 
 console.info('[bundle] creating zip')
 const zipName = `${SLUG}.${plugin.version}.zip`

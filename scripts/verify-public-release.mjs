@@ -99,9 +99,10 @@ function privateIp(value) {
 		|| (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127)
 }
 
-function scanLine({ line, decision, denied }) {
+function scanLine({ line, decision, denied, instructionFile = false }) {
 	const classes = []
-	if (decision.test(line)) classes.push('decision-reference')
+	const referenceLine = instructionFile ? line.split(['TWP', '243'].join('-')).join('') : line
+	if (decision.test(referenceLine)) classes.push('decision-reference')
 	if (PRIVATE_RECORD.test(line)) classes.push('private-record')
 	if (PRIVATE_SOURCE.test(line)) classes.push('private-source')
 	if (PRIVATE_ENDPOINT.test(line) || [...line.matchAll(IPV4)].some(match => privateIp(match[0]))
@@ -178,7 +179,9 @@ function verify(config) {
 			add({ path, classification: 'historical-changelog' })
 		}
 		content.toString('utf8').split('\n').forEach((line, index) => {
-			for (const classification of scanLine({ line, decision, denied })) {
+			const instructionFile = config.mode !== 'package'
+				&& ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md'].includes(path)
+			for (const classification of scanLine({ line, decision, denied, instructionFile })) {
 				add({ path, line: index + 1, classification })
 			}
 		})

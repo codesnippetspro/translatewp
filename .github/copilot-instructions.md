@@ -1,5 +1,15 @@
 # GitHub Copilot instructions — TranslateWP
 
+## HARD RULE: TranslateWP domains (TWP-243)
+
+Use https://translatewp.ai/ and its www, app, api, admin and analytics
+subdomains for all customer-visible product URLs. Use https://translatewp.zip/
+and its app, api and admin subdomains only for internal staging, testing,
+previews and tooling. Internal domains must never appear in customer packages.
+No other TranslateWP domain may be introduced in code, configuration, metadata,
+documentation, links, emails, tests or examples. Remove existing violations.
+A new domain requires an owner decision first.
+
 This file re-delivers the repository ruleset to Copilot. The canonical version is
 [`AGENTS.md`](../AGENTS.md); domain terms live in [`CONTEXT.md`](../CONTEXT.md).
 If any two disagree, `AGENTS.md` wins — and the disagreement is a bug to fix there.

@@ -1,5 +1,15 @@
 # AGENTS.md — TranslateWP
 
+## HARD RULE: TranslateWP domains (TWP-243)
+
+Use https://translatewp.ai/ and its www, app, api, admin and analytics
+subdomains for all customer-visible product URLs. Use https://translatewp.zip/
+and its app, api and admin subdomains only for internal staging, testing,
+previews and tooling. Internal domains must never appear in customer packages.
+No other TranslateWP domain may be introduced in code, configuration, metadata,
+documentation, links, emails, tests or examples. Remove existing violations.
+A new domain requires an owner decision first.
+
 Single source of truth for how work is done in this repo, shared across every AI
 tool and human contributor, and aligned with the codesnippets house standard used
 by the sibling WordPress plugins. `CLAUDE.md` carries project and architecture

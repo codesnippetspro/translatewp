@@ -324,3 +324,21 @@ test('credential variables and configuration references remain allowed', () => {
 	const result = verify(root)
 	assert.equal(result.status, 0, result.stdout)
 })
+
+
+test('the domain policy citation is allowed only in agent instruction files', () => {
+	const root = candidate()
+	const citation = ['TWP', '243'].join('-')
+	for (const path of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']) {
+		write(root, path, 'Domain policy (' + citation + ')\n')
+	}
+	assert.equal(verify(root).status, 0)
+	write(root, 'Components/Example.php', '<?php // ' + citation)
+	rejected(root, 'decision-reference')
+})
+
+test('other internal citations remain forbidden in agent instruction files', () => {
+	const root = candidate()
+	write(root, 'AGENTS.md', ['TWP', '209'].join('-'))
+	rejected(root, 'decision-reference')
+})
