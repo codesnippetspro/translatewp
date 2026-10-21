@@ -1,5 +1,14 @@
 # TranslateWP
 
+## HARD RULE: TranslateWP domains (TWP-243)
+
+Use only https://translatewp.ai/ and its www, app, api, admin and analytics
+subdomains for customer-visible product URLs. Internal environment domains are
+specified in the owner's private domain records; never commit them here or
+include them in customer packages. No other product domain may be introduced
+in code, configuration, metadata, documentation, links, emails, tests or examples.
+Remove existing violations. A new domain requires an owner decision first.
+
 A WordPress plugin that translates site content and exposes a public language
 switcher; hosted translation is metered per Site. PHP backend (WordPress plugin,
 PSR-4 `TranslateWP\`, REST endpoints via plubo-routes) plus three

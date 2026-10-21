@@ -4,7 +4,7 @@
 	"packageManager": "yarn@1.22.22",
 	"wpSlug": "translate",
 	"author": "TranslateWP",
-	"homepage": "https://translatewp.ai",
+	"homepage": "https://translatewp.ai/",
 	"private": true,
 	"licenses": [
 		{

@@ -324,3 +324,48 @@ test('credential variables and configuration references remain allowed', () => {
 	const result = verify(root)
 	assert.equal(result.status, 0, result.stdout)
 })
+
+
+test('the domain policy citation is allowed only in agent instruction files', () => {
+	const root = candidate()
+	const citation = ['TWP', '243'].join('-')
+	for (const path of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']) {
+		write(root, path, 'Domain policy (' + citation + ')\n')
+	}
+	assert.equal(verify(root).status, 0)
+	write(root, 'Components/Example.php', '<?php // ' + citation)
+	rejected(root, 'decision-reference')
+})
+
+test('other internal citations remain forbidden in agent instruction files', () => {
+	const root = candidate()
+	write(root, 'AGENTS.md', ['TWP', '209'].join('-'))
+	rejected(root, 'decision-reference')
+})
+
+
+test('patch releases retain released changelog entries and exclude pre-release history', () => {
+	const root = candidate()
+	for (const file of ['translatewp.php', 'package.json', 'readme.txt']) {
+		write(root, file, readFileSync(join(root, file), 'utf8').replaceAll('1.0.0', '1.0.1'))
+	}
+	const readme = readFileSync(join(root, 'readme.txt'), 'utf8')
+	write(root, 'readme.txt', readme + '= 1.0.0 =\nInitial release.\n')
+	assert.equal(verify(root, 'tree', ['--version', '1.0.1']).status, 0)
+	write(root, 'readme.txt', readme + '= 0.10.30 =\nOld version.\n')
+	rejected(root, 'readme-contract', 'tree', ['--version', '1.0.1'])
+})
+
+
+test('PHP source sweep allows the domain citation only in agent instructions', () => {
+	const root = candidate()
+	const citation = ['TWP', '243'].join('-')
+	write(root, 'tests/DecisionReferenceSweepTest.php', readFileSync(join(ROOT, 'tests/DecisionReferenceSweepTest.php')))
+	write(root, 'scripts/decision-reference-pattern.json', readFileSync(join(ROOT, 'scripts/decision-reference-pattern.json')))
+	mkdirSync(join(root, 'build'))
+	write(root, '.github/copilot-instructions.md', citation)
+	const run = () => spawnSync('php', [join(root, 'tests/DecisionReferenceSweepTest.php')], { encoding: 'utf8' })
+	assert.equal(run().status, 0)
+	write(root, 'Components/Example.php', '<?php // ' + citation)
+	assert.equal(run().status, 1)
+})

@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-// What the public readme must and must not say for 1.0.
-
 $options = getopt( '', [ 'root:', 'release:' ] );
 $root    = (string) ( $options['root'] ?? dirname( __DIR__ ) );
 
@@ -37,7 +35,16 @@ if ( isset( $options['release'] ) ) {
 	$changelog = $sections[1] ?? '';
 	preg_match_all( '/^=\s*([^=\r\n]+?)\s*=$/m', $changelog, $entries );
 	assert_true( 2 === count( $sections ), 'the readme must contain one changelog' );
-	assert_true( [ (string) $options['release'] ] === ( $entries[1] ?? [] ), 'the changelog must contain only the requested release' );
+	$versions = $entries[1] ?? [];
+	assert_true( ( $versions[0] ?? null ) === (string) $options['release'], 'the changelog must start with the requested release' );
+	$previous = null;
+	foreach ( $versions as $version ) {
+		assert_true( 1 === preg_match( '/^\d+\.\d+\.\d+$/', $version ) && version_compare( $version, '1.0.0', '>=' ), 'the changelog must contain stable public releases only' );
+		if ( null !== $previous ) {
+			assert_true( version_compare( $previous, $version, '>' ), 'changelog releases must be unique and newest first' );
+		}
+		$previous = $version;
+	}
 }
 
 if ( $failures > 0 ) {
