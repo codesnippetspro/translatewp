@@ -18,7 +18,30 @@ class PluginRow {
 		if ( defined( 'TRANSLATEWP_BASENAME' ) ) {
 			add_filter( 'plugin_action_links_' . TRANSLATEWP_BASENAME, [ $this, 'action_links' ] );
 			add_filter( 'network_admin_plugin_action_links_' . TRANSLATEWP_BASENAME, [ $this, 'action_links' ] );
+			add_filter( 'plugin_row_meta', [ $this, 'row_meta' ], 10, 3 );
 		}
+	}
+
+	public function row_meta( $links, $plugin_file, $plugin_data ) {
+		$files = [ TRANSLATEWP_BASENAME, ProEligibility::addon_basename() ];
+		if ( ! in_array( $plugin_file, $files, true ) || empty( $plugin_data['AuthorURI'] ) ) {
+			return $links;
+		}
+
+		$author_href = 'href="' . esc_url( $plugin_data['AuthorURI'] ) . '"';
+		foreach ( $links as $key => $link ) {
+			if ( false !== strpos( $link, $author_href ) ) {
+				$links[ $key ] = sprintf(
+					/* translators: 1: product link, 2: maker link. */
+					esc_html__( '%1$s by %2$s', 'translate' ),
+					'<a href="' . esc_url( 'https://translatewp.ai/' ) . '">' . esc_html__( 'TranslateWP', 'translate' ) . '</a>',
+					'<a href="' . esc_url( 'https://codesnippets.pro/' ) . '">' . esc_html__( 'Code Snippets', 'translate' ) . '</a>'
+				);
+				break;
+			}
+		}
+
+		return $links;
 	}
 
 	/**
