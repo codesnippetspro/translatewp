@@ -43,7 +43,7 @@ const run = (command, args, options = {}) => {
 	}
 }
 
-run('node', ['scripts/check-domains.mjs'])
+run('node', ['scripts/check-domains.mjs', '--public'])
 
 console.info('[bundle] building assets')
 run('npm', ['run', 'build'])
