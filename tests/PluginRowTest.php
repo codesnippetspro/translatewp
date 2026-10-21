@@ -57,6 +57,27 @@ wp_test_set_filter( 'translatewp_pro_installed_version', static fn() => '' );
 $plain = $row->action_links( [ 'delete' => $link ] );
 assert_true( $link === $plain['delete'] && ! isset( $plain['translatewp_delete_pro_first'] ), 'without Pro the delete link stays and nothing is added' );
 
+wp_test_reset( [] );
+$GLOBALS['wp_test_filters_registered'] = [];
+new PluginRow( 'translatewp', '1.0.1' );
+$metadata = [
+	'Version 1.0.1',
+	'By <a href="https://translatewp.ai/">Code Snippets</a>',
+	'<a href="plugin-install.php">View details</a>',
+];
+$data = [ 'AuthorURI' => 'https://translatewp.ai/' ];
+$branded = apply_filters( 'plugin_row_meta', $metadata, TRANSLATEWP_BASENAME, $data );
+$expected = '<a href="https://translatewp.ai/">TranslateWP</a> by <a href="https://codesnippets.pro/">Code Snippets</a>';
+assert_true( $expected === $branded[1], 'the author line links the product and its maker separately' );
+assert_true( $metadata[0] === $branded[0] && $metadata[2] === $branded[2], 'version and details links are preserved' );
+assert_true( $metadata === apply_filters( 'plugin_row_meta', $metadata, 'other/plugin.php', $data ), 'other plugins are untouched' );
+
+wp_test_set_filter( 'translatewp_pro_addon_basename', static fn() => 'extension/plugin.php' );
+$localized = $metadata;
+$localized[1] = 'Von <a href="https://translatewp.ai/">Code Snippets</a>';
+$extension = apply_filters( 'plugin_row_meta', $localized, 'extension/plugin.php', $data );
+assert_true( $expected === $extension[1], 'an inactive addon shares the attribution without depending on the translated By prefix' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "PluginRowTest: {$failures} failure(s)\n" );
 	exit( 1 );
