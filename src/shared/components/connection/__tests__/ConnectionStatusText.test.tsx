@@ -10,6 +10,17 @@ if (typeof globalThis.TextEncoder === 'undefined')
 
 type MockPro = { plan: string; entitled: boolean; installed: boolean; active: boolean; installedVersion: string | null; latestVersion: string | null; packagePending: boolean; updateAvailable: boolean; updateUrl: string | null };
 let mockConnectStatus: { connected: boolean; siteId: string | null; accountLabel: string; portalSitesUrl: string; portalSiteUrl?: string; pro?: MockPro } | undefined = undefined;
+let mockConnectTabState: { kind: 'idle' } | { kind: 'blocked'; url: string } = { kind: 'idle' };
+
+jest.mock('@/shared/lib/connect/useConnectStart', () => ({
+    ...jest.requireActual<typeof import('@/shared/lib/connect/useConnectStart')>('@/shared/lib/connect/useConnectStart'),
+    useConnectStart: () => ({
+        start: () => {},
+        isPending: false,
+        tabState: mockConnectTabState,
+        errorMessage: null,
+    }),
+}));
 
 jest.mock('@tanstack/react-query', () => ({
     useQuery: () => ({ data: mockConnectStatus, isLoading: false }),
@@ -22,8 +33,6 @@ jest.mock('@/shared/query-options/connect', () => ({
 }));
 
 jest.mock('@/shared/mutation-options/connect', () => ({
-    beginConnectMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
-    reconnectSiteMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     disconnectSiteMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     installProMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     activateProMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
@@ -84,6 +93,21 @@ describe('ConnectionStatusText', () =>
 
 describe('ConnectionPanel status composition', () =>
 {
+    afterEach(() => { mockConnectTabState = { kind: 'idle' }; });
+
+    test('hides the blocked-tab guidance after the site connects', () =>
+    {
+        mockConnectTabState = { kind: 'blocked', url: 'https://portal.example/connect' };
+        mockConnectStatus = { connected: false, siteId: null, accountLabel: '', portalSitesUrl: '' };
+        expect(renderToStaticMarkup(<ConnectionPanel />)).toContain('Your browser blocked the sign-in tab.');
+
+        mockConnectStatus = { connected: true, siteId: 'site-1', accountLabel: 'owner@example.com', portalSitesUrl: '' };
+        const html = renderToStaticMarkup(<ConnectionPanel />);
+        expect(html).toContain('Connected as');
+        expect(html).not.toContain('Your browser blocked the sign-in tab.');
+        expect(html).not.toContain('Open the sign-in page');
+    });
+
     test('labeled connected panel shows status exactly once', () =>
     {
         mockConnectStatus = { connected: true, siteId: 'site-1', accountLabel: 'owner@example.com', portalSitesUrl: '' };

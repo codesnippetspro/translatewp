@@ -134,11 +134,20 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 ## Upgrade Notice
 
+### 1.0.1
+
+Fixes sign-in from WordPress Playground and other framed WordPress admin screens.
+
 ### 1.0.0
 
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 ## Changelog
+
+### 1.0.1
+
+* Open framed WordPress sign-in in a new tab and resume setup when the connection completes.
+* Offer a sign-in link when the browser blocks or refuses the new tab.
 
 ### 1.0.0
 

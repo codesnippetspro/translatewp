@@ -416,6 +416,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_remote_get_response']  = null;
 	$GLOBALS['wp_test_remote_get_urls']      = [];
 	$GLOBALS['wp_test_home_url']             = null;
+	$GLOBALS['wp_test_admin_url']            = null;
 	$GLOBALS['wp_test_spawn_cron']           = 0;
 	$GLOBALS['wp_test_scan_fail']            = false;
 	$GLOBALS['wp_test_scan_response']        = null;
@@ -1741,7 +1742,9 @@ function network_admin_url( string $path = '' ): string {
 }
 
 function admin_url( string $path = '' ): string {
-	return 'https://example.com/wp-admin/' . ltrim( $path, '/' );
+	$base = (string) ( $GLOBALS['wp_test_admin_url'] ?? 'https://example.com/wp-admin/' );
+
+	return $base . ltrim( $path, '/' );
 }
 
 function get_admin_url( $blog_id, string $path = '' ): string {
