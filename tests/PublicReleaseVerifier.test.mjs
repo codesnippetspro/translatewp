@@ -342,3 +342,16 @@ test('other internal citations remain forbidden in agent instruction files', () 
 	write(root, 'AGENTS.md', ['TWP', '209'].join('-'))
 	rejected(root, 'decision-reference')
 })
+
+
+test('patch releases retain released changelog entries and exclude pre-release history', () => {
+	const root = candidate()
+	for (const file of ['translatewp.php', 'package.json', 'readme.txt']) {
+		write(root, file, readFileSync(join(root, file), 'utf8').replaceAll('1.0.0', '1.0.1'))
+	}
+	const readme = readFileSync(join(root, 'readme.txt'), 'utf8')
+	write(root, 'readme.txt', readme + '= 1.0.0 =\nInitial release.\n')
+	assert.equal(verify(root, 'tree', ['--version', '1.0.1']).status, 0)
+	write(root, 'readme.txt', readme + '= 0.10.30 =\nOld version.\n')
+	rejected(root, 'readme-contract', 'tree', ['--version', '1.0.1'])
+})
