@@ -1,9 +1,9 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import { beginConnectMutationOptions, reconnectSiteMutationOptions } from '@/shared/mutation-options/connect';
+import { beginConnect, reconnectSite } from '@/shared/api/connect';
+import { ConnectTabStatus, useConnectStart } from '@/shared/lib/connect/useConnectStart';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 import { ManagedByNetworkNote } from '@/shared/components/managedByNetwork';
 import { isGroupLocked } from '@/shared/lib/settingsScope';
@@ -11,19 +11,9 @@ import { isGroupLocked } from '@/shared/lib/settingsScope';
 export const AddressChangedNotice = () =>
 {
     const { data } = useQuery(getConnectStatusQueryOptions());
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-    const reconnectMutation = useMutation({
-        ...reconnectSiteMutationOptions(),
-        onError: () => setErrorMessage(__('Connection could not be started. Try again.', 'translate')),
-        onSuccess: (result) => window.location.assign(result.redirectUrl),
-    });
-
-    const newSiteMutation = useMutation({
-        ...beginConnectMutationOptions(),
-        onError: () => setErrorMessage(__('Connection could not be started. Try again.', 'translate')),
-        onSuccess: (result) => window.location.assign(result.redirectUrl),
-    });
+    const reconnect = useConnectStart(reconnectSite);
+    const newSite = useConnectStart(beginConnect);
+    const errorMessage = reconnect.errorMessage ?? newSite.errorMessage;
 
     const invalidated = data?.connectionStatus === 'invalidated';
 
@@ -31,7 +21,7 @@ export const AddressChangedNotice = () =>
         return null;
     }
 
-    const inFlight = reconnectMutation.isPending || newSiteMutation.isPending;
+    const inFlight = reconnect.isPending || newSite.isPending;
 
     return (
         <div
@@ -63,12 +53,8 @@ export const AddressChangedNotice = () =>
                     variant="primary"
                     className="rounded-sm!"
                     disabled={inFlight}
-                    isBusy={reconnectMutation.isPending}
-                    onClick={() =>
-                    {
-                        setErrorMessage(null);
-                        reconnectMutation.mutate();
-                    }}
+                    isBusy={reconnect.isPending}
+                    onClick={reconnect.start}
                 >
                     {__('Reconnect this site', 'translate')}
                 </Button>
@@ -76,17 +62,15 @@ export const AddressChangedNotice = () =>
                     variant="secondary"
                     className="rounded-sm!"
                     disabled={inFlight}
-                    isBusy={newSiteMutation.isPending}
-                    onClick={() =>
-                    {
-                        setErrorMessage(null);
-                        newSiteMutation.mutate();
-                    }}
+                    isBusy={newSite.isPending}
+                    onClick={newSite.start}
                 >
                     {__('Connect as a new site', 'translate')}
                 </Button>
             </div>
             )}
+            <ConnectTabStatus state={reconnect.tabState} />
+            <ConnectTabStatus state={newSite.tabState} />
             {errorMessage && (
                 <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage}</p>
             )}

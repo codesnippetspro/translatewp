@@ -22,8 +22,6 @@ jest.mock('@/shared/query-options/connect', () => ({
 }));
 
 jest.mock('@/shared/mutation-options/connect', () => ({
-    beginConnectMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
-    reconnectSiteMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     disconnectSiteMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     installProMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
     activateProMutationOptions: () => ({ mutationFn: () => Promise.resolve() }),
