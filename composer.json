@@ -8,7 +8,7 @@
         "translate",
         "wp"
     ],
-    "homepage": "https://translatewp.ai",
+    "homepage": "https://translatewp.ai/",
     "license": "GPL-3.0+",
     "autoload": {
         "psr-4": {
