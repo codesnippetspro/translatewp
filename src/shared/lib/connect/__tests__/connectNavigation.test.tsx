@@ -94,6 +94,51 @@ describe('Connecting from a framed admin (WordPress Playground)', () =>
         expect(container.textContent).toContain('Finish connecting in the new tab');
     });
 
+    it('points the tab at sign-in while it is still this page\'s popup, then cuts the opener', async () =>
+    {
+        mockFramed.mockReturnValue(true);
+        const steps: string[] = [];
+        let opener: unknown = {};
+        const tab = {
+            closed: false,
+            get opener() { return opener; },
+            set opener(value: unknown) { steps.push('sever'); opener = value; },
+            location: {
+                set href(value: string) { steps.push(null === opener ? 'navigate-after-sever' : 'navigate'); this.value = value; },
+                get href() { return (this as { value?: string }).value ?? ''; },
+            } as { href: string; value?: string },
+        };
+        open.mockReturnValue(tab as unknown as Window);
+        const { container } = await render();
+
+        await click(container);
+
+        expect(steps).toEqual(['navigate', 'sever']);
+        expect(tab.location.href).toBe(CONNECT_URL);
+        expect(opener).toBeNull();
+    });
+
+    it('closes the blank tab and offers the link when the browser refuses to navigate it', async () =>
+    {
+        mockFramed.mockReturnValue(true);
+        const close = jest.fn();
+        const tab = {
+            closed: false,
+            opener: {},
+            close,
+            location: { set href(_value: string) { throw new DOMException('The current window does not have permission to navigate the target frame', 'SecurityError'); } },
+        };
+        open.mockReturnValue(tab as unknown as Window);
+        const { container } = await render();
+
+        await click(container);
+
+        expect(close).toHaveBeenCalled();
+        const link = container.querySelector('a[target="_blank"]') as HTMLAnchorElement;
+        expect(link?.href).toBe(CONNECT_URL);
+        expect(container.textContent).not.toContain('Finish connecting in the new tab');
+    });
+
     it('offers a plain link to the same sign-in page when the browser blocks the tab', async () =>
     {
         mockFramed.mockReturnValue(true);

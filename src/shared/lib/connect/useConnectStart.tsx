@@ -46,9 +46,6 @@ export const useConnectStart = (mutationFn: StartConnect) =>
         const framed = isFramed();
         // Opened before the async request so the browser still treats it as the click's own popup.
         const tab = framed ? window.open('', '_blank') : null;
-        if (tab) {
-            tab.opener = null;
-        }
 
         mutation.mutate(undefined, {
             onSuccess: ({ redirectUrl }) =>
@@ -58,9 +55,15 @@ export const useConnectStart = (mutationFn: StartConnect) =>
                     return;
                 }
                 if (tab && !tab.closed) {
-                    tab.location.href = redirectUrl;
-                    setTabState({ kind: 'new-tab' });
-                    return;
+                    try {
+                        // A sandboxed frame may only navigate a popup it still opens, so the opener is cut after.
+                        tab.location.href = redirectUrl;
+                        tab.opener = null;
+                        setTabState({ kind: 'new-tab' });
+                        return;
+                    } catch {
+                        tab.close();
+                    }
                 }
                 setTabState({ kind: 'blocked', url: redirectUrl });
             },
