@@ -148,6 +148,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 
 * Open framed WordPress sign-in in a new tab and resume setup when the connection completes.
 * Offer a sign-in link when the browser blocks or refuses the new tab.
+* Matte switchers now use the selected border color (light gray by default) and preserve background transparency.
 
 ### 1.0.0
 
