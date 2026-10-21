@@ -409,7 +409,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
                     )}
                 </>
             ))}
-            <ConnectTabStatus state={connect.tabState} />
+            {!data?.connected && <ConnectTabStatus state={connect.tabState} />}
             {(errorMessage ?? connect.errorMessage) && (
                 <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage ?? connect.errorMessage}</p>
             )}
