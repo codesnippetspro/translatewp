@@ -51,6 +51,10 @@ $count = static function ( array $files, string $pattern, array &$by_file ) use 
 		if ( false === $contents ) {
 			continue;
 		}
+		$relative = str_replace( $root . '/', '', $file );
+		if ( in_array( $relative, [ 'AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md' ], true ) ) {
+			$contents = str_replace( implode( '-', [ 'TWP', '243' ] ), '', $contents );
+		}
 		$hits = preg_match_all( $pattern, $contents );
 		if ( $hits > 0 ) {
 			$total += $hits;

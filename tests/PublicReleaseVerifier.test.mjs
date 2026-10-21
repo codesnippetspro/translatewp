@@ -355,3 +355,17 @@ test('patch releases retain released changelog entries and exclude pre-release h
 	write(root, 'readme.txt', readme + '= 0.10.30 =\nOld version.\n')
 	rejected(root, 'readme-contract', 'tree', ['--version', '1.0.1'])
 })
+
+
+test('PHP source sweep allows the domain citation only in agent instructions', () => {
+	const root = candidate()
+	const citation = ['TWP', '243'].join('-')
+	write(root, 'tests/DecisionReferenceSweepTest.php', readFileSync(join(ROOT, 'tests/DecisionReferenceSweepTest.php')))
+	write(root, 'scripts/decision-reference-pattern.json', readFileSync(join(ROOT, 'scripts/decision-reference-pattern.json')))
+	mkdirSync(join(root, 'build'))
+	write(root, '.github/copilot-instructions.md', citation)
+	const run = () => spawnSync('php', [join(root, 'tests/DecisionReferenceSweepTest.php')], { encoding: 'utf8' })
+	assert.equal(run().status, 0)
+	write(root, 'Components/Example.php', '<?php // ' + citation)
+	assert.equal(run().status, 1)
+})
