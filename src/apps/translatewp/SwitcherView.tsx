@@ -17,6 +17,7 @@ import { getCountryFlagFromLocale } from '@/shared/lib/languages';
 import { switcherLabel } from '@/shared/lib/languages/switcherLabel';
 import { proNextStep } from '@/shared/lib/pro/proState';
 import { LIST_SCREEN_MARGIN, resolveSideTabPosition, sideTabCss, sideTabHalf } from './sideTab';
+import { useDropdownList } from '@/apps/translatewp/useDropdownList';
 
 export type SwitcherViewProps = {
     languages: LanguageItem[];
@@ -116,6 +117,7 @@ export function SwitcherView({
     }) ?? (entitled ? 'activate' : 'upgrade');
     const [lockedPrompt, setLockedPrompt] = useState<string | null>(null);
     const editing = useEditMode();
+    const { listRef, more } = useDropdownList({ open: isOpen, languageCount: languages.length, editing, settings: switcher });
     // The sweep starts from a different angle on every mount.
     const sweepStart = useMemo(() => Math.floor(Math.random() * 360), []);
     const switcherType = switcher?.type === 'native_select' ? 'native_select' : 'dropdown';
@@ -534,10 +536,38 @@ export function SwitcherView({
 				.twp-dropdown[data-editing="true"] {
 					min-width: min(15rem, var(--twp-list-room, 15rem)) !important;
 				}
+                .twp-dropdown-scroll {
+                    position: relative !important;
+                    min-height: 0 !important;
+                }
                 .twp-dropdown-list {
                     overflow-x: hidden !important;
                     overflow-y: auto !important;
-                    max-height: 15rem !important;
+                    overscroll-behavior: contain !important;
+                    max-height: var(--twp-list-max-height, calc(100dvh - 5rem)) !important;
+                    --twp-fade-top: 0px;
+                    --twp-fade-bottom: 0px;
+                    mask-image: linear-gradient(to bottom, transparent, #000 var(--twp-fade-top), #000 calc(100% - var(--twp-fade-bottom)), transparent) !important;
+                }
+                .twp-dropdown-scroll[data-more-above="true"] .twp-dropdown-list {
+                    --twp-fade-top: 12px;
+                }
+                .twp-dropdown-scroll[data-more-below="true"] .twp-dropdown-list {
+                    --twp-fade-bottom: 12px;
+                }
+                .twp-scroll-cue {
+                    position: absolute !important;
+                    right: 0.25rem !important;
+                    display: flex !important;
+                    pointer-events: none !important;
+                    color: ${ textColor } !important;
+                }
+                .twp-scroll-cue-up {
+                    top: 0 !important;
+                    transform: rotate(180deg) !important;
+                }
+                .twp-scroll-cue-down {
+                    bottom: 0 !important;
                 }
                 .twp-dropdown-item {
                     display: flex !important;
@@ -863,7 +893,8 @@ export function SwitcherView({
                     <div className="twp-popover-stack">
 						<div className="twp-dropdown" role={switcherType === 'dropdown' ? 'listbox' : undefined} data-editing={editing ? 'true' : undefined}>
                             { switcherType === 'dropdown' && (
-                            <div className="twp-dropdown-list">
+                            <div className="twp-dropdown-scroll" data-more-above={more.above} data-more-below={more.below}>
+                            <div className="twp-dropdown-list" ref={listRef}>
                                 { languages.map((lang) =>
                                 {
                                     const label = switcherLabel(lang, { nativeNames, regionalNames, flagShown: showFlag });
@@ -885,6 +916,9 @@ export function SwitcherView({
                                         </button>
                                     );
                                 }) }
+                            </div>
+                            {more.above && <span className="twp-scroll-cue twp-scroll-cue-up" aria-hidden="true"><ChevronDown size={14} /></span>}
+                            {more.below && <span className="twp-scroll-cue twp-scroll-cue-down" aria-hidden="true"><ChevronDown size={14} /></span>}
                             </div>
                             ) }
 

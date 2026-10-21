@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { ColorPicker, COLOR_POPOVER_PROPS, isHexColor } from '@/shared/components/form/colorPicker';
@@ -73,6 +73,34 @@ describe('ColorPicker text field', () =>
         expect(container.querySelector('[role="alert"]')).toBeNull();
     });
 
+    it.each([['#0E3ECD', '#0E3ECDff'], ['#abc', '#abcf']])(
+        'stores an explicitly opaque alpha when entering %s', async (value, expected) =>
+        {
+            const onChange = jest.fn();
+            const container = await render(<ColorPicker label="Background Color" value="#FFFFFF" onChange={onChange} />);
+
+            await typeInto(container.querySelector('input') as HTMLInputElement, value);
+
+            expect(onChange).toHaveBeenLastCalledWith(expected);
+        },
+    );
+
+    it('keeps typed characters intact while the parent saves an explicit alpha', async () =>
+    {
+        const Controlled = () => {
+            const [value, setValue] = useState('#FFFFFF');
+            return <><ColorPicker label="Background" value={value} onChange={setValue} /><output>{value}</output></>;
+        };
+        const container = await render(<Controlled />);
+        const input = container.querySelector('input') as HTMLInputElement;
+
+        for (const value of ['#a', '#ab', '#abc', '#abcd', '#abcde', '#abcdef']) {
+            await typeInto(input, value);
+            expect(input.value).toBe(value);
+        }
+        expect(container.querySelector('output')?.textContent).toBe('#abcdefff');
+    });
+
     it('opens an alpha-capable colour picker from the swatch', async () =>
     {
         const container = await render(<ColorPicker label="Background Color" value="#FFFFFF" onChange={jest.fn()} />);
@@ -120,7 +148,7 @@ describe('ColorPicker text field', () =>
 
         await typeInto(input, '#0E3ECD');
 
-        expect(onChange).toHaveBeenLastCalledWith('#0E3ECD');
+        expect(onChange).toHaveBeenLastCalledWith('#0E3ECDff');
         expect(container.querySelector('[role="alert"]')).toBeNull();
     });
 });

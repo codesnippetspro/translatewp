@@ -7,6 +7,13 @@ const HEX_COLOR = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export const isHexColor = (value: string): boolean => HEX_COLOR.test(value.trim());
 
+const withExplicitAlpha = (value: string): string => {
+    const hex = value.trim();
+    if (hex.length === 4) return `${hex}f`;
+    if (hex.length === 7) return `${hex}ff`;
+    return hex;
+};
+
 // The popup anchors to its swatch and floats above every overflow ancestor,
 // flipping and sliding so it stays inside the viewport near the admin sidebar.
 export const COLOR_POPOVER_PROPS: ComponentProps<typeof Dropdown>["popoverProps"] = {
@@ -31,7 +38,9 @@ export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPicke
 
     if (value !== lastValue) {
         setLastValue(value);
-        setText(value);
+        if (value !== withExplicitAlpha(text)) {
+            setText(value);
+        }
     }
 
     const invalid = !isHexColor(text);
@@ -40,7 +49,7 @@ export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPicke
     const handleTextChange = (next: string) => {
         setText(next);
         if (isHexColor(next)) {
-            onChange(next.trim());
+            onChange(withExplicitAlpha(next));
         }
     };
 
@@ -67,7 +76,7 @@ export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPicke
                     <WPColorPicker
                         enableAlpha
                         color={value}
-                        onChange={(next) => onChange(next)}
+                        onChange={(next) => onChange(withExplicitAlpha(next))}
                     />
                 )}
             />
