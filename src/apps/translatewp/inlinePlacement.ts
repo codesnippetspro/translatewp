@@ -125,6 +125,7 @@ export const resolvePlacementTarget = (placement: InlinePlacement | null | undef
         // The first match that belongs to the page itself: the admin bar and
         // the plugin's own elements exist only for some visitors.
         element = Array.from(root.querySelectorAll(placement.selector)).find(candidate => !isTransientElement(candidate)) ?? null;
+        element ??= resolveAdminBarOffset(placement.selector, root);
     }
     catch
     {
@@ -148,10 +149,28 @@ export const resolvePlacementTarget = (placement: InlinePlacement | null | undef
 // overlays and the switcher itself. A path must neither count them as
 // siblings nor land on them, or the same path names another element for
 // the visitor than for the administrator who saved it.
-const TRANSIENT_SELECTOR = '#wpadminbar, .twp-editor, .twp-container, [data-twp-switcher], .twp-placed';
+const TRANSIENT_SELECTOR = '#wpadminbar, #translatewp, .twp-editor, .twp-container, [data-twp-switcher], .twp-placed';
 
 export const isTransientElement = (element: Element): boolean =>
     element.matches(TRANSIENT_SELECTOR) || element.closest(TRANSIENT_SELECTOR) !== null;
+
+const resolveAdminBarOffset = (selector: string, root: ParentNode): Element | null =>
+{
+    const path = /^body > div:nth-of-type\(([1-9]\d*)\)((?: > [a-z][\w-]*(?::nth-of-type\([1-9]\d*\))?)*)$/.exec(selector);
+    const body = root.querySelector('body');
+    if (!path || !body) return null;
+    const divs = Array.from(body.children).filter(child => child.tagName === 'DIV');
+    if (!divs.some(child => child.id === 'wpadminbar')) return null;
+    const content = divs.filter(child => !isTransientElement(child));
+    const element = content[Number(path[1]) - 1];
+    if (!element) return null;
+    const adjusted = `body > div:nth-of-type(${divs.indexOf(element) + 1})${path[2]}`;
+    const matches = Array.from(root.querySelectorAll(adjusted)).filter(candidate => !isTransientElement(candidate));
+    return matches.length === 1 ? matches[0] : null;
+};
+
+const placementChildren = (parent: Element): Element[] => Array.from(parent.children)
+    .flatMap(child => child.classList.contains(ANCHOR_ROW_CLASS) ? placementChildren(child) : [child]);
 
 export const cssPath = (element: Element): string =>
 {
@@ -159,15 +178,32 @@ export const cssPath = (element: Element): string =>
     let current: Element | null = element;
     while (current && current !== document.body && current !== document.documentElement)
     {
+        if (current.classList.contains(ANCHOR_ROW_CLASS))
+        {
+            current = current.parentElement;
+            continue;
+        }
         if (current.id && /^[A-Za-z][\w-]*$/.test(current.id) && document.querySelectorAll(`#${current.id}`).length === 1)
         {
             steps.unshift(`#${current.id}`);
             return steps.join(' > ');
         }
         const tag = current.tagName.toLowerCase();
-        const parent: Element | null = current.parentElement;
+        let parent: Element | null = current.parentElement;
+        while (parent?.classList.contains(ANCHOR_ROW_CLASS)) parent = parent.parentElement;
+        if (parent === document.body)
+        {
+            const rootClass = Array.from(current.classList).find(name => /^[A-Za-z_][\w-]*$/.test(name)
+                && !name.startsWith('twp-') && !name.startsWith('translatewp-')
+                && document.querySelectorAll(`.${name}`).length === 1);
+            if (rootClass)
+            {
+                steps.unshift(`${tag}.${rootClass}`);
+                return steps.join(' > ');
+            }
+        }
         const siblings = parent
-            ? Array.from(parent.children).filter(child => child.tagName === current!.tagName && !isTransientElement(child))
+            ? placementChildren(parent).filter(child => child.tagName === current!.tagName && !isTransientElement(child))
             : [];
         const index = siblings.indexOf(current) + 1;
         // A same-tag sibling that is itself transient is not counted, so the

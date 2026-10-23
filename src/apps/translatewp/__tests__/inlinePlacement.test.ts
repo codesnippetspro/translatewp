@@ -64,13 +64,127 @@ describe('placement paths across an admin and a visitor page', () =>
 {
     afterEach(() => { document.body.innerHTML = ''; });
 
+    it('finds a generated content-root path before and after the admin bar is removed', () =>
+    {
+        const content = '<div class="wp-site-blocks"><header><div><a href="/#pricing">Start</a></div></header></div><div class="analytics"></div>';
+        document.body.innerHTML = `<div id="wpadminbar"></div><div class="twp-editor"></div>${content}`;
+        const anchor = document.querySelector('.wp-site-blocks a')!;
+        const selector = cssPath(anchor);
+
+        expect(document.querySelector(selector)).toBe(anchor);
+        document.body.innerHTML = content;
+        expect(document.querySelector(selector)).toBe(document.querySelector('.wp-site-blocks a'));
+    });
+
+    it.each([1, 2])('recovers a saved visitor path through content div %i when the admin bar shifts it', index =>
+    {
+        const preceding = index === 2 ? '<div class="notice"></div>' : '';
+        document.body.innerHTML = `<div id="wpadminbar"></div>${preceding}<div class="wp-site-blocks"><header><a>Start</a></header></div>`;
+        const anchor = document.querySelector('.wp-site-blocks a')!;
+        const target = resolvePlacementTarget({
+            kind: 'anchor', selector: `body > div:nth-of-type(${index}) > header > a`, position: 'right',
+        });
+
+        expect(target && 'beside' in target && target.beside).toBe(anchor);
+    });
+
+    it('leaves a stored path that already matches its element unchanged', () =>
+    {
+        document.body.innerHTML = '<div id="wpadminbar"></div><div class="first"><header><a>First</a></header></div><div class="second"><header><a>Second</a></header></div>';
+        const target = resolvePlacementTarget({
+            kind: 'anchor', selector: 'body > div:nth-of-type(2) > header > a', position: 'right',
+        });
+
+        expect(target && 'beside' in target && target.beside).toBe(document.querySelector('.first a'));
+    });
+
+    it('does not recover a stored path when its adjusted location has several elements', () =>
+    {
+        document.body.innerHTML = '<div id="wpadminbar"></div><div class="wp-site-blocks"><header><a>One</a><a>Two</a></header></div>';
+
+        expect(resolvePlacementTarget({
+            kind: 'anchor', selector: 'body > div:nth-of-type(1) > header > a', position: 'right',
+        })).toBeNull();
+    });
+
+    it('does not search a different content root when no admin bar is present', () =>
+    {
+        document.body.innerHTML = '<div class="notice"></div><div class="wp-site-blocks"><header><a>Start</a></header></div>';
+
+        expect(resolvePlacementTarget({
+            kind: 'anchor', selector: 'body > div:nth-of-type(1) > header > a', position: 'right',
+        })).toBeNull();
+    });
+
+    it('does not count the plugin mount as a content root while recovering a saved path', () =>
+    {
+        document.body.innerHTML = '<div id="wpadminbar"></div><div id="translatewp"></div><div><header><a>Start</a></header></div>';
+        const anchor = document.querySelector('header a')!;
+        const target = resolvePlacementTarget({
+            kind: 'anchor', selector: 'body > div:nth-of-type(1) > header > a', position: 'right',
+        });
+
+        expect(target && 'beside' in target && target.beside).toBe(anchor);
+    });
+
+    it('keeps a new path valid after an existing side placement unwraps its row', async () =>
+    {
+        const { mountPlacement, unmountPlacement } = await import('@/apps/translatewp/inlinePlacement');
+        document.body.innerHTML = '<div id="wpadminbar"></div><div class="wp-site-blocks"><header><a>Start</a></header></div>';
+        const anchor = document.querySelector('header a')!;
+        const host = document.createElement('span');
+        host.className = 'twp-placed';
+        mountPlacement({ beside: anchor, side: 'right' }, host);
+
+        const selector = cssPath(anchor);
+        unmountPlacement(host);
+
+        expect(document.querySelector(selector)).toBe(anchor);
+        const target = resolvePlacementTarget({ kind: 'anchor', selector, position: 'left' });
+        expect(target && 'beside' in target && target.beside).toBe(anchor);
+    });
+
+    it.each([1, 2])('keeps heading %i distinct when a preceding or containing placement row unwraps', async index =>
+    {
+        const { mountPlacement, unmountPlacement } = await import('@/apps/translatewp/inlinePlacement');
+        document.body.innerHTML = '<div id="content"><h2>First</h2><h2>Second</h2><h2>Third</h2></div>';
+        const headings = document.querySelectorAll('h2');
+        const anchor = headings[index];
+        const host = document.createElement('span');
+        host.className = 'twp-placed';
+        mountPlacement({ beside: headings[1], side: 'right' }, host);
+
+        const selector = cssPath(anchor);
+        unmountPlacement(host);
+
+        expect(document.querySelector(selector)).toBe(anchor);
+        const target = resolvePlacementTarget({ kind: 'anchor', selector, position: 'right' });
+        expect(target && 'beside' in target && target.beside).toBe(anchor);
+    });
+
+    it('retains a stable content-root path while the content root itself is side-placed', async () =>
+    {
+        const { mountPlacement, unmountPlacement } = await import('@/apps/translatewp/inlinePlacement');
+        document.body.innerHTML = '<div id="wpadminbar"></div><div class="other"><header><a>Other</a></header></div><div class="wp-site-blocks"><header><a>Start</a></header></div>';
+        const content = document.querySelector('.wp-site-blocks')!;
+        const anchor = content.querySelector('a')!;
+        const host = document.createElement('span');
+        host.className = 'twp-placed';
+        mountPlacement({ beside: content, side: 'right' }, host);
+
+        const selector = cssPath(anchor);
+        unmountPlacement(host);
+
+        expect(document.querySelector(selector)).toBe(anchor);
+    });
+
     it('counts no admin-only or plugin-inserted sibling, so the visitor resolves the same element', () =>
     {
         document.body.innerHTML = '<div id="wpadminbar"></div><div class="twp-editor twp-editor-overlay"></div><div class="site"><p>One</p><p>Two</p></div><div class="twp-container"></div>';
         const site = document.querySelector('.site') as Element;
         const selector = cssPath(site);
 
-        expect(selector).toBe('body > div');
+        expect(document.querySelector(selector)).toBe(site);
 
         document.body.innerHTML = '<div class="site"><p>One</p><p>Two</p></div>';
         const target = resolvePlacementTarget({ kind: 'anchor', selector, position: 'after' });

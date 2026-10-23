@@ -3,6 +3,13 @@ description: Core development doctrine — execution sequence, critical-partner 
 alwaysApply: true
 ---
 
+## Implementation workflow
+
+Follow the working-POC, owner-feedback and test-freeze sequence in `AGENTS.md`.
+It takes precedence over conflicting test-first/TDD defaults. Existing tests and
+required final verification remain in force.
+
+
 Read `AGENTS.md` at the repository root for full project standards. This file
 re-delivers the essentials.
 

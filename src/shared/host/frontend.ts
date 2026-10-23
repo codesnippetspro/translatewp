@@ -18,7 +18,7 @@ import segmentRegistry, {
     type AppliedSegment,
 } from '@/shared/lib/translations/segmentRegistry';
 import {
-    cssPath,
+    cssPath, effectivePlacement,
     resolvePlacementTarget, livePlacement,
     resolveZoneElement,
     SWITCHER_ZONES,
@@ -100,6 +100,7 @@ export interface FrontendHostBridge
         resolveZoneElement: typeof resolveZoneElement;
         resolvePlacementTarget: typeof resolvePlacementTarget;
         cssPath: typeof cssPath;
+        current: () => InlinePlacement | null;
         /** Moves the switcher to a just-saved placement, or back to floating for null, without a reload. */
         apply: (placement: InlinePlacement | null) => void;
     };
@@ -125,7 +126,16 @@ export const frontendHost: FrontendHostBridge = {
     },
     page: () => ({ defaultLocale: pageState.defaultLocale, selectedLocale: pageState.selectedLocale }),
     editMode,
-    placement: { zones: SWITCHER_ZONES, labels: ZONE_LABELS, resolveZoneElement, resolvePlacementTarget, cssPath, apply: placement => livePlacement.apply(placement) },
+    placement: {
+        zones: SWITCHER_ZONES, labels: ZONE_LABELS, resolveZoneElement, resolvePlacementTarget, cssPath,
+        current: () =>
+        {
+            const live = livePlacement.current();
+            return live ? live.placement : effectivePlacement(window.TranslateWP?.context?.page_placement,
+                window.TranslateWP?.options?.languages?.switcher?.inline_placement);
+        },
+        apply: placement => livePlacement.apply(placement),
+    },
     ContextGrouping,
     CacheFirstTranslator,
 };
