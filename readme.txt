@@ -5,7 +5,7 @@ Tags: translation, multilingual, language switcher, localization, ai translation
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -39,7 +39,7 @@ TranslateWP requires a connected TranslateWP account and its online translation 
 Orbital (Pro) extends the free plugin with the separate TranslateWP Pro addon:
 
 * **Translation editor.** Review and correct translated text on your site.
-* **Advanced SEO tools.** Manage translated metadata and slugs, image alt text and additional search-engine options.
+* **Advanced SEO tools.** Manage translated metadata, image alt text and additional search-engine options.
 * **Side tab switcher.** Offer a language tab along the edge of the page.
 * **Additional writing controls.** Refine translations for your audience, length and cultural adaptation.
 * **Your own AI providers.** Connect supported providers and choose a fallback order for each language. Your provider bills for that usage.
@@ -106,7 +106,7 @@ TranslateWP works with rendered page text rather than requiring a separate trans
 
 = Can search engines find translated pages? =
 
-Translated versions have language addresses and hreflang links. Search visibility also depends on your site's indexing settings and translation readiness. Pro adds advanced SEO controls, including translated metadata and slugs. No plugin can guarantee indexing or rankings.
+Translated versions have language addresses and hreflang links. Search visibility also depends on your site's indexing settings and translation readiness. Pro adds advanced SEO controls, including translated metadata. No plugin can guarantee indexing or rankings.
 
 = Will my page cache need configuration? =
 
@@ -149,6 +149,10 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 == Upgrade Notice ==
 
+= 1.0.2 =
+
+Keeps saved language switchers attached to the correct page element when the WordPress admin bar is visible.
+
 = 1.0.1 =
 
 Fixes sign-in from WordPress Playground and other framed WordPress admin screens.
@@ -158,6 +162,11 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 == Changelog ==
+
+= 1.0.2 =
+
+* Keep saved switcher anchors stable when the WordPress admin bar or page layout wrappers change.
+* Preserve the correct heading when moving a switcher beside repeated headings.
 
 = 1.0.1 =
 
