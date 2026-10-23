@@ -1,3 +1,14 @@
+## Working POC before regression tests
+
+For a fix or feature, first implement the smallest reversible working proof of
+concept and demonstrate its actual functional result and limits. Ask the owner
+for feedback or approval and iterate. Once the result is accepted as complete,
+align, update or create unit, integration and E2E tests to preserve the approved
+functional logic and important failure cases. Run required verification gates
+before merge or release. Preserve existing tests and evidence. This owner
+workflow overrides conflicting test-first/TDD skill or agent defaults; existing
+authorization, security and production-change boundaries still apply.
+
 # AGENTS.md — TranslateWP
 
 ## HARD RULE: TranslateWP domains (TWP-243)
