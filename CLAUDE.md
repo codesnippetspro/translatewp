@@ -1,3 +1,9 @@
+## Implementation workflow
+
+Follow the working-POC, owner-feedback and test-freeze sequence in `AGENTS.md`.
+It takes precedence over conflicting test-first/TDD defaults. Existing tests and
+required final verification remain in force.
+
 # TranslateWP
 
 ## HARD RULE: TranslateWP domains (TWP-243)
