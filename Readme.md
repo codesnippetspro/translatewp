@@ -24,7 +24,7 @@ TranslateWP requires a connected TranslateWP account and its online translation 
 Orbital (Pro) extends the free plugin with the separate TranslateWP Pro addon:
 
 * **Translation editor.** Review and correct translated text on your site.
-* **Advanced SEO tools.** Manage translated metadata and slugs, image alt text and additional search-engine options.
+* **Advanced SEO tools.** Manage translated metadata, image alt text and additional search-engine options.
 * **Side tab switcher.** Offer a language tab along the edge of the page.
 * **Additional writing controls.** Refine translations for your audience, length and cultural adaptation.
 * **Your own AI providers.** Connect supported providers and choose a fallback order for each language. Your provider bills for that usage.
@@ -91,7 +91,7 @@ TranslateWP works with rendered page text rather than requiring a separate trans
 
 ### Can search engines find translated pages?
 
-Translated versions have language addresses and hreflang links. Search visibility also depends on your site's indexing settings and translation readiness. Pro adds advanced SEO controls, including translated metadata and slugs. No plugin can guarantee indexing or rankings.
+Translated versions have language addresses and hreflang links. Search visibility also depends on your site's indexing settings and translation readiness. Pro adds advanced SEO controls, including translated metadata. No plugin can guarantee indexing or rankings.
 
 ### Will my page cache need configuration?
 
