@@ -30,6 +30,15 @@ assert_true( false !== strpos( $current, 'https://translatewp.ai/terms' ), 'the 
 assert_true( false !== strpos( $current, 'https://translatewp.ai/privacy' ), 'the privacy policy link must stay' );
 assert_true( false !== strpos( $current, 'api.translatewp.ai' ), 'the disclosure of what is sent to the service must stay' );
 
+$listing_copies = [ $current ];
+if ( is_file( $root . '/Readme.md' ) ) {
+	$listing_copies[] = explode( '## Changelog', (string) file_get_contents( $root . '/Readme.md' ) )[0];
+}
+foreach ( $listing_copies as $listing_copy ) {
+	assert_true( 0 === preg_match( '/\btranslated\s+(?:(?:url|page)\s+|metadata\s+and\s+)?slugs?\b/i', $listing_copy ), 'the listing must not claim translated page slugs' );
+	assert_true( false !== strpos( $listing_copy, 'translated metadata' ), 'the listing must retain the translated metadata feature' );
+}
+
 if ( isset( $options['release'] ) ) {
 	$sections = explode( '== Changelog ==', $readme );
 	$changelog = $sections[1] ?? '';
