@@ -192,6 +192,7 @@ export function SwitcherView({
     // line while a switch still has groups unserved; there is no error notice.
     // Re-gating the line later is a single change to this condition.
 	const dragEnabled = triggerBindings?.['data-drag-handle'] === true;
+	const placementHandle = variant === 'inline' && can.settings;
 	// Once dismissed, the line gives way to a small round handle on the trigger's corner.
 	const dragHintDismissed = useDragHintDone();
 	const positioningNotice = dragEnabled && !dragHintDismissed
@@ -278,6 +279,12 @@ export function SwitcherView({
                     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
                     cursor: grab !important;
                     z-index: 2 !important;
+                }
+                .twp-drag-dot[data-twp-placement-only] {
+                    display: none !important;
+                }
+                html.twp-placing .twp-drag-dot[data-twp-placement-only] {
+                    display: inline-flex !important;
                 }
                 .twp-admin-switch {
                     display: inline-block !important;
@@ -1083,12 +1090,13 @@ export function SwitcherView({
 						) }
                     </div>
                 ) }
-                { dragEnabled && dragHintDismissed && (
+                { ((dragEnabled && dragHintDismissed) || placementHandle) && (
                     <span
                         className="twp-drag-dot"
                         title={ __('Drag to reposition', 'translate') }
                         aria-hidden="true"
                         data-twp-drag-dot
+                        data-twp-placement-only={placementHandle ? 'true' : undefined}
                         onPointerDown={(event) => { event.preventDefault(); triggerBindings?.onPointerDown?.(event as unknown as React.PointerEvent<HTMLButtonElement>); }}
                         onPointerMove={(event) => triggerBindings?.onPointerMove?.(event as unknown as React.PointerEvent<HTMLButtonElement>)}
                         onPointerUp={(event) => triggerBindings?.onPointerUp?.(event as unknown as React.PointerEvent<HTMLButtonElement>)}
