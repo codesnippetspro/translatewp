@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 	await signIn(page);
 });
 
-test('color inputs have accessible names', async ({ page }) => {
+test('switcher controls have names and radios support keyboard selection with visible focus', async ({ page }) => {
 	await page.goto('/wp-admin/admin.php?page=translatewp-settings#switcher');
 	for (const label of [
 		'Text color', 'Background color', 'Highlight text color',
@@ -16,6 +16,26 @@ test('color inputs have accessible names', async ({ page }) => {
 	]) {
 		await expect(page.getByRole('textbox', { name: label, exact: true })).toHaveCount(1);
 	}
+	for (const label of [
+		'Flag icon style', 'Background', 'Switcher type', 'Show selected language', 'Language names',
+	]) {
+		await expect(page.getByRole('radiogroup', { name: label, exact: true })).toHaveCount(1);
+	}
+	const group = page.getByRole('radiogroup', { name: 'Language names', exact: true });
+	const full = group.getByRole('radio', { name: 'Full name', exact: true });
+	const short = group.getByRole('radio', { name: 'Short', exact: true });
+	await expect(full).toBeChecked();
+	await full.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(short).toBeChecked();
+	await expect(short).toBeFocused();
+	await expect(short.locator('..')).toHaveCSS('outline-style', 'solid');
+	expect(await short.locator('..').evaluate(element => parseFloat(getComputedStyle(element).outlineWidth)))
+		.toBeGreaterThan(0);
+	await expect.poll(() => storedSwitcher().regional_names).toBe('short');
+	await page.keyboard.press('ArrowLeft');
+	await expect(full).toBeChecked();
+	await expect.poll(() => storedSwitcher().regional_names).toBe('full');
 });
 
 test('search focus remains visible in wp-admin and feedback has an accessible name', async ({ page }) => {

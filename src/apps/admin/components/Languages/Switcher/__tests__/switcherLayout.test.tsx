@@ -127,7 +127,8 @@ describe('Settings, Switcher: layout', () =>
     it('starts every option card at the top and keeps room for the check mark, so its text stays put when the choice changes', async () =>
     {
         const container = await render();
-        const cards = Array.from(container.querySelectorAll<HTMLElement>('[data-option-cards] [role="radio"]'));
+        const cards = Array.from(container.querySelectorAll<HTMLInputElement>('[data-option-cards] input[type="radio"]'))
+            .map(input => input.parentElement as HTMLElement);
 
         expect(cards.length).toBeGreaterThan(4);
         for (const card of cards)
@@ -136,7 +137,7 @@ describe('Settings, Switcher: layout', () =>
             expect(card.className).toMatch(/\bjustify-start\b/);
             const check = card.querySelector('[data-option-check]');
             expect(check).not.toBeNull();
-            expect(check?.getAttribute('class') ?? '').toMatch(card.getAttribute('aria-checked') === 'true' ? /^(?!.*\binvisible\b)/ : /\binvisible\b/);
+            expect(check?.getAttribute('class') ?? '').toMatch(card.querySelector<HTMLInputElement>('input[type="radio"]')?.checked ? /^(?!.*\binvisible\b)/ : /\binvisible\b/);
         }
     });
 
@@ -145,8 +146,8 @@ describe('Settings, Switcher: layout', () =>
         const container = await render();
         for (const group of ['switcher-type', 'show-selected-language'])
         {
-            const lengths = Array.from(container.querySelectorAll(`[data-option-cards="${group}"] [role="radio"]`))
-                .map(card => (card.querySelector('[data-option-description]')?.textContent ?? '').length);
+            const lengths = Array.from(container.querySelectorAll(`[data-option-cards="${group}"] [data-option-description]`))
+                .map(description => (description.textContent ?? '').length);
             expect(lengths).toHaveLength(3);
             expect(Math.max(...lengths) - Math.min(...lengths)).toBeLessThanOrEqual(24);
         }

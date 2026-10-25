@@ -79,13 +79,13 @@ describe('advanced style controls', () =>
         });
         expect(useAdminSettingsStore.getState().settings['translations.style'].audience).toBe('Small business owners');
 
-        const shorter = advanced.querySelector('[data-option-cards="length"] [role="radio"][aria-checked="true"]') as HTMLElement;
-        expect(shorter.textContent).toContain('Shorter');
-        const longer = Array.from(advanced.querySelectorAll('[data-option-cards="length"] [role="radio"]')).find(card => card.textContent?.includes('Longer')) as HTMLButtonElement;
+        const shorter = advanced.querySelector('[data-option-cards="length"] input[type="radio"]:checked') as HTMLElement;
+        expect(shorter.getAttribute('aria-label')).toBe('Shorter');
+        const longer = Array.from(advanced.querySelectorAll('[data-option-cards="length"] input[type="radio"]')).find(card => card.getAttribute('aria-label') === 'Longer') as HTMLInputElement;
         act(() => longer.click());
         expect(useAdminSettingsStore.getState().settings['translations.style'].length).toBe('longer');
 
-        const adapt = Array.from(advanced.querySelectorAll('[data-option-cards="cultural-adaptation"] [role="radio"]')).find(card => card.textContent?.includes('Adapt')) as HTMLButtonElement;
+        const adapt = Array.from(advanced.querySelectorAll('[data-option-cards="cultural-adaptation"] input[type="radio"]')).find(card => card.getAttribute('aria-label') === 'Adapt') as HTMLInputElement;
         act(() => adapt.click());
         expect(useAdminSettingsStore.getState().settings['translations.style'].cultural_adaptation).toBe('adapt');
     });

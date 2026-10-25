@@ -163,6 +163,7 @@ export const LanguagesSwitcher = () =>
                     <p className='text-sm text-translatewp-muted!'>{__('Your switcher is placed next to an element of your site. On a page that does not have that element, show this instead.', 'translate')}</p>
                     <OptionCards
                         name="anchor-fallback"
+                        label={__('Pages without the placed spot', 'translate')}
                         columns={2}
                         value={settings.anchor_fallback ?? 'floating'}
                         onChange={(value) => updateSetting('anchor_fallback', value)}
@@ -210,6 +211,7 @@ export const LanguagesSwitcher = () =>
             } checked={settings.native_names !== false} onChange={(value) => updateSetting('native_names', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
                 <OptionCards
                     name="regional-names"
+                    label={__('Language names', 'translate')}
                     columns={2}
                     value={settings.regional_names}
                     onChange={(value) => updateSetting('regional_names', value)}
@@ -298,6 +300,7 @@ export const LanguagesSwitcher = () =>
                     >
                         <OptionCards
                             name="flag-icon-style"
+                            label={__('Flag icon style', 'translate')}
                             value={settings.icon_style}
                             onChange={(value) => updateSetting('icon_style', value)}
                             options={FLAG_STYLE_OPTIONS}
@@ -315,6 +318,7 @@ export const LanguagesSwitcher = () =>
                 <p className='text-sm text-translatewp-muted!'>{__('How the switcher sits on your page. Transparent and Matte glass let a photo or video show through; the preview shows them on a busy background.', 'translate')}</p>
                 <OptionCards
                     name="background-style"
+                    label={__('Background', 'translate')}
                     value={settings.background_style ?? 'solid'}
                     onChange={chooseBackground}
                     options={BACKGROUND_OPTIONS}

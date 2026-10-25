@@ -25,8 +25,8 @@ const render = async (): Promise<HTMLElement> =>
 };
 
 const switcher = () => useAdminSettingsStore.getState().settings['languages.switcher'];
-const typeCards = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLButtonElement>('[data-option-cards="switcher-type"] [role="radio"]'));
-const sideTabCard = (container: HTMLElement) => typeCards(container).find(card => card.textContent?.includes('Side tab')) as HTMLButtonElement;
+const typeCards = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLInputElement>('[data-option-cards="switcher-type"] input[type="radio"]'));
+const sideTabCard = (container: HTMLElement) => typeCards(container).find(card => card.getAttribute('aria-label') === 'Side tab') as HTMLInputElement;
 
 const setPro = (active: boolean) =>
 {
@@ -53,10 +53,10 @@ describe('Settings, Switcher: the Side tab', () =>
         store({ type: 'dropdown', side_tab_position: null, floating_position: null });
         const container = await render();
 
-        expect(typeCards(container).map(card => card.textContent)).toEqual([
+        expect(typeCards(container).map(card => card.getAttribute('aria-label'))).toEqual([
             expect.stringContaining('Dropdown'), expect.stringContaining('Native dropdown'), expect.stringContaining('Side tab'),
         ]);
-        expect(sideTabCard(container).textContent).toContain('Placed switchers stay dropdowns.');
+        expect(sideTabCard(container).parentElement?.textContent).toContain('Placed switchers stay dropdowns.');
         await act(async () => { sideTabCard(container).click(); });
         expect(switcher().type).toBe('side_tab');
     });
@@ -67,7 +67,7 @@ describe('Settings, Switcher: the Side tab', () =>
         store({ type: 'dropdown' });
         const container = await render();
 
-        const lock = sideTabCard(container).closest('.relative') as HTMLElement;
+        const lock = container.querySelector('[data-option-cards="switcher-type"] [data-pro-lock-badge]')?.parentElement as HTMLElement;
         expect(lock.querySelector('[data-pro-lock-badge]')).not.toBeNull();
         expect(lock.querySelector('button[aria-label*="side tab"]')).not.toBeNull();
         expect(sideTabCard(container).disabled).toBe(true);
@@ -99,7 +99,7 @@ describe('Settings, Switcher: the Side tab', () =>
         store({ side_tab_position: { edge: 'left', offset: 30 } });
         container = await render();
         expect(container.textContent).toContain('Position: left edge, where you dragged it in edit mode on your site.');
-        const reset = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Reset position') as HTMLButtonElement;
+        const reset = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Reset position') as HTMLInputElement;
         await act(async () => { reset.click(); });
         expect(switcher().side_tab_position).toBeNull();
         expect(switcher().floating_position).toEqual(floating);
@@ -111,7 +111,7 @@ describe('Settings, Switcher: the Side tab', () =>
         store({ type: 'side_tab', side_tab_position: { edge: 'left', offset: 40 }, floating_position: null });
         const container = await render();
 
-        expect(typeCards(container).map(card => card.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+        expect(typeCards(container).map(card => card.checked)).toEqual([true, false, false]);
         expect(container.querySelector('[data-twp-switcher-preview] .twp-side-tab')).toBeNull();
         expect(container.textContent).toContain('Position: Top right, the default.');
         expect(container.querySelector('[data-size-offset]')?.getAttribute('aria-disabled')).toBeNull();
