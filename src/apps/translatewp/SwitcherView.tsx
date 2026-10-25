@@ -1070,7 +1070,7 @@ export function SwitcherView({
                                         aria-label={ __('by TranslateWP, opens in a new tab', 'translate') }
                                     >
                                         <span>by TranslateWP</span>
-                                        <ArrowUpRight size={12} />
+                                        <ArrowUpRight className="rtl:-scale-x-100" size={12} />
                                     </a>
                                 </>
                             ) }
