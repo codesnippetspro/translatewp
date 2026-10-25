@@ -18,6 +18,10 @@ describe('LexiconTable empty state', () =>
             createRoot(container).render(<LexiconTable rows={[]} onEdit={() => {}} onDelete={() => {}} onAdd={onAdd} />);
         });
 
+        expect(container.querySelector('table')).not.toBeNull();
+        expect(container.querySelector('td')?.colSpan).toBe(4);
+        expect(Array.from(container.querySelectorAll('th')).map(header => header.textContent))
+            .toEqual(['Term', 'Languages', 'Categories', 'Actions']);
         const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === 'Add term');
         expect(button).toBeDefined();
         await act(async () =>

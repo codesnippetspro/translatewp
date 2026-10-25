@@ -31,3 +31,11 @@ test('search focus remains visible in wp-admin and feedback has an accessible na
 		name: 'Tell us what would make TranslateWP better', exact: true,
 	})).toBeVisible();
 });
+
+test('language tables expose semantic column headers', async ({ page }) => {
+	await page.goto('/wp-admin/admin.php?page=translatewp-settings#languages');
+	const table = page.getByRole('table');
+	for (const header of ['Language', 'Slug', 'Locale', 'Actions']) {
+		await expect(table.getByRole('columnheader', { name: header, exact: true })).toBeVisible();
+	}
+});

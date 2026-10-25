@@ -23,7 +23,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
 {
     return (
         <Table>
-            <TableHeaderRow columnsClassName="grid-cols-4">
+            <TableHeaderRow>
                 <TableCell variant="header">Term</TableCell>
                 <TableCell variant="header">Languages</TableCell>
                 <TableCell variant="header">Categories</TableCell>
@@ -31,8 +31,8 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
             </TableHeaderRow>
 
             {rows.length === 0 && (
-                <TableRow columnsClassName="grid-cols-1">
-                    <TableCell align="center" className="py-4 text-translatewp-muted">
+                <TableRow>
+                    <TableCell colSpan={4} align="center" className="py-4 text-translatewp-muted">
                         <div className="flex flex-col items-center gap-3">
                             <span>No terms found. Add your first term to get started.</span>
                             <Button variant="primary" className="rounded-sm!" onClick={onAdd}>Add term</Button>
@@ -42,7 +42,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
             )}
 
             {rows.map((row) => (
-                <TableRow key={row.id} columnsClassName="grid-cols-4">
+                <TableRow key={row.id}>
                     <TableCell className="text-translatewp-neutral max-w-md break-words">{row.term}</TableCell>
 
                     <TableCell as="div" className="flex items-center gap-1.5">
