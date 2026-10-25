@@ -8,7 +8,7 @@ export type TableProps = ComponentPropsWithoutRef<'table'>;
 export const Table = ({ className, children, ...props }: TableProps) => (
 	<div className="max-w-full overflow-x-auto rounded-lg border border-translatewp-border">
 		<table
-			className={joinClassNames('w-full table-fixed border-separate border-spacing-0', className)}
+			className={joinClassNames('w-full table-auto border-separate border-spacing-0', className)}
 			{...props}
 		>
 			<tbody>{children}</tbody>
@@ -70,7 +70,7 @@ export const TableCell = <T extends ElementType = 'span'>({
 			colSpan={colSpan}
 			className={joinClassNames(
 				'px-3 py-4 align-middle text-sm text-translatewp-muted break-words',
-				variant === 'header' && 'font-semibold',
+				variant === 'header' && 'font-semibold whitespace-nowrap',
 				alignClassName,
 				!as && className
 			)}

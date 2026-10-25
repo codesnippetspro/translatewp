@@ -78,3 +78,31 @@ test('language headers remain semantic and the permissions table scrolls within 
 	await page.keyboard.press('ArrowRight');
 	await expect.poll(() => region.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
 });
+
+test('language-table action buttons do not compress or clip their icons on mobile', async ({ page }) => {
+	await page.setViewportSize({ width: 320, height: 800 });
+	await page.goto('/wp-admin/admin.php?page=translatewp-settings#languages');
+	const table = page.getByRole('table');
+	await expect(table).toBeVisible();
+	const buttons = await table.getByRole('button').all();
+	expect(buttons.length).toBeGreaterThan(0);
+	for (const button of buttons) {
+		const dimensions = await button.evaluate(element => ({
+			visible: element.clientWidth,
+			content: element.scrollWidth,
+		}));
+		expect(dimensions.content).toBeLessThanOrEqual(dimensions.visible + 1);
+	}
+	const localeLines = await table.getByRole('columnheader', { name: 'Locale', exact: true })
+		.evaluate(element => {
+			const range = document.createRange();
+			range.selectNodeContents(element);
+			return range.getClientRects().length;
+		});
+	expect(localeLines).toBe(1);
+	const pageWidth = await page.evaluate(() => ({
+		viewport: window.innerWidth,
+		content: document.documentElement.scrollWidth,
+	}));
+	expect(pageWidth.content).toBeLessThanOrEqual(pageWidth.viewport);
+});
