@@ -17,3 +17,10 @@ test('color inputs have accessible names', async ({ page }) => {
 		await expect(page.getByRole('textbox', { name: label, exact: true })).toHaveCount(1);
 	}
 });
+
+test('feedback field has an accessible name', async ({ page }) => {
+	await page.goto('/wp-admin/admin.php?page=translatewp#support');
+	await expect(page.getByRole('textbox', {
+		name: 'Tell us what would make TranslateWP better', exact: true,
+	})).toBeVisible();
+});
