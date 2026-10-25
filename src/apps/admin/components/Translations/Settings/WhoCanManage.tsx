@@ -50,7 +50,7 @@ export const WhoCanManage = () =>
 
     return (
         <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5" data-who-can-manage>
-            <span className="text-sm font-bold text-translatewp-neutral!">{__('Who can manage translations', 'translate')}</span>
+            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Who can manage translations', 'translate')}</h4>
             {!editable && <ManagedByNetworkNote />}
             {isError && <p className="text-sm text-translatewp-error m-0" role="alert">{__('The roles could not be loaded. Reload the page to try again.', 'translate')}</p>}
             {data && (
