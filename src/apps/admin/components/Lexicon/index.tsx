@@ -234,7 +234,16 @@ export const Lexicon = () =>
                     setIsDrawerOpen(true);
                 }} />
 
-                <div id="lexicon-terms-results" aria-label={__('Lexicon terms', 'translate')} tabIndex={-1} aria-busy={isFetching}>
+                <section
+                    id="lexicon-terms-results"
+                    aria-labelledby="lexicon-terms-heading"
+                    tabIndex={-1}
+                    aria-busy={isFetching}
+                    className="flex flex-col gap-8"
+                >
+                    <h3 id="lexicon-terms-heading" className="screen-reader-text">
+                        {__('Lexicon terms', 'translate')}
+                    </h3>
                     <LexiconTable
                         rows={rows}
                         onAdd={() => {
@@ -250,54 +259,54 @@ export const Lexicon = () =>
                         }}
                         onDelete={handleDelete}
                     />
-                </div>
-                {termsQuery.isError && (
-                    <div role="alert">
-                        <p>{__('Terms could not be loaded. Try again.', 'translate')}</p>
-                        <Button variant="secondary" onClick={() => void termsQuery.refetch()}>
-                            {__('Retry', 'translate')}
-                        </Button>
-                    </div>
-                )}
-                <span className="screen-reader-text" role="status" aria-live="polite" aria-atomic="true">
-                    {isFetching ? lastPaginationAnnouncement.current : paginationAnnouncement}
-                </span>
-                {pagination && (
-                    <nav
-                        className="flex flex-wrap items-center justify-between gap-4"
-                        aria-label={__('Lexicon terms pages', 'translate')}
-                    >
-                        <span className="text-sm text-translatewp-muted">{paginationAnnouncement}</span>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
-                                aria-label={__('Previous page of lexicon terms', 'translate')}
-                                aria-controls="lexicon-terms-results"
-                                disabled={!pagination?.has_prev || isFetching}
-                                onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
-                                {
-                                    paginationButton.current = event.currentTarget;
-                                    setPage(Math.max(1, (pagination?.page ?? 1) - 1));
-                                }}
-                            >
-                                {__('Previous', 'translate')}
-                            </Button>
-                            <Button
-                                variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
-                                aria-label={__('Next page of lexicon terms', 'translate')}
-                                aria-controls="lexicon-terms-results"
-                                disabled={!pagination?.has_next || isFetching}
-                                onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
-                                {
-                                    paginationButton.current = event.currentTarget;
-                                    setPage((pagination?.page ?? 1) + 1);
-                                }}
-                            >
-                                {__('Next', 'translate')}
+                    {termsQuery.isError && (
+                        <div role="alert">
+                            <p>{__('Terms could not be loaded. Try again.', 'translate')}</p>
+                            <Button variant="secondary" onClick={() => void termsQuery.refetch()}>
+                                {__('Retry', 'translate')}
                             </Button>
                         </div>
-                    </nav>
-                )}
+                    )}
+                    <span className="screen-reader-text" role="status" aria-live="polite" aria-atomic="true">
+                        {isFetching ? lastPaginationAnnouncement.current : paginationAnnouncement}
+                    </span>
+                    {pagination && (
+                        <nav
+                            className="flex flex-wrap items-center justify-between gap-4"
+                            aria-label={__('Lexicon terms pages', 'translate')}
+                        >
+                            <span className="text-sm text-translatewp-muted">{paginationAnnouncement}</span>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
+                                    aria-label={__('Previous page of lexicon terms', 'translate')}
+                                    aria-controls="lexicon-terms-results"
+                                    disabled={!pagination?.has_prev || isFetching}
+                                    onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                                    {
+                                        paginationButton.current = event.currentTarget;
+                                        setPage(Math.max(1, (pagination?.page ?? 1) - 1));
+                                    }}
+                                >
+                                    {__('Previous', 'translate')}
+                                </Button>
+                                <Button
+                                    variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
+                                    aria-label={__('Next page of lexicon terms', 'translate')}
+                                    aria-controls="lexicon-terms-results"
+                                    disabled={!pagination?.has_next || isFetching}
+                                    onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                                    {
+                                        paginationButton.current = event.currentTarget;
+                                        setPage((pagination?.page ?? 1) + 1);
+                                    }}
+                                >
+                                    {__('Next', 'translate')}
+                                </Button>
+                            </div>
+                        </nav>
+                    )}
+                </section>
             </PageBody>
 
             <AddLexiconDrawer
