@@ -1,6 +1,6 @@
 import { Button } from '@wordpress/components';
 import { Pencil, Trash2 } from 'lucide-react';
-import { getCountryFlagFromLocale } from '@/shared/lib/languages';
+import { getCountryFlagFromLocale, getLanguageNameFromLocale } from '@/shared/lib/languages';
 import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 
 export interface LexiconRow
@@ -45,10 +45,11 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                 <TableRow key={row.id}>
                     <TableCell className="text-translatewp-neutral max-w-md break-words">{row.term}</TableCell>
 
-                    <TableCell as="div" className="flex items-center gap-1.5">
+                    <TableCell as="div" className="flex flex-wrap items-center gap-1.5">
                         {row.languages.map((locale) => (
-                            <span key={`${row.id}-${locale}`} title={locale}>
-                                {getCountryFlagFromLocale(locale)}
+                            <span key={`${row.id}-${locale}`} className="inline-flex items-center gap-1.5">
+                                <span aria-hidden="true">{getCountryFlagFromLocale(locale)}</span>
+                                {getLanguageNameFromLocale(locale) || locale}
                             </span>
                         ))}
                     </TableCell>

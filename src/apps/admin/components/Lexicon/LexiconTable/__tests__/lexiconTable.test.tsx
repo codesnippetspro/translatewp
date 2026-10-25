@@ -57,3 +57,21 @@ describe('LexiconTable term cell', () =>
         container.remove();
     });
 });
+
+it('names the languages in each term row and preserves an unknown locale', async () =>
+{
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+        root.render(<LexiconTable
+            rows={[{ id: 1, term: 'Brand', languages: ['en-us', 'he', 'unknown'], categories: [] }]}
+            onEdit={jest.fn()} onDelete={jest.fn()} onAdd={jest.fn()}
+        />);
+    });
+    const languages = container.querySelectorAll('tr')[1].cells[1];
+    expect(languages.textContent).toContain('American English');
+    expect(languages.textContent).toContain('Hebrew');
+    expect(languages.textContent).toContain('unknown');
+    expect(languages.querySelectorAll('[aria-hidden="true"]')).toHaveLength(3);
+    await act(async () => { root.unmount(); });
+});
