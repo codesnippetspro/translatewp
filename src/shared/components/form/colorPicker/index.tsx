@@ -84,6 +84,8 @@ export const ColorPicker = ({ label, value, onChange, onOpenChange }: ColorPicke
                 <TextControl
                     __next40pxDefaultSize
                     __nextHasNoMarginBottom
+                    label={label}
+                    hideLabelFromVision
                     className='[&_input]:border-translatewp-border! [&_input]:rounded-sm!'
                     value={text}
                     onChange={handleTextChange}

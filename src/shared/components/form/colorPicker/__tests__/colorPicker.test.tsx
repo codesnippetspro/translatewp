@@ -43,6 +43,19 @@ describe('ColorPicker text field', () =>
         document.body.innerHTML = '';
     });
 
+    it('gives each editable color its own associated label', async () =>
+    {
+        const container = await render(<>
+            <ColorPicker label="Text color" value="#343739" onChange={jest.fn()} />
+            <ColorPicker label="Background color" value="#FFFFFF" onChange={jest.fn()} />
+        </>);
+        const inputs = Array.from(container.querySelectorAll('input'));
+        expect(inputs).toHaveLength(2);
+        expect(inputs.map(input => input.labels?.[0]?.textContent))
+            .toEqual(['Text color', 'Background color']);
+        expect(inputs[0].id).not.toBe(inputs[1].id);
+    });
+
     it('accepts three, four, six and eight digit hex colours, including an alpha channel', () =>
     {
         expect(isHexColor('#0E3ECD')).toBe(true);
