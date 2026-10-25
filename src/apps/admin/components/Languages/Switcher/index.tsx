@@ -341,7 +341,7 @@ export const LanguagesSwitcher = () =>
                     onChange={(value) => updateMetric('icon_size', value)}
                     min={0}
                     max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pr-2'>px</span>}
+                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
                     className='max-w-40'
                 />
                 </div>
@@ -356,7 +356,7 @@ export const LanguagesSwitcher = () =>
                     onChange={(value) => updateMetric('padding', value)}
                     min={0}
                     max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pr-2'>px</span>}
+                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
                     className='max-w-40'
                 />
                 </div>
@@ -371,7 +371,7 @@ export const LanguagesSwitcher = () =>
                     onChange={(value) => updateMetric('offset', value)}
                     min={0}
                     max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pr-2'>px</span>}
+                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
                     className='max-w-40'
                 />
                 </div>

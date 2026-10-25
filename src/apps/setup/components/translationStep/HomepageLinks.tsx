@@ -70,7 +70,7 @@ export const HomepageLinks = () =>
     if (!languages.length || homeUrl === '') return null;
 
     return (
-        <div className='ml-auto flex flex-wrap items-center justify-end gap-2' role='group' aria-label={__('See your homepage translated', 'translate')} data-homepage-links>
+        <div className='ms-auto flex flex-wrap items-center justify-end gap-2' role='group' aria-label={__('See your homepage translated', 'translate')} data-homepage-links>
             <span className='text-sm text-translatewp-neutral'>{__('See your homepage translated', 'translate')}</span>
             {languages.map(locale =>
             {

@@ -72,7 +72,7 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                         sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
                     }
                 </span>
-                <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+                <div className="flex flex-wrap items-center gap-2 lg:ms-auto">
                     {dismissed ? (
                         <>
                             <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>

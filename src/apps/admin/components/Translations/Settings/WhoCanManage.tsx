@@ -56,9 +56,9 @@ export const WhoCanManage = () =>
             {data && (
                 <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
                     <thead>
-                        <tr className="text-left text-translatewp-muted">
-                            <th className="px-3 py-2 font-semibold">{__('Role', 'translate')}</th>
-                            {CAPABILITIES.map(capability => <th key={capability.key} className="px-3 py-2 font-semibold">{capability.label}</th>)}
+                        <tr className="text-start text-translatewp-muted">
+                            <th className="px-3 py-2 font-semibold text-start">{__('Role', 'translate')}</th>
+                            {CAPABILITIES.map(capability => <th key={capability.key} className="px-3 py-2 font-semibold text-start">{capability.label}</th>)}
                         </tr>
                     </thead>
                     <tbody>

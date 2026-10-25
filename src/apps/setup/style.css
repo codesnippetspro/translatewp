@@ -183,7 +183,7 @@
     color: var(--color-translatewp-neutral, #343739);
     font-size: 18px;
     font-weight: 700;
-    text-align: right;
+    text-align: end;
 }
 
 #translatewp-setup .setup-translation-value.is-finished {
@@ -245,7 +245,7 @@
     border-radius: 8px;
     background: color-mix(in srgb, var(--color-translatewp-success) 8%, #FFF);
     color: var(--color-translatewp-neutral, #343739);
-    text-align: left;
+    text-align: start;
     box-sizing: border-box;
 }
 

@@ -166,11 +166,11 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
             </div>
 
             {isOpen && (
-                <div className="box-border absolute left-0 top-full mt-2 z-10 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto">
+                <div className="box-border absolute start-0 top-full mt-2 z-10 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto">
                     {canCreateOption && (
                         <button
                             type="button"
-                            className="px-3 py-2.75 w-full text-left cursor-pointer bg-white border-0 hover:bg-translatewp-border text-translatewp-primary"
+                            className="px-3 py-2.75 w-full text-start cursor-pointer bg-white border-0 hover:bg-translatewp-border text-translatewp-primary"
                             onClick={handleCreate}
                         >
                             <span className="text-sm">
@@ -189,7 +189,7 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
                         <button
                             type="button"
                             key={option.value}
-                            className="px-3 py-2.75 w-full text-left cursor-pointer hover:bg-translatewp-border"
+                            className="px-3 py-2.75 w-full text-start cursor-pointer hover:bg-translatewp-border"
                             onClick={() => handleSelect(option.value)}
                         >
                             <span className="text-translatewp-neutral text-sm">{option.label}</span>

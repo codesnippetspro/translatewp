@@ -124,7 +124,7 @@ export const TranslationCard = () =>
                 {details.map(({ label, value }) => (
                     <div key={label} className="grid grid-cols-2 gap-3 py-2.5 first:pt-0">
                         <dt className="text-sm text-translatewp-muted">{label}</dt>
-                        <dd className="m-0 min-w-0 text-right text-sm font-medium text-translatewp-neutral break-words">
+                        <dd className="m-0 min-w-0 text-end text-sm font-medium text-translatewp-neutral break-words">
                             {value}
                         </dd>
                     </div>

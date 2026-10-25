@@ -299,7 +299,7 @@ const ExceptionsForm = ({ group, form, subsites, requestConfirmation }: {
             {sites.map(id => <input key={id} type="hidden" name="sites[]" value={String(id)} />)}
             <span className="text-sm font-bold text-translatewp-neutral">{__('Exceptions for chosen subsites', 'translate')}</span>
             {current.length > 0 ? (
-                <ul className="m-0 list-disc pl-5 text-sm text-translatewp-neutral!">
+                <ul className="m-0 list-disc ps-5 text-sm text-translatewp-neutral!">
                     {current.map(([siteId, state]) => <li key={siteId}>{`${names.get(siteId) ?? `#${siteId}`}: ${exceptionLabel(state)}`}</li>)}
                 </ul>
             ) : (

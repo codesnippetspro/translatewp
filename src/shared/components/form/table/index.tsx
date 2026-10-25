@@ -52,21 +52,26 @@ export const TableHeaderRow = (props: TableHeaderRowProps) => (
 
 export type TableCellProps<T extends ElementType = 'span'> = PropsWithChildren<{
     as?: T;
-    align?: 'left' | 'center' | 'right';
+    align?: 'start' | 'end' | 'left' | 'center' | 'right';
     variant?: 'header' | 'body';
     className?: string;
 }> & Omit<ComponentPropsWithoutRef<T>, 'as' | 'className' | 'children'>;
 
 export const TableCell = <T extends ElementType = 'span'>({
     as,
-    align = 'left',
+    align = 'start',
     variant = 'body',
     className,
     ...props
 }: TableCellProps<T>) => {
     const Component = as ?? 'span';
-    const alignClassName =
-        align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    const alignClassName = {
+        start: 'text-start',
+        end: 'text-end',
+        left: 'text-left',
+        center: 'text-center',
+        right: 'text-right',
+    }[align];
     const variantClassName =
         variant === 'header'
             ? 'font-semibold text-sm text-translatewp-muted'

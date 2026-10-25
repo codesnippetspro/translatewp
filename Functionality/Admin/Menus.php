@@ -172,7 +172,7 @@ class Menus {
 
     public function render_upgrade_menu_styles() {
         echo '<style>
-            #adminmenu .translatewp-pro-pill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; background: #0e3ecd; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; vertical-align: middle; }
+            #adminmenu .translatewp-pro-pill { display: inline-block; margin-inline-start: 6px; padding: 0 6px; border-radius: 3px; background: #0e3ecd; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; vertical-align: middle; }
             #adminmenu ' . esc_html( self::UPGRADE_LINK_SELECTOR ) . ',
             #adminmenu a[href$="page=translatewp#overview"] {
                 color: #0e3ecd;
