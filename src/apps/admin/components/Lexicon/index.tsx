@@ -1,7 +1,8 @@
-import { useEffect, useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 import { getWordPressLexiconTermsQueryOptions } from '@/shared/query-options/wordpress';
 import { deleteWordPressLexiconTerm, type LexiconTerm } from '@/shared/api/wordpress';
@@ -42,7 +43,17 @@ export const Lexicon = () =>
     const [applyNotice, setApplyNotice] = useState<string | null>(null);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
 
-    const { data: lexiconTermsResponse, isFetching } = useQuery(getWordPressLexiconTermsQueryOptions(perPage, page));
+    const termsQuery = useQuery({
+        ...getWordPressLexiconTermsQueryOptions(perPage, page),
+        placeholderData: previous => previous,
+    });
+    const [lastTerms, setLastTerms] = useState<typeof termsQuery.data>(undefined);
+    useEffect(() =>
+    {
+        if (termsQuery.isSuccess && !termsQuery.isPlaceholderData) setLastTerms(termsQuery.data);
+    }, [termsQuery.data, termsQuery.isSuccess, termsQuery.isPlaceholderData]);
+    const lexiconTermsResponse = termsQuery.data ?? lastTerms;
+    const { isFetching } = termsQuery;
 
     // A term change never marks anything stale by itself. The pages
     // translated under the previous terms are counted here and retranslated
@@ -125,6 +136,31 @@ export const Lexicon = () =>
 
     const pagination = lexiconTermsResponse?.pagination;
 
+    const paginationButton = useRef<HTMLButtonElement | null>(null);
+    const paginationAnnouncement = pagination ? sprintf(
+        /* translators: 1: current page, 2: total pages, 3: total terms. */
+        __('Page %1$d of %2$d (%3$d terms)', 'translate'),
+        pagination.page, Math.max(1, pagination.total_pages), pagination.total
+    ) : '';
+    const lastPaginationAnnouncement = useRef('');
+    useEffect(() =>
+    {
+        if (!isFetching) lastPaginationAnnouncement.current = paginationAnnouncement;
+    }, [paginationAnnouncement, isFetching]);
+    useEffect(() =>
+    {
+        const button = paginationButton.current;
+        if (!button || isFetching) return;
+        paginationButton.current = null;
+        const active = document.activeElement;
+        if (active !== button && active !== document.body) return;
+        if (!pagination || !button.isConnected || button.disabled)
+        {
+            document.getElementById('lexicon-terms-results')?.focus();
+        }
+        else if (active === document.body) button.focus();
+    });
+
     const handleDelete = async (id: number | string) =>
     {
         if (isDeleting) {
@@ -198,47 +234,69 @@ export const Lexicon = () =>
                     setIsDrawerOpen(true);
                 }} />
 
-                <LexiconTable
-                    rows={rows}
-                    onAdd={() => {
-                        setDrawerContext('add');
-                        setSelectedTerm(null);
-                        setIsDrawerOpen(true);
-                    }}
-                    onEdit={(id) => {
-                        const termToEdit = (lexiconTermsResponse?.items ?? []).find((item) => item.id === Number(id)) ?? null;
-                        setSelectedTerm(termToEdit);
-                        setDrawerContext('edit');
-                        setIsDrawerOpen(true);
-                    }}
-                    onDelete={handleDelete}
-                />
-
+                <div id="lexicon-terms-results" aria-label={__('Lexicon terms', 'translate')} tabIndex={-1} aria-busy={isFetching}>
+                    <LexiconTable
+                        rows={rows}
+                        onAdd={() => {
+                            setDrawerContext('add');
+                            setSelectedTerm(null);
+                            setIsDrawerOpen(true);
+                        }}
+                        onEdit={(id) => {
+                            const termToEdit = (lexiconTermsResponse?.items ?? []).find((item) => item.id === Number(id)) ?? null;
+                            setSelectedTerm(termToEdit);
+                            setDrawerContext('edit');
+                            setIsDrawerOpen(true);
+                        }}
+                        onDelete={handleDelete}
+                    />
+                </div>
+                {termsQuery.isError && (
+                    <div role="alert">
+                        <p>{__('Terms could not be loaded. Try again.', 'translate')}</p>
+                        <Button variant="secondary" onClick={() => void termsQuery.refetch()}>
+                            {__('Retry', 'translate')}
+                        </Button>
+                    </div>
+                )}
+                <span className="screen-reader-text" role="status" aria-live="polite" aria-atomic="true">
+                    {isFetching ? lastPaginationAnnouncement.current : paginationAnnouncement}
+                </span>
                 {pagination && (
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <span className="text-sm text-translatewp-muted!">
-                            Page {pagination.page} of {Math.max(1, pagination.total_pages)} ({pagination.total} terms)
-                        </span>
-
+                    <nav
+                        className="flex flex-wrap items-center justify-between gap-4"
+                        aria-label={__('Lexicon terms pages', 'translate')}
+                    >
+                        <span className="text-sm text-translatewp-muted">{paginationAnnouncement}</span>
                         <div className="flex items-center gap-2">
                             <Button
-                                variant='secondary'
-                                className='rounded-sm! min-w-20! justify-center'
-                                disabled={!pagination.has_prev || isFetching}
-                                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                                variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
+                                aria-label={__('Previous page of lexicon terms', 'translate')}
+                                aria-controls="lexicon-terms-results"
+                                disabled={!pagination?.has_prev || isFetching}
+                                onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                                {
+                                    paginationButton.current = event.currentTarget;
+                                    setPage(Math.max(1, (pagination?.page ?? 1) - 1));
+                                }}
                             >
-                                Previous
+                                {__('Previous', 'translate')}
                             </Button>
                             <Button
-                                variant='secondary'
-                                className='rounded-sm! min-w-20! justify-center'
-                                disabled={!pagination.has_next || isFetching}
-                                onClick={() => setPage((current) => current + 1)}
+                                variant="secondary" type="button" className="rounded-sm! min-w-20! justify-center"
+                                aria-label={__('Next page of lexicon terms', 'translate')}
+                                aria-controls="lexicon-terms-results"
+                                disabled={!pagination?.has_next || isFetching}
+                                onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                                {
+                                    paginationButton.current = event.currentTarget;
+                                    setPage((pagination?.page ?? 1) + 1);
+                                }}
                             >
-                                Next
+                                {__('Next', 'translate')}
                             </Button>
                         </div>
-                    </div>
+                    </nav>
                 )}
             </PageBody>
 
