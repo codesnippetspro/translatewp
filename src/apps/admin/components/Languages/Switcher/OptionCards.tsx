@@ -49,7 +49,7 @@ export const OptionCards = <Value extends string>({ options, value, onChange, co
             );
             return option.locked
                 // The badge takes the check mark's place, on the title's line.
-                ? <ProLock key={option.value} feature={option.locked.feature} badge={<ProMarker />} badgeClassName="right-4 top-4" className="h-full">{card}</ProLock>
+                ? <ProLock key={option.value} feature={option.locked.feature} badge={<ProMarker />} badgeClassName="end-4 top-4" className="h-full">{card}</ProLock>
                 : card;
         })}
     </div>

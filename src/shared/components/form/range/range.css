@@ -1,6 +1,7 @@
 input[type="range"].twp-range {
 	--twp-range-track: #e2e2e4;
 	--twp-range-accent: #0e3ecd;
+	--twp-range-direction: to right;
 	width: 100%;
 	height: 1.25rem;
 	margin: 0;
@@ -10,10 +11,14 @@ input[type="range"].twp-range {
 	appearance: none;
 }
 
+input[type="range"].twp-range:dir(rtl) {
+	--twp-range-direction: to left;
+}
+
 input[type="range"].twp-range::-webkit-slider-runnable-track {
 	height: 6px;
 	border-radius: 9999px;
-	background: linear-gradient(to right, var(--twp-range-accent) var(--twp-range-fill, 0%), var(--twp-range-track) var(--twp-range-fill, 0%));
+	background: linear-gradient(var(--twp-range-direction), var(--twp-range-accent) var(--twp-range-fill, 0%), var(--twp-range-track) var(--twp-range-fill, 0%));
 }
 
 input[type="range"].twp-range::-webkit-slider-thumb {

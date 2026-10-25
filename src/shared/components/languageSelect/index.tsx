@@ -105,7 +105,7 @@ export const LanguageSelect = ({ defaultValue, onChange, placeholder, compact = 
                     value={filterValue}
                     placeholder={placeholder ?? __('Filter languages', 'translate')}
                     aria-label={__('Filter languages', 'translate')}
-                    className={`min-w-0 flex-1 m-0! p-0! h-auto! min-h-0! bg-transparent text-translatewp-neutral! text-sm! leading-normal! border-none! shadow-none! focus:ring-0! focus:outline-none! focus:shadow-none!${compact ? ' text-right! placeholder:text-right' : ''}`}
+                    className={`min-w-0 flex-1 m-0! p-0! h-auto! min-h-0! bg-transparent text-translatewp-neutral! text-sm! leading-normal! border-none! shadow-none! focus:ring-0! focus:outline-none! focus:shadow-none!${compact ? ' text-end! placeholder:text-end' : ''}`}
                     onChange={( event ) => setFilterValue( event.target.value )}
                     onFocus={() => setIsOpen( true )}
                 />
@@ -113,7 +113,7 @@ export const LanguageSelect = ({ defaultValue, onChange, placeholder, compact = 
             </div>
 
             { isOpen && (
-                <div className={`absolute left-0 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto z-999999 ${compact ? 'top-full mt-1 min-w-64' : 'top-14'}`}>
+                <div className={`absolute start-0 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto z-999999 ${compact ? 'top-full mt-1 min-w-64' : 'top-14'}`}>
                     { sortedLocales.length === 0 && (
                         <p className='px-3 py-2.75 m-0! text-sm! text-translatewp-muted!'>
                             {__( 'Could not load the language list. Reload the page.', 'translate' )}

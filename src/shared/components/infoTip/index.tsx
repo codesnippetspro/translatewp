@@ -13,7 +13,7 @@ export const InfoTip = ({ text }: { text: string }) =>
             <span
                 id={id}
                 role="tooltip"
-                className="pointer-events-none invisible absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 rounded-sm bg-translatewp-neutral px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-white opacity-0 shadow-lg"
+                className="pointer-events-none invisible absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 rounded-sm bg-translatewp-neutral px-3 py-2 text-start text-xs font-normal normal-case tracking-normal text-white opacity-0 shadow-lg"
             >
                 {text}
             </span>

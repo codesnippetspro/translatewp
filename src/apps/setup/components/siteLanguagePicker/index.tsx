@@ -14,7 +14,7 @@ export const SiteLanguagePicker = () =>
     const setDefaultLanguage = useSetupStore(state => state.setDefaultLanguage);
 
     return (
-        <div className='ml-auto w-72 shrink-0' data-site-language-picker title={__('The language your content is written in. Every translation is made from it.', 'translate')}>
+        <div className='ms-auto w-72 shrink-0' data-site-language-picker title={__('The language your content is written in. Every translation is made from it.', 'translate')}>
             <LanguageSelect compact defaultValue={defaultLanguage} onChange={setDefaultLanguage} placeholder={__('Change', 'translate')} />
         </div>
     );

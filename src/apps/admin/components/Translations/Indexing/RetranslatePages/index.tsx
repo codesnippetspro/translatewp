@@ -378,11 +378,11 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                         <>
                             <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
                                 <thead>
-                                    <tr className="text-left text-translatewp-muted">
-                                        <th className="px-3 py-2 font-semibold">{__('Page', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold">{__('Status', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold">{__('Segments', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold text-right">{__('Actions', 'translate')}</th>
+                                    <tr className="text-start text-translatewp-muted">
+                                        <th className="px-3 py-2 font-semibold text-start">{__('Page', 'translate')}</th>
+                                        <th className="px-3 py-2 font-semibold text-start">{__('Status', 'translate')}</th>
+                                        <th className="px-3 py-2 font-semibold text-start">{__('Segments', 'translate')}</th>
+                                        <th className="px-3 py-2 font-semibold text-end">{__('Actions', 'translate')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -408,8 +408,8 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                     <StatusCell entry={entry} />
                                                 </td>
                                                 <td className="px-3 py-2 text-translatewp-neutral">{entry.segments}</td>
-                                                <td className="px-3 py-2 text-right">
-                                                    <div className="relative inline-block text-left" ref={openMenuId === entry.id ? menuRef : undefined}>
+                                                <td className="px-3 py-2 text-end">
+                                                    <div className="relative inline-block text-start" ref={openMenuId === entry.id ? menuRef : undefined}>
                                                         <Button
                                                             variant="tertiary"
                                                             aria-haspopup="menu"
@@ -429,13 +429,13 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                         {openMenuId === entry.id && (
                                                             <div
                                                                 role="menu"
-                                                                className="absolute right-0 top-full z-999999 mt-1 min-w-52 flex flex-col bg-white border border-translatewp-border rounded-sm shadow-sm"
+                                                                className="absolute end-0 top-full z-999999 mt-1 min-w-52 flex flex-col bg-white border border-translatewp-border rounded-sm shadow-sm"
                                                             >
                                                                 <button
                                                                     type="button"
                                                                     role="menuitem"
                                                                     disabled={confirmDialogProps.isOpen || mutation.isPending}
-                                                                    className="px-3 py-2 text-left text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    className="px-3 py-2 text-start text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                     onClick={() => void handleRetranslate(pageEntry, activeLanguage)}
                                                                 >
                                                                     {sprintf(
@@ -448,7 +448,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                                     type="button"
                                                                     role="menuitem"
                                                                     disabled={confirmDialogProps.isOpen || mutation.isPending}
-                                                                    className="px-3 py-2 text-left text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    className="px-3 py-2 text-start text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                     onClick={() => void handleRetranslate(pageEntry)}
                                                                 >
                                                                     {__('Retranslate in every language', 'translate')}
@@ -457,7 +457,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                                     <button
                                                                         type="button"
                                                                         role="menuitem"
-                                                                        className="px-3 py-2 text-left text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40"
+                                                                        className="px-3 py-2 text-start text-sm text-translatewp-neutral bg-white border-0 cursor-pointer hover:bg-translatewp-border/40"
                                                                         onClick={() => handleExtractAgain(entry.id)}
                                                                     >
                                                                         {__('Extract again', 'translate')}

@@ -83,7 +83,7 @@ export const Drawer = ({
             <div
                 role="dialog"
                 aria-modal="true"
-                className={`absolute right-0 top-0 h-full bg-white shadow-xl transition-transform translate-x-0 ${widthClassName ?? 'w-80 sm:w-96'} ${className ?? ''}`}
+                className={`absolute end-0 top-0 h-full bg-white shadow-xl transition-transform translate-x-0 ${widthClassName ?? 'w-80 sm:w-96'} ${className ?? ''}`}
                 onClick={( event ) => event.stopPropagation()}
             >
                 <div className="h-full overflow-y-auto px-7 py-8 flex flex-col gap-8">

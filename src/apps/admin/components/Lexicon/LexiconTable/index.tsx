@@ -27,7 +27,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                 <TableCell variant="header">Term</TableCell>
                 <TableCell variant="header">Languages</TableCell>
                 <TableCell variant="header">Categories</TableCell>
-                <TableCell variant="header" align="right">Actions</TableCell>
+                <TableCell variant="header" align="end">Actions</TableCell>
             </TableHeaderRow>
 
             {rows.length === 0 && (
@@ -64,7 +64,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                         ))}
                     </TableCell>
 
-                    <TableCell as="div" align="right" className="flex justify-end gap-2">
+                    <TableCell as="div" align="end" className="flex justify-end gap-2">
                         <Button
                             variant='primary'
                             label='Edit lexicon term'

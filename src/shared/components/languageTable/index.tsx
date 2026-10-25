@@ -67,7 +67,7 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                 <TableCell variant="header" className="col-span-2">Language</TableCell>
                 <TableCell variant="header" align="center">Slug</TableCell>
                 <TableCell variant="header" align="center">Locale</TableCell>
-                <TableCell variant="header" align="right">Actions</TableCell>
+                <TableCell variant="header" align="end">Actions</TableCell>
             </TableHeaderRow>
 
             {languages.length === 0 ? (
@@ -98,7 +98,7 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
 
                         <TableCell align="center">{language.slug}</TableCell>
                         <TableCell align="center">{formatLocale( language.locale )}</TableCell>
-                        <TableCell align="right" className="flex justify-end gap-2">
+                        <TableCell align="end" className="flex justify-end gap-2">
                             <Button
                                 variant='primary'
                                 label={`Edit ${languageName}`}
