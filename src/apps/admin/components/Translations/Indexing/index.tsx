@@ -400,7 +400,7 @@ export const LanguagesIndexing = () =>
                     {__('Pinned pages are indexed before everything else.', 'translate')}
                 </p>
                 <div className="relative w-full" ref={pinSelectRef}>
-                    <div className="box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary">
+                    <div className="box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary focus-within:outline-2! focus-within:outline-solid! focus-within:outline-offset-2! focus-within:outline-translatewp-primary!">
                         <input
                             type="text"
                             value={filterValue}

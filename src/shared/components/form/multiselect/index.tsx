@@ -119,7 +119,7 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
     return (
         <div className="relative w-full min-w-0" ref={containerRef}>
             <div
-                className="box-border px-3 py-2.75 w-full min-w-0 flex flex-wrap items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary"
+                className="box-border px-3 py-2.75 w-full min-w-0 flex flex-wrap items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary focus-within:outline-2! focus-within:outline-solid! focus-within:outline-offset-2! focus-within:outline-translatewp-primary!"
                 onClick={() => inputRef.current?.focus()}
             >
                 {selectedOptions.map((option) => (

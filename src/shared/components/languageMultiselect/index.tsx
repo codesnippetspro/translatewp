@@ -90,7 +90,7 @@ export const LanguageChecklist = ({ selected, onChange, excludeLocales = [], pla
 
     return (
         <>
-            <div className='box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary shrink-0'>
+            <div className='box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary focus-within:outline-2! focus-within:outline-solid! focus-within:outline-offset-2! focus-within:outline-translatewp-primary! shrink-0'>
                 <input
                     type='text'
                     value={filterValue}

@@ -33,7 +33,7 @@ export const CheckboxGrid = ({ label, options, selected, columns = 2, help, onCh
                             checked={selected.includes(option.value)}
                             onChange={() => handleChange(option.value)}
                         />
-                        <div className="h-4 w-4 rounded-sm border border-translatewp-border flex items-center justify-center text-transparent peer-checked:border-translatewp-primary peer-checked:bg-translatewp-primary peer-checked:text-white">
+                        <div className="h-4 w-4 rounded-sm border border-translatewp-border flex items-center justify-center text-transparent peer-checked:border-translatewp-primary peer-checked:bg-translatewp-primary peer-checked:text-white peer-focus-visible:outline-2! peer-focus-visible:outline-solid! focus-visible:outline-solid! peer-focus-visible:outline-offset-2! peer-focus-visible:outline-translatewp-primary!">
                             <Check className="h-3 w-3" aria-hidden="true" />
                         </div>
                         <span className="text-sm text-translatewp-neutral">{option.label}</span>
