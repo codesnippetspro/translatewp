@@ -43,7 +43,9 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
 
             {rows.map((row) => (
                 <TableRow key={row.id}>
-                    <TableCell className="text-translatewp-neutral max-w-md break-words">{row.term}</TableCell>
+                    <TableCell className="text-translatewp-neutral max-w-md [overflow-wrap:anywhere]!">
+                        {row.term}
+                    </TableCell>
 
                     <TableCell as="div" className="flex flex-wrap items-center gap-1.5">
                         {row.languages.map((locale) => (

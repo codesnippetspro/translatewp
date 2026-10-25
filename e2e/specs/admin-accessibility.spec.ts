@@ -106,3 +106,24 @@ test('language-table action buttons do not compress or clip their icons on mobil
 	}));
 	expect(pageWidth.content).toBeLessThanOrEqual(pageWidth.viewport);
 });
+
+test('an unbroken lexicon term wraps without widening the term column across the screen', async ({ page }) => {
+	const term = 'A'.repeat(200);
+	await page.route('**/translatewp/v1/admin/get-lexicon-terms?*', route => route.fulfill({
+		json: {
+			items: [{ id: 1, term, description: '', languages: ['en-us'], categories: [] }],
+			pagination: { page: 1, per_page: 10, total: 1, total_pages: 1, has_next: false, has_prev: false },
+		},
+	}));
+	await page.setViewportSize({ width: 375, height: 812 });
+	await page.goto('/wp-admin/admin.php?page=translatewp-lexicon');
+	const cell = page.getByRole('cell', { name: term, exact: true });
+	await expect(cell).toBeVisible();
+	await expect(cell).toHaveCSS('overflow-wrap', 'anywhere');
+	const dimensions = await cell.evaluate(element => ({
+		width: element.getBoundingClientRect().width,
+		viewport: window.innerWidth,
+	}));
+	expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport / 2);
+	await expect(page.getByRole('button', { name: 'Edit lexicon term', exact: true })).toBeVisible();
+});
