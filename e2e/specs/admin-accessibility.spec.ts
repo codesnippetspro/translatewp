@@ -21,6 +21,9 @@ test('switcher controls have names and radios support keyboard selection with vi
 	]) {
 		await expect(page.getByRole('radiogroup', { name: label, exact: true })).toHaveCount(1);
 	}
+	const lockedSideTab = page.getByRole('radio', { name: 'Side tab', exact: true });
+	await expect(lockedSideTab).toBeDisabled();
+	await expect(lockedSideTab).toHaveCSS('opacity', '0');
 	const group = page.getByRole('radiogroup', { name: 'Language names', exact: true });
 	const full = group.getByRole('radio', { name: 'Full name', exact: true });
 	const short = group.getByRole('radio', { name: 'Short', exact: true });

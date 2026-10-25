@@ -68,7 +68,7 @@ export const OptionCards = <Value extends string>({
 							aria-label={option.label}
 							aria-describedby={`${id}-${option.value}-description`}
 							onChange={() => onChange(option.value)}
-							className="absolute inset-0 m-0! h-full! w-full! cursor-pointer opacity-0"
+							className="absolute inset-0 m-0! h-full! w-full! cursor-pointer opacity-0!"
 						/>
 						<OptionRow
 							label={option.label}
