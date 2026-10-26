@@ -50,7 +50,7 @@ export const WhoCanManage = () =>
 
     return (
         <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5" data-who-can-manage>
-            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Who can manage translations', 'translate')}</h4>
+            <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Who can manage translations', 'translate')}</h3>
             {!editable && <ManagedByNetworkNote />}
             {isError && <p className="text-sm text-translatewp-error m-0" role="alert">{__('The roles could not be loaded. Reload the page to try again.', 'translate')}</p>}
             {data && (
@@ -93,7 +93,7 @@ export const WhoCanManage = () =>
                 </div>
             )}
             <p className="text-sm text-translatewp-muted! m-0">
-                {__('Edit translations opens edit mode, the editor and Add to Lexicon. Retranslate uses quota. Manage settings covers the translation and switcher settings. The connection, languages, your own AI key, billing and the Advanced tab stay with administrators. Everyone sees the translated site.', 'translate')}
+                {__('Edit translations opens edit mode, the editor and Add to Lexicon. Retranslate uses quota. Manage settings covers the translation and switcher settings. The connection, languages, your own AI key, billing and the Advanced page stay with administrators. Everyone sees the translated site.', 'translate')}
             </p>
             {users.length > 0 && (
                 <div className="flex flex-col gap-2">

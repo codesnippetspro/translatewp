@@ -184,16 +184,11 @@ export const LanguagesSetup = () =>
 
     return (
         <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-2">
-                <h3 className="font-semibold text-lg text-translatewp-neutral!">Languages</h3>
-                <p className="text-sm text-translatewp-muted!">The language your content is written in, and the languages it is translated into.</p>
-            </div>
-
             <DefaultLanguageControl />
 
             <Button variant='primary' className='rounded-sm! w-fit' onClick={handleAddLanguage}>Add languages</Button>
 
-            <h4 className="font-semibold text-base! text-translatewp-neutral!">Translation languages</h4>
+            <h3 className="font-semibold text-base! text-translatewp-neutral!">Translation languages</h3>
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-12">
