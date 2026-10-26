@@ -143,7 +143,7 @@ describe('Content and behaviour toggles', () =>
 
     test('every content and behaviour label is translatable', () =>
     {
-        const headings = Array.from(container.querySelectorAll('[data-translation-settings] span.font-bold'))
+        const headings = Array.from(container.querySelectorAll('[data-translation-settings] h4'))
             .map(heading => heading.textContent)
             .filter(text => text?.startsWith('T:'));
         expect(headings).toEqual(['T:Content', 'T:Behaviour', 'T:Who can manage translations']);
