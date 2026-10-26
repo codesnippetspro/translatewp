@@ -94,7 +94,7 @@ export const LanguageSelect = ({ defaultValue, onChange, placeholder, compact = 
 
     return (
         <div className='relative w-full' ref={containerRef} data-language-select={compact ? 'compact' : 'full'}>
-            <div className={`box-border w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm bg-white hover:border-translatewp-primary ${compact ? 'px-2 py-1' : 'px-3 py-2.75'}`}>
+            <div className={`box-border w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm bg-white hover:border-translatewp-primary focus-within:outline-2! focus-within:outline-solid! focus-within:outline-offset-2! focus-within:outline-translatewp-primary! ${compact ? 'px-2 py-1' : 'px-3 py-2.75'}`}>
                 { compact && selectedCountryCode && (
                     <span className='flex shrink-0 items-center gap-2 rounded-sm bg-translatewp-selection px-2 py-0.5'>
                         <LanguageOption countryCode={selectedCountryCode} />

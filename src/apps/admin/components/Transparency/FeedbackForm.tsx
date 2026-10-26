@@ -1,4 +1,5 @@
 import { useState } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { Button, TextareaControl } from '@wordpress/components';
 import { useMutation } from '@tanstack/react-query';
 
@@ -56,12 +57,13 @@ export const FeedbackForm = () =>
 
             <form className="flex w-full flex-col gap-3" onSubmit={handleSubmit}>
                 <div className="flex flex-col gap-2">
-                    <span className="text-sm font-bold text-translatewp-neutral">
-                        Tell us what would make TranslateWP better
+                    <span id="feedback-message-label" className="text-sm font-bold text-translatewp-neutral">
+                        {__('Tell us what would make TranslateWP better', 'translate')}
                     </span>
                     <TextareaControl
                         __nextHasNoMarginBottom
                         name="message"
+                        aria-labelledby="feedback-message-label"
                         required
                         maxLength={5000}
                         rows={5}

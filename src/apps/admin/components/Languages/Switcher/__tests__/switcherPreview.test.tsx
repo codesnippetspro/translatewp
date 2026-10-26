@@ -79,11 +79,11 @@ describe('Settings > Switcher preview and where it shows', () =>
         expect(preview()).toBeTruthy();
         expect(preview().querySelector('.twp-trigger')).toBeTruthy();
 
-        await click(buttonByText(container, 'Native dropdown'));
+        await click(container.querySelector('input[type="radio"][aria-label="Native dropdown"]'));
         expect(preview().querySelector('select.twp-native-select')).toBeTruthy();
         expect(preview().querySelector('.twp-trigger')).toBeNull();
 
-        await click(buttonByText(container, 'Dropdown'));
+        await click(container.querySelector('input[type="radio"][aria-label="Dropdown"]'));
         expect(preview().querySelector('.twp-trigger')).toBeTruthy();
     });
 

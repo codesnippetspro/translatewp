@@ -31,7 +31,7 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
         draggingIndexRef.current = index;
     };
 
-    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) =>
+    const handleDragOver = (event: React.DragEvent<HTMLTableRowElement>) =>
     {
         event.preventDefault();
     };
@@ -63,16 +63,16 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
 
     return (
         <Table>
-            <TableHeaderRow columnsClassName="grid-cols-5">
-                <TableCell variant="header" className="col-span-2">Language</TableCell>
+            <TableHeaderRow>
+                <TableCell variant="header" className="w-2/5">Language</TableCell>
                 <TableCell variant="header" align="center">Slug</TableCell>
                 <TableCell variant="header" align="center">Locale</TableCell>
                 <TableCell variant="header" align="end">Actions</TableCell>
             </TableHeaderRow>
 
             {languages.length === 0 ? (
-                <TableRow columnsClassName="grid-cols-1">
-                    <TableCell align="center" className="py-4 text-translatewp-muted">
+                <TableRow>
+                    <TableCell colSpan={4} align="center" className="py-4 text-translatewp-muted">
                         <Button variant="primary" className="rounded-sm!" onClick={onAddLanguage}>Add a language</Button>
                     </TableCell>
                 </TableRow>
@@ -83,14 +83,13 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                 return (
                     <TableRow
                         key={language.locale}
-                        columnsClassName="grid-cols-5"
                         draggable
                         onDragStart={handleDragStart(index)}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop(index)}
                         onDragEnd={handleDragEnd}
                     >
-                        <TableCell as="div" className="flex items-center gap-2.5 col-span-2 text-translatewp-neutral">
+                        <TableCell as="div" className="flex items-center gap-2.5 text-translatewp-neutral">
                             <GripVertical className="w-5 h-5 text-translatewp-grip cursor-grab active:cursor-grabbing" />
                             {getCountryFlagFromLocale( language.locale )}
                             <span className="text-sm text-translatewp-neutral">{getLanguageNameFromLocale( language.locale )}</span>
@@ -98,7 +97,7 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
 
                         <TableCell align="center">{language.slug}</TableCell>
                         <TableCell align="center">{formatLocale( language.locale )}</TableCell>
-                        <TableCell align="end" className="flex justify-end gap-2">
+                        <TableCell as="div" align="end" className="flex justify-end gap-2">
                             <Button
                                 variant='primary'
                                 label={`Edit ${languageName}`}

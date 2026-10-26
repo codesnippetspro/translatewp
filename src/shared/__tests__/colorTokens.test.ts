@@ -11,13 +11,11 @@ const PORTAL = {
     icons: '#9CA1A8',
     selection: '#F6F7F7',
     grip: '#8D8F95',
-    success: '#45A366',
-    warning: '#c98a1e',
     cta: '#2E7D57',
     'cta-hover': '#276B4A',
-    // stylelint wants the short form; #F00 is #FF0000.
-    error: '#F00',
 };
+
+const ACCESSIBLE_STATUS = { success: '#2E7D57', warning: '#946200', error: '#B32D2E' };
 
 // The portal's neutral surface scale (translatewp-app src/app/globals.css
 // @theme): the tones the ported chip and button surfaces sit on. The chrome
@@ -40,6 +38,17 @@ describe('the plugin colour tokens', () =>
     it.each(Object.entries(PORTAL))('%s equals the portal value', (role, value) =>
     {
         expect(theme).toMatch(new RegExp(`--color-translatewp-${role}: ${value};`));
+    });
+
+    it.each(Object.entries(ACCESSIBLE_STATUS))('%s uses the accepted accessible status color', (role, value) =>
+    {
+        expect(theme).toContain(`--color-translatewp-${role}: ${value};`);
+        const channels = value.slice(1).match(/../g)!.map(channel => parseInt(channel, 16) / 255);
+        const linear = channels.map(channel => channel <= 0.04045
+            ? channel / 12.92
+            : ((channel + 0.055) / 1.055) ** 2.4);
+        const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+        expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5);
     });
 
     it.each(Object.entries(PORTAL_TWP))('twp %s equals the portal value', (role, value) =>

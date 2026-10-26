@@ -18,6 +18,10 @@ describe('LexiconTable empty state', () =>
             createRoot(container).render(<LexiconTable rows={[]} onEdit={() => {}} onDelete={() => {}} onAdd={onAdd} />);
         });
 
+        expect(container.querySelector('table')).not.toBeNull();
+        expect(container.querySelector('td')?.colSpan).toBe(4);
+        expect(Array.from(container.querySelectorAll('th')).map(header => header.textContent))
+            .toEqual(['Term', 'Languages', 'Categories', 'Actions']);
         const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === 'Add term');
         expect(button).toBeDefined();
         await act(async () =>
@@ -52,4 +56,22 @@ describe('LexiconTable term cell', () =>
         expect((window as { __lexiconXss?: number }).__lexiconXss).toBeUndefined();
         container.remove();
     });
+});
+
+it('names the languages in each term row and preserves an unknown locale', async () =>
+{
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+        root.render(<LexiconTable
+            rows={[{ id: 1, term: 'Brand', languages: ['en-us', 'he', 'unknown'], categories: [] }]}
+            onEdit={jest.fn()} onDelete={jest.fn()} onAdd={jest.fn()}
+        />);
+    });
+    const languages = container.querySelectorAll('tr')[1].cells[1];
+    expect(languages.textContent).toContain('American English');
+    expect(languages.textContent).toContain('Hebrew');
+    expect(languages.textContent).toContain('unknown');
+    expect(languages.querySelectorAll('[aria-hidden="true"]')).toHaveLength(3);
+    await act(async () => { root.unmount(); });
 });

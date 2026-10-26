@@ -103,7 +103,7 @@ export const TranslationsSettings = () =>
         <div className="flex flex-col gap-6" data-translation-settings>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-content-behaviour>
             <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <span className="text-sm font-bold text-translatewp-neutral!">{__('Content', 'translate')}</span>
+            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Content', 'translate')}</h4>
 
             <ToggleControl label={
                 <ToggleLabel title={__('Translate all public content', 'translate')} description={__('Every public page is translated. Turn it off to exclude post types or categories, for example your shop products.', 'translate')} />} checked={settings.translate_all_content} onChange={(value) => updateSetting('translate_all_content', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
@@ -135,7 +135,7 @@ export const TranslationsSettings = () =>
             </div>
 
             <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <span className="text-sm font-bold text-translatewp-neutral!">{__('Behaviour', 'translate')}</span>
+            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Behaviour', 'translate')}</h4>
 
             <ManagedByNetwork group="translation_behaviour">
             <ToggleControl label={

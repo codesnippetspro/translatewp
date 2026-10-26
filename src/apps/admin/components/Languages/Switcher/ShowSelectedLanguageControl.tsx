@@ -31,5 +31,5 @@ interface ShowSelectedLanguageControlProps
 }
 
 export const ShowSelectedLanguageControl = ({ value, onChange }: ShowSelectedLanguageControlProps) => (
-    <OptionCards options={TRIGGER_OPTIONS} value={value} onChange={onChange} name="show-selected-language" />
+    <OptionCards options={TRIGGER_OPTIONS} value={value} onChange={onChange} name="show-selected-language" label={__('Show selected language', 'translate')} />
 );

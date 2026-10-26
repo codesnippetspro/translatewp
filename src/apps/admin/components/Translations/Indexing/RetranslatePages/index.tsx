@@ -4,6 +4,7 @@ import { Button, SelectControl, Spinner, TextControl } from '@wordpress/componen
 import { __, sprintf } from '@wordpress/i18n';
 import { dateI18n } from '@wordpress/date';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 
 import { getIndexPagesQueryOptions } from '@/shared/query-options/admin';
@@ -153,6 +154,26 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
     const visibleRows = filteredRows.slice(startIndex, startIndex + ROWS_PER_PAGE);
     const rangeStart = 0 === filteredRows.length ? 0 : startIndex + 1;
     const rangeEnd = Math.min(startIndex + ROWS_PER_PAGE, filteredRows.length);
+
+    const paginationButton = useRef<HTMLButtonElement | null>(null);
+    const paginationAnnouncement = sprintf(
+        /* translators: 1: current page, 2: total pages, 3: matching results. */
+        __('Page %1$d of %2$d (%3$d results)', 'translate'),
+        currentPage, totalPages, filteredRows.length
+    );
+    useEffect(() =>
+    {
+        const button = paginationButton.current;
+        if (!button) return;
+        paginationButton.current = null;
+        const active = document.activeElement;
+        if (active !== button && active !== document.body) return;
+        if (isPending || isError || filteredRows.length === 0 || !button.isConnected || button.disabled)
+        {
+            document.getElementById('retranslation-pages-results')?.focus();
+        }
+        else if (active === document.body) button.focus();
+    });
 
     const hasFailed = languageRows.some(({ entry }) => 'failed' === entry.status);
     const languageName = getLanguageNameFromLocale(activeLanguage) ?? activeLanguage;
@@ -376,7 +397,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                         </p>
                     ) : (
                         <>
-                            <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
+                            <table id="retranslation-pages-results" tabIndex={-1} className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
                                 <thead>
                                     <tr className="text-start text-translatewp-muted">
                                         <th className="px-3 py-2 font-semibold text-start">{__('Page', 'translate')}</th>
@@ -472,38 +493,50 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                     })}
                                 </tbody>
                             </table>
-
-                            <div className="flex items-center justify-between gap-4 flex-wrap">
-                                <span className="text-sm text-translatewp-muted m-0">
-                                    {sprintf(
-                                        /* translators: 1: first visible row number, 2: last visible row number, 3: total matching rows. */
-                                        __('Showing %1$d to %2$d of %3$d', 'translate'),
-                                        rangeStart,
-                                        rangeEnd,
-                                        filteredRows.length
-                                    )}
-                                </span>
-
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="secondary"
-                                        disabled={currentPage <= 1}
-                                        onClick={() => setPage(currentPage - 1)}
-                                    >
-                                        {__('Previous', 'translate')}
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        disabled={currentPage >= totalPages}
-                                        onClick={() => setPage(currentPage + 1)}
-                                    >
-                                        {__('Next', 'translate')}
-                                    </Button>
-                                </div>
-                            </div>
                         </>
                     )}
                 </>
+            )}
+
+            <span className="screen-reader-text" role="status" aria-live="polite" aria-atomic="true">
+                {paginationAnnouncement}
+            </span>
+            {!isPending && !isError && filteredRows.length > 0 && (
+                <nav className="flex flex-wrap items-center justify-between gap-4" aria-label={__('Retranslation pages', 'translate')}>
+                    <span className="text-sm text-translatewp-muted">{sprintf(
+                    /* translators: 1: first row, 2: last row, 3: total rows. */
+                    __('Showing %1$d to %2$d of %3$d', 'translate'),
+                    rangeStart, rangeEnd, filteredRows.length
+                )}</span>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="secondary" type="button"
+                            aria-label={__('Previous page of retranslation pages', 'translate')}
+                            aria-controls="retranslation-pages-results"
+                            disabled={currentPage <= 1}
+                            onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                            {
+                                paginationButton.current = event.currentTarget;
+                                setPage(currentPage - 1);
+                            }}
+                        >
+                            {__('Previous', 'translate')}
+                        </Button>
+                        <Button
+                            variant="secondary" type="button"
+                            aria-label={__('Next page of retranslation pages', 'translate')}
+                            aria-controls="retranslation-pages-results"
+                            disabled={currentPage >= totalPages}
+                            onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                            {
+                                paginationButton.current = event.currentTarget;
+                                setPage(currentPage + 1);
+                            }}
+                        >
+                            {__('Next', 'translate')}
+                        </Button>
+                    </div>
+                </nav>
             )}
 
             {actionFailed && (

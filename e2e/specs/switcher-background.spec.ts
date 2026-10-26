@@ -26,7 +26,7 @@ test.describe('the switcher background', () =>
         {
             if (stored === 'solid') seed({ background_style: 'glass' });
             await page.goto('/wp-admin/admin.php?page=translatewp-settings#switcher');
-            await page.locator(`[data-option-cards="background-style"] [role="radio"]`, { hasText: choice }).click();
+            await page.getByRole('radiogroup', { name: 'Background', exact: true }).getByRole('radio', { name: choice, exact: true }).click();
             await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
             expect(storedSwitcher().background_style).toBe(stored);
             if (stored !== 'solid') await expect(page.locator('[data-twp-switcher-preview]')).toHaveAttribute('data-busy-background', 'true');

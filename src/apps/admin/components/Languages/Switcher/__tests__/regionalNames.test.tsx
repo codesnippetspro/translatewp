@@ -33,10 +33,10 @@ const initialize = (switcher: unknown) =>
 
 const radio = (container: HTMLElement, label: string) =>
 {
-    const card = Array.from(container.querySelectorAll('[data-option-cards="regional-names"] [role="radio"]'))
-        .find(button => button.textContent?.startsWith(label)) as HTMLButtonElement | undefined;
+    const card = Array.from(container.querySelectorAll('[data-option-cards="regional-names"] input[type="radio"]'))
+        .find(button => button.getAttribute('aria-label') === label) as HTMLInputElement | undefined;
 
-    return card ? Object.assign(card, { checked: card.getAttribute('aria-checked') === 'true' }) : undefined;
+    return card;
 };
 
 describe('Regional language names switcher setting', () =>

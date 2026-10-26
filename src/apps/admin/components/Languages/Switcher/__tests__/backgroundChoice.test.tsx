@@ -26,8 +26,8 @@ const render = async (): Promise<HTMLElement> =>
 
 const choose = async (container: HTMLElement, label: string) =>
 {
-    const card = Array.from(container.querySelectorAll('[data-option-cards="background-style"] [role="radio"]'))
-        .find(element => element.textContent?.includes(label)) as HTMLButtonElement;
+    const card = Array.from(container.querySelectorAll('[data-option-cards="background-style"] input[type="radio"]'))
+        .find(element => element.getAttribute('aria-label') === label) as HTMLInputElement;
     await act(async () => { card.click(); });
 };
 
@@ -50,7 +50,7 @@ describe('Settings, Switcher: the background choice', () =>
     it('offers solid, transparent and matte glass, and shows the preview over a busy background for the see-through ones', async () =>
     {
         const container = await render();
-        const labels = Array.from(container.querySelectorAll('[data-option-cards="background-style"] [role="radio"]')).map(card => card.textContent);
+        const labels = Array.from(container.querySelectorAll('[data-option-cards="background-style"] input[type="radio"]')).map(card => card.getAttribute('aria-label'));
         expect(labels.map(label => label?.split(/(?=[A-Z][a-z]+ )/)[0])).toHaveLength(3);
 
         await choose(container, 'Matte glass');

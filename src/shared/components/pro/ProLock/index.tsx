@@ -35,8 +35,8 @@ export const ProLock = ({ children, feature, className, blur = false, defaultOpe
     };
 
     const gatedClasses = blur
-        ? 'blur-[3px] opacity-70 pointer-events-none select-none'
-        : 'opacity-50 grayscale pointer-events-none select-none';
+        ? 'blur-[3px] opacity-70 pointer-events-none select-none h-full'
+        : 'opacity-50 grayscale pointer-events-none select-none h-full';
 
     return (
         <div className={`relative ${className ?? ''}`}>

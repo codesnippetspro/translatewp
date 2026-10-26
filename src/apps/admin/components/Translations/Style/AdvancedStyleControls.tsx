@@ -61,6 +61,7 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
     const length = (
         <OptionCards
             name="length"
+            label={__('Length', 'translate')}
             columns={1}
             value={style.length ?? 'match'}
             onChange={(value) => updateStyle('length', value as TranslationsStyle['length'])}
@@ -75,6 +76,7 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
     const adaptation = (
         <OptionCards
             name="cultural-adaptation"
+            label={__('Cultural adaptation', 'translate')}
             columns={1}
             value={style.cultural_adaptation ?? 'keep'}
             onChange={(value) => updateStyle('cultural_adaptation', value as TranslationsStyle['cultural_adaptation'])}
