@@ -132,7 +132,7 @@ export const Sidebar = () =>
 								>
 									<a
 										href={buildAdminUrl(group.route, page.name)}
-										className={`${LINK_CLASS} text-translatewp-muted! ${collapsed ? 'ps-2.5!' : 'ps-[22px]!'}`}
+										className={`${LINK_CLASS} text-translatewp-neutral! ${collapsed ? 'ps-2.5!' : 'ps-[22px]!'}`}
 										aria-current={route === group.route && activePageName === page.name
 											? 'location' : undefined}
 										aria-label={title}
