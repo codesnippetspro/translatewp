@@ -12,7 +12,7 @@ export const StyleCard = ({ title, badge, description, children }: StyleCardProp
         <div className="flex flex-col gap-4 rounded-lg border border-translatewp-border p-5">
             <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{title}</h4>
+                    <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{title}</h3>
                     {badge}
                 </div>
                 {description && <p className="m-0! text-sm! text-translatewp-muted!">{description}</p>}

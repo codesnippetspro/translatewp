@@ -159,7 +159,7 @@ export const LanguagesSwitcher = () =>
             {settings.inline_placement && (
             <div className="rounded-lg border border-translatewp-border p-5" data-anchor-fallback>
                 <div className='flex flex-col gap-2'>
-                    <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Pages without the placed spot', 'translate')}</h4>
+                    <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Pages without the placed spot', 'translate')}</h3>
                     <p className='text-sm text-translatewp-muted!'>{__('Your switcher is placed next to an element of your site. On a page that does not have that element, show this instead.', 'translate')}</p>
                     <OptionCards
                         name="anchor-fallback"
@@ -181,7 +181,7 @@ export const LanguagesSwitcher = () =>
     const translatingMessage = (
         <div data-switcher-section="pending-message" className="rounded-lg border border-translatewp-border p-5" data-pending-message>
             <div className='flex flex-col gap-2'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Translating message', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Translating message', 'translate')}</h3>
                 <p className='text-sm text-translatewp-muted!'>{__('Shown to a visitor when a page takes longer than a few seconds to translate. Leave empty for the default line.', 'translate')}</p>
                 <TextControl
                     __next40pxDefaultSize
@@ -201,7 +201,7 @@ export const LanguagesSwitcher = () =>
     const languageNames = (
         <div data-switcher-section="language-names" className="rounded-lg border border-translatewp-border p-5" data-switcher-language-names>
             <div className='flex flex-col gap-2'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Language names', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Language names', 'translate')}</h3>
                 <p className='text-sm text-translatewp-muted!'>{__('How the switcher names a language that has a region.', 'translate')}</p>
             <ToggleControl label={
                 <div className='flex flex-col gap-1'>
@@ -227,7 +227,7 @@ export const LanguagesSwitcher = () =>
     const colors = (
         <div data-switcher-section="colors" className="rounded-lg border border-translatewp-border p-5">
             <div className='flex flex-col gap-4'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Colors', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Colors', 'translate')}</h3>
                 {settings.background_style === 'transparent' && (
                     <p className='text-sm text-translatewp-muted! m-0' data-background-color-note>{__('With Transparent, the background colour is used for the open language list, which stays frosted so it reads over the page.', 'translate')}</p>
                 )}
@@ -261,7 +261,7 @@ export const LanguagesSwitcher = () =>
     const switcherType = (
         <div data-switcher-section="type" className="rounded-lg border border-translatewp-border p-5">
             <div className="flex min-w-0 flex-col gap-2">
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Switcher type', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Switcher type', 'translate')}</h3>
                 <SwitcherTypeControl value={renderedSwitcherType(settings.type)} onChange={(type) => updateSetting('type', type)} />
             </div>
         </div>
@@ -270,7 +270,7 @@ export const LanguagesSwitcher = () =>
     const showSelectedLanguage = (
         <div data-switcher-section="show-selected" className="rounded-lg border border-translatewp-border p-5">
             <div className="flex flex-col gap-2">
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Show selected language', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Show selected language', 'translate')}</h3>
                 <p className='text-sm text-translatewp-muted!'>{__('What the closed switcher shows, so visitors know it is a language switcher and which language is active.', 'translate')}</p>
                 <Unavailable when={native} reason={NATIVE_REASON}>
                     <ShowSelectedLanguageControl value={settings.trigger} onChange={(trigger) => updateSetting('trigger', trigger)} />
@@ -282,7 +282,7 @@ export const LanguagesSwitcher = () =>
     const flagIconStyle = (
         <div data-switcher-section="flag-style" className="rounded-lg border border-translatewp-border p-5">
             <div className='flex flex-col gap-4'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Flag icon style', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Flag icon style', 'translate')}</h3>
             <ToggleControl label={
                 <div className='flex flex-col gap-1'>
                     <p className='font-bold text-sm! text-translatewp-neutral!'>{settings.type === 'native_select' ? __('Show emoji flags', 'translate') : __('Show flag icon', 'translate')}</p>
@@ -314,7 +314,7 @@ export const LanguagesSwitcher = () =>
     const background = (
         <div data-switcher-section="background" className="rounded-lg border border-translatewp-border p-5" data-switcher-background>
             <div className='flex flex-col gap-2'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Background', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Background', 'translate')}</h3>
                 <p className='text-sm text-translatewp-muted!'>{__('How the switcher sits on your page. Transparent and Matte glass let a photo or video show through; the preview shows them on a busy background.', 'translate')}</p>
                 <OptionCards
                     name="background-style"
@@ -330,7 +330,7 @@ export const LanguagesSwitcher = () =>
     const sizes = (
         <div data-switcher-section="sizes" className="rounded-lg border border-translatewp-border p-5" data-switcher-sizes>
             <div className='flex flex-col gap-4'>
-                <h4 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Sizes', 'translate')}</h4>
+                <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Sizes', 'translate')}</h3>
                 {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The native dropdown is sized by the browser; only the offset applies.', 'translate')}</p>}
                 {sideTab && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The side tab sits on the screen edge, so the offset does not apply.', 'translate')}</p>}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -410,11 +410,6 @@ export const LanguagesSwitcher = () =>
 
     return (
         <div className='flex flex-col gap-8 min-w-0'>
-            <div className='flex flex-col gap-2'>
-                <h3 className='font-semibold text-lg text-translatewp-neutral!'>{__('Language switcher', 'translate')}</h3>
-                <p className='text-sm text-translatewp-muted!'>{__('How the language switcher looks and where it shows. Every change shows in the preview first.', 'translate')}</p>
-            </div>
-
             <ManagedByNetwork group="switcher_appearance">
             {desktop ? (
                 <div className={`grid grid-cols-2 items-start gap-6 ${CLEAR_OF_PREVIEW}`} data-switcher-layout>

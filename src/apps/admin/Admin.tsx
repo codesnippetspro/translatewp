@@ -19,13 +19,14 @@ import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDi
 import { useAdminConfirmStore } from '@/shared/lib/confirmLanguageRetranslation';
 
 import { Header } from '@/apps/admin/components/Header';
+import { Sidebar } from '@/apps/admin/components/Sidebar';
 import { DashboardPage } from '@/apps/admin/components/Dashboard/DashboardPage';
 import { Lexicon } from '@/apps/admin/components/Lexicon';
 import { SeoTools } from '@/apps/admin/components/SeoTools';
 import { SettingsPage } from '@/apps/admin/components/SettingsPage';
 import { SlugClashActions } from '@/apps/admin/components/SlugClashActions';
 
-// Four pages. Every previous slug forwards to the page and tab that
+// Four pages. Every previous slug forwards to the page and section that
 // owns it now (useNavigate), so old links and bookmarks keep working.
 const ROUTES = ['/', '/lexicon', '/seo', '/settings'];
 const SAVED_MESSAGE_MS = 3000;
@@ -228,8 +229,9 @@ export const Admin = () =>
         <div className='translatewp-app-root w-full flex flex-col gap-6 pb-24'>
             <Header />
 
-            <div className='px-4 md:px-6'>
-                <div className='bg-white rounded-lg'>
+            <div className='flex items-start gap-6 px-6 [@media(max-width:782px)]:flex-col [@media(max-width:782px)]:gap-4 [@media(max-width:782px)]:px-4'>
+                <Sidebar />
+                <div className='min-w-0 flex-1 overflow-clip rounded-lg border border-solid border-translatewp-border bg-white [@media(max-width:782px)]:w-full'>
                     {/* A page draws only from loaded settings: an empty store must never
                         show as a language list or a connection state for a moment. */}
                     { isLoading && (
