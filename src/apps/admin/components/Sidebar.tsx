@@ -10,6 +10,7 @@ import { DASHBOARD_PAGES } from '@/apps/admin/components/Dashboard/DashboardPage
 import { settingsPagesFor } from '@/apps/admin/components/SettingsPage';
 import { buildAdminUrl, useNavigate } from '@/apps/admin/hooks/useNavigate';
 import { usePageHash } from '@/apps/admin/hooks/usePageHash';
+import codeSnippetsLogo from '@/shared/assets/code-snippets-logo.svg';
 import { Icon as TranslateWPIcon } from '@/shared/components/Icon';
 import { ProBadge } from '@/shared/components/pro/ProBadge';
 import { canAdminister, managerCan } from '@/shared/lib/access';
@@ -146,6 +147,18 @@ export const Sidebar = () =>
 					</div>
 				))}
 			</nav>
+			{!collapsed && (
+				<div className='mt-3 [border-top:1px_solid_var(--color-translatewp-border)] px-2.5 pt-3 text-xs text-center text-translatewp-muted'>
+					<a
+						href='https://codesnippets.pro/' target='_blank' rel='noopener noreferrer'
+						className='inline-flex items-center gap-2 text-translatewp-muted! no-underline!'
+						aria-label={__('A product of Code Snippets', 'translate')}
+					>
+						<span>{__('A product of', 'translate')}</span>
+						<img src={codeSnippetsLogo} alt='Code Snippets' width={30} height={25} />
+					</a>
+				</div>
+			)}
 		</aside>
 	);
 };
