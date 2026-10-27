@@ -46,8 +46,8 @@ namespace TranslateWP\Components;
  *      - redirect_changed_slugs: string
  *      - ai_crawlers: AI crawler access control
  *           - preset_answer_engines: boolean
- *           - bots: { [bot_name]: { default: allow|deny, languages: { [locale]: allow|deny|inherit } } }
- *             (bot_name limited to a fixed allow-list, locale limited to configured languages.list entries)
+ *           - bots: { [bot_name]: { default: allow|deny|inherit, languages: { [locale]: allow|deny|inherit } } }
+ *             (bot_name is a listed or validated custom User-Agent, locale limited to configured languages.list entries)
  *
  * `languages.seo` is written as a deep merge (Functionality/Endpoints/Admin.php::update_data): a save that
  * only submits some of these keys leaves the rest of the stored option untouched.

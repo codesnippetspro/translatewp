@@ -204,6 +204,18 @@ class Management extends BaseApiEndpoints {
             }
         }
 
+        $languages_list = null;
+        if ( 'languages' === $step ) {
+            $default_language = $this->normalize_locale( (string) $request->get_param( 'default_language' ) );
+            if ( '' !== $default_language ) {
+                $languages_list = $this->languages_list( $default_language, (array) $request->get_param( 'languages' ) );
+                $address_refusal = \TranslateWP\Components\LanguageSlugs::address_refusal( $languages_list );
+                if ( null !== $address_refusal ) {
+                    return $address_refusal;
+                }
+            }
+        }
+
         $resume_step = sanitize_key( (string) $request->get_param( 'resume_step' ) );
         Options::update( 'setup.step', '' !== $resume_step ? $resume_step : $step );
 
@@ -211,10 +223,7 @@ class Management extends BaseApiEndpoints {
             if ( null !== $request->get_param( 'context' ) ) {
                 Options::update( 'translations.context.text_context', sanitize_textarea_field( (string) $request->get_param( 'context' ) ) );
             }
-            $default_language = $this->normalize_locale( (string) $request->get_param( 'default_language' ) );
-
-            if ( '' !== $default_language ) {
-                $languages_list = $this->languages_list( $default_language, (array) $request->get_param( 'languages' ) );
+            if ( null !== $languages_list ) {
                 Options::update( 'languages.list', $languages_list );
                 // Translation starts the moment the languages are chosen.
                 SiteLanguageSync::sync_active_languages( true );
@@ -266,6 +275,10 @@ class Management extends BaseApiEndpoints {
         }
 
         $languages_list = $this->languages_list( $default_language, (array) $request->get_param( 'languages' ) );
+        $address_refusal = \TranslateWP\Components\LanguageSlugs::address_refusal( $languages_list );
+        if ( null !== $address_refusal ) {
+            return $address_refusal;
+        }
 
         Options::update( 'languages.list', $languages_list );
         SiteLanguageSync::sync_active_languages( true );
