@@ -104,6 +104,7 @@ const GRANTED_ROUTES = [
 	'Admin POST update-lexicon-term',
 	'Admin POST delete-lexicon-term',
 	'Admin GET get-lexicon-terms',
+	'Admin GET get-lexicon-categories',
 	'Admin GET settings-revision',
 	'Admin POST switcher-position',
 	'LexiconCandidates POST lexicon-candidates/scan',
