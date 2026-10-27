@@ -102,10 +102,10 @@ export const Sidebar = () =>
 				<span className={collapsed ? 'hidden [@media(max-width:782px)]:inline!' : undefined}>{toggleLabel}</span>
 			</Button>
 			<nav
-				className={collapsed ? '[@media(max-width:782px)]:hidden' : undefined}
+				className={`${collapsed ? '[@media(max-width:782px)]:hidden' : ''}`}
 				id='twp-sidebar-navigation' aria-label={__('TranslateWP navigation', 'translate')}>
 				{groups.map(group => (
-					<div className='[&+&]:mt-2 [&+&]:[border-top:1px_solid_var(--color-translatewp-border)] [&+&]:pt-2' key={group.route}>
+					<div className='mt-2 pt-2 [border-top:1px_solid_var(--color-translatewp-border)]' key={group.route}>
 						<Tooltip text={collapsed ? group.title : undefined} placement={tooltipPlacement}>
 							<a
 								href={buildAdminUrl(group.route)}
@@ -147,18 +147,16 @@ export const Sidebar = () =>
 					</div>
 				))}
 			</nav>
-			{!collapsed && (
-				<div className='mt-3 [border-top:1px_solid_var(--color-translatewp-border)] px-2.5 pt-3 text-xs text-center text-translatewp-muted'>
-					<a
-						href='https://codesnippets.pro/' target='_blank' rel='noopener noreferrer'
-						className='inline-flex items-center gap-2 text-translatewp-muted! no-underline!'
-						aria-label={__('A product of Code Snippets', 'translate')}
-					>
-						<span>{__('A product of', 'translate')}</span>
-						<img src={codeSnippetsLogo} alt='Code Snippets' width={30} height={25} />
-					</a>
-				</div>
-			)}
+			<div className={`mt-2 pt-2 [border-top:1px_solid_var(--color-translatewp-border)] text-xs text-center text-translatewp-muted ${collapsed ? '[@media(max-width:782px)]:hidden' : ''}`}>
+				<a
+					href='https://codesnippets.pro/' target='_blank' rel='noopener noreferrer'
+					className='inline-flex items-center gap-2 text-translatewp-muted! no-underline!'
+					aria-label={__('A product of Code Snippets', 'translate')}
+				>
+					{!collapsed && <span>{__('A product of', 'translate')}</span>}
+					<img src={codeSnippetsLogo} alt='Code Snippets' width={24} height={20} />
+				</a>
+			</div>
 		</aside>
 	);
 };
