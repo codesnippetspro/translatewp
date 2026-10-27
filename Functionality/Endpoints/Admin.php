@@ -20,6 +20,7 @@ use TranslateWP\Entities\CPTs\Lexicon;
 use TranslateWP\Functionality\KeepWarm;
 
 class Admin extends BaseApiEndpoints {
+	public const SEO_CRAWLER_INHERIT_SUPPORTED = true;
 
 	private const ADMIN_DATA_PATHS = [
 		'languages.list',
@@ -44,7 +45,7 @@ class Admin extends BaseApiEndpoints {
 		'Applebot-Extended',
 	];
 
-	private const SEO_BOT_DEFAULT_DECISIONS = [ 'allow', 'deny' ];
+	private const SEO_BOT_DEFAULT_DECISIONS = [ 'allow', 'deny', 'inherit' ];
 
 	private const SEO_BOT_LANGUAGE_DECISIONS = [ 'allow', 'deny', 'inherit' ];
 
@@ -385,6 +386,12 @@ class Admin extends BaseApiEndpoints {
                 [ 'status' => 400 ]
             );
         }
+		if ( 'languages.list' === $option ) {
+			$address_refusal = \TranslateWP\Components\LanguageSlugs::address_refusal( $data );
+			if ( null !== $address_refusal ) {
+				return $address_refusal;
+			}
+		}
 
         $slug_clash = 'languages.list' === $option ? \TranslateWP\Components\LanguageSlugs::clash( $data, Options::get( 'languages.list', [] ) ) : [];
         if ( [] !== $slug_clash ) {
@@ -1059,7 +1066,7 @@ class Admin extends BaseApiEndpoints {
 				}
 				$seen[ $lower ] = true;
 
-				$default_decision = self::SEO_BOT_DEFAULT_DECISIONS[0];
+				$default_decision = 'inherit';
 				if ( in_array( $bot_settings['default'] ?? null, self::SEO_BOT_DEFAULT_DECISIONS, true ) ) {
 					$default_decision = $bot_settings['default'];
 				}
