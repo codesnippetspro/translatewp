@@ -136,7 +136,7 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 ### 1.0.3
 
-Lexicon entries become private. Clear any external CDN or edge page cache after updating; TranslateWP clears recognized WordPress page caches once.
+Lexicon entries are no longer reachable from public pages or WordPress's public routes. Clear any external CDN or edge page cache after updating; TranslateWP clears recognized WordPress page caches once.
 
 ### 1.0.2
 
@@ -156,7 +156,8 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 
 * Keep Lexicon terms and categories out of public pages and WordPress's public routes; preserve access for authorized editors.
 * Fill the page translation store when a visitor and the background indexer request the same text at the same time.
-* Preserve crawler settings when saving languages, and improve right-to-left layouts and admin accessibility.
+* Preserve crawler settings when saving languages.
+* Add full right-to-left layout support and improve admin accessibility.
 
 ### 1.0.2
 
