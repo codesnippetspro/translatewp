@@ -660,6 +660,7 @@ describe('Translator SHA-256 fingerprint', () =>
 
     it('translateBatch reaches cache lookup without crypto.subtle', async () =>
     {
+        jest.spyOn(Math, 'random').mockReturnValue(0.5);
         Object.defineProperty(globalThis, 'crypto', {
             value: {},
             configurable: true,
