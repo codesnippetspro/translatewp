@@ -887,17 +887,6 @@ class Indexer {
 	 *                              as a cache hit.
 	 */
 	private function push_language_rows( string $language, array $language_rows, array &$result, bool $retranslate = false ): void {
-		$job = $this->create_job( $language );
-		if ( '' === $job['id'] ) {
-			foreach ( $language_rows as $language_row ) {
-				$this->release_row_claims( $language, $language_row['items'] );
-				$this->queue->fail( $language_row['id'], $job['reason'] );
-				$result['failed']++;
-			}
-			return;
-		}
-		$job_id = $job['id'];
-
 		// Every segment leaves under the fingerprint this site computes for
 		// it (its source language, the target and its own model profile),
 		// whatever hash the extracting browser attached; the miss proxy, the
@@ -966,6 +955,13 @@ class Indexer {
 			}
 		}
 
+		$store_rows = [];
+		foreach ( $language_rows as $language_row ) {
+			$store_row          = $language_row;
+			$store_row['items'] = $readiness_items[ (int) $language_row['id'] ] ?? [];
+			$store_rows[]       = $store_row;
+		}
+
 		if ( ! $batch_items ) {
 			foreach ( $language_rows as $language_row ) {
 				TranslationReadiness::record(
@@ -979,8 +975,20 @@ class Indexer {
 				$this->queue->mark_translated( [ (int) $language_row['id'] ] );
 				$result['processed']++;
 			}
+			$this->announce_pushed_rows( $language, $store_rows );
 			return;
 		}
+
+		$job = $this->create_job( $language );
+		if ( '' === $job['id'] ) {
+			foreach ( $language_rows as $language_row ) {
+				$this->release_row_claims( $language, $language_row['items'] );
+				$this->queue->fail( $language_row['id'], $job['reason'] );
+				$result['failed']++;
+			}
+			return;
+		}
+		$job_id = $job['id'];
 
 		$base_body = [
 			'batchId'    => 'index-' . (int) $language_rows[0]['id'],
@@ -1021,7 +1029,6 @@ class Indexer {
 			return;
 		}
 
-		$pushed_rows = [];
 		foreach ( $language_rows as $language_row ) {
 			$this->queue->remember_job( (int) $language_row['id'], $job_id );
 			TranslationReadiness::record(
@@ -1032,10 +1039,9 @@ class Indexer {
 			);
 			$this->queue->complete( $language_row['id'] );
 			$result['processed']++;
-			$pushed_rows[] = $language_row;
 		}
 
-		$this->announce_pushed_rows( $language, $pushed_rows );
+		$this->announce_pushed_rows( $language, $store_rows );
 	}
 
 	/**
