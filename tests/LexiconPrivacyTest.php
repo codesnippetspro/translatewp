@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use TranslateWP\Entities\CPTs\Lexicon;
 use TranslateWP\Entities\Scripts\TranslateWP;
+use TranslateWP\Entities\Scripts\Admin as AdminScript;
+use TranslateWP\Components\Access;
 use TranslateWP\Components\CleanupInventory;
 use TranslateWP\Components\Migrations;
 use TranslateWP\Components\PageCachePurge;
@@ -87,6 +89,22 @@ assert_true( false !== strpos( $visitor, '"lexicon_terms":[]' ), 'visitor settin
 assert_true( false === strpos( $visitor, 'Private Brand' ) && false === strpos( $visitor, 'Private usage note' ), 'visitor markup never carries the term or description' );
 $server = TranslationProxySettings::ai_settings( 'de' );
 assert_true( [ [ 'term' => 'Private Brand', 'description' => 'Private usage note' ] ] === $server['lexicon_terms'], 'server translation still receives the scoped term' );
+
+$GLOBALS['wp_test_current_user'] = 7;
+$GLOBALS['wp_test_current_user_id'] = 7;
+$GLOBALS['wp_test_current_user_roles'] = [ 'editor' ];
+$GLOBALS['wp_test_users'] = [ (object) [ 'ID' => 7, 'roles' => [ 'editor' ] ] ];
+$GLOBALS['wp_test_user_caps'][7] = [ 'edit_pages' ];
+$GLOBALS['wp_test_caps'] = [ 'edit_pages' ];
+Access::set_role_map( [ 'manage_settings' => [ 'editor' => true ] ] );
+assert_true( Access::can( Access::SETTINGS ) && ! Access::can( Access::LEXICON ) && ! Access::can( Access::EDIT ), 'the fixture holds only Manage settings' );
+$settings_data = ( new AdminScript( 'translatewp', TRANSLATEWP_VERSION ) )->context_data();
+assert_true( false !== strpos( $settings_data, '"lexicon_terms":[]' ), 'a settings-only manager receives no Lexicon terms' );
+assert_true( false === strpos( $settings_data, 'Private Brand' ) && false === strpos( $settings_data, 'Private usage note' ), 'a settings-only manager cannot read Lexicon text in admin markup' );
+Access::set_role_map( [ 'manage_settings' => [ 'editor' => true ], 'manage_lexicon' => [ 'editor' => true ] ] );
+assert_true( Access::can( Access::LEXICON ), 'the fixture now holds Manage the Lexicon' );
+$lexicon_data = ( new AdminScript( 'translatewp', TRANSLATEWP_VERSION ) )->context_data();
+assert_true( false !== strpos( $lexicon_data, 'Private Brand' ) && false !== strpos( $lexicon_data, 'Private usage note' ), 'a Lexicon manager retains terms for authorized editing' );
 
 $purges = 0;
 wp_test_reset( [] );

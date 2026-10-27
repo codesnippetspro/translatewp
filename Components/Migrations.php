@@ -35,7 +35,7 @@ class Migrations {
 
 		self::backfill_translated_marks();
 		if ( '' === $stored ) {
-			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
 		} elseif ( version_compare( $stored, TRANSLATEWP_VERSION, '<=' ) ) {
 			self::purge_lexicon_private_cache_once();
 		}
@@ -91,13 +91,13 @@ class Migrations {
 			return;
 		}
 		// Mark before external cache hooks so a failing hook cannot repeat the purge on every init.
-		update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+		update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
 		PageCachePurge::purge_all( 'lexicon_private' );
 	}
 
 	public static function seed_for_fresh_install(): void {
 		if ( '' === (string) get_option( self::VERSION_OPTION, '' ) ) {
-			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
 		}
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 	}
