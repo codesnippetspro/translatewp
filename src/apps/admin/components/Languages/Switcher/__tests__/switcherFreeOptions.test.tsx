@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { SwitcherTypeControl } from '@/apps/admin/components/Languages/Switcher/SwitcherTypeControl';
@@ -62,24 +62,29 @@ describe('the switcher page only offers options the free plugin renders', () =>
     it('offers three working Free options for the closed switcher', async () =>
     {
         const chosen: string[] = [];
-        const container = await render(<ShowSelectedLanguageControl value="name_flag" onChange={(value) => chosen.push(value)} />);
-        const cards = Array.from(container.querySelectorAll('button'));
+        const Controlled = () =>
+        {
+            const [value, setValue] = useState<'name_flag' | 'flag' | 'icon'>('name_flag');
+            return <ShowSelectedLanguageControl value={value} onChange={next => {
+                chosen.push(next);
+                setValue(next);
+            }} />;
+        };
+        const container = await render(<Controlled />);
+        const cards = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
 
-        expect(cards.map(card => card.textContent)).toEqual([
+        expect(cards.map(card => card.getAttribute('aria-label'))).toEqual([
             expect.stringContaining('Flag and name'),
             expect.stringContaining('Flag only'),
             expect.stringContaining('Icon only'),
         ]);
-        expect(cards.map(card => card.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+        expect(cards.map(card => card.checked)).toEqual([true, false, false]);
         expect(proBadgeCount(container)).toBe(0);
         expect(unlockControlCount(container)).toBe(0);
 
-        await act(async () =>
-        {
-            cards[1].click();
-            cards[2].click();
-            cards[0].click();
-        });
+        for (const index of [1, 2, 0]) {
+            await act(async () => { cards[index].click(); });
+        }
         expect(chosen).toEqual(['flag', 'icon', 'name_flag']);
     });
 

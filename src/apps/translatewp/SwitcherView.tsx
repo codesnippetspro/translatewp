@@ -288,7 +288,7 @@ export function SwitcherView({
                 }
                 .twp-admin-switch {
                     display: inline-block !important;
-                    margin-left: auto !important;
+                    margin-inline-start: auto !important;
                     width: 28px !important;
                     height: 16px !important;
                     border-radius: 9999px !important;
@@ -411,8 +411,8 @@ export function SwitcherView({
                 .twp-inline .twp-popover-stack {
                     position: absolute !important;
                     top: 100% !important;
-                    left: 0 !important;
-                    right: auto !important;
+                    inset-inline-start: 0 !important;
+                    inset-inline-end: auto !important;
                     align-items: flex-start !important;
                 }
                 .twp-trigger {
@@ -582,7 +582,7 @@ export function SwitcherView({
                     gap: 0.5rem !important;
                     width: 100% !important;
                     padding: 0.625rem 0.75rem !important;
-                    text-align: left !important;
+                    text-align: start !important;
                     font-size: 0.875rem !important;
 					line-height: 1.25rem !important;
                     font-family: inherit !important;
@@ -628,7 +628,7 @@ export function SwitcherView({
                     gap: 0.5rem !important;
                     width: 100% !important;
                     padding: 0.625rem 0.75rem !important;
-                    text-align: left !important;
+                    text-align: start !important;
                     font-size: 0.875rem !important;
 					line-height: 1.25rem !important;
                     font-family: inherit !important;
@@ -680,7 +680,7 @@ export function SwitcherView({
 					color: ${ highlightText } !important;
 				}
                 .twp-pro-tag {
-                    margin-left: auto !important;
+                    margin-inline-start: auto !important;
                     padding: 0.1rem 0.4rem !important;
                     border-radius: 999px !important;
                     font-size: 0.625rem !important;
@@ -747,8 +747,9 @@ export function SwitcherView({
                     margin-left: 0.5rem !important;
                 }
                 .twp-inline .twp-toast {
-                    right: 100% !important;
-                    left: auto !important;
+                    inset-inline-end: 100% !important;
+                    inset-inline-start: auto !important;
+                    margin-inline: 0 0.5rem !important;
                 }
                 .twp-toast-action {
                     flex-shrink: 0 !important;
@@ -779,7 +780,8 @@ export function SwitcherView({
                     appearance: none !important;
                     width: auto !important;
                     position: static !important;
-                    padding: 0.5rem 2.25rem 0.5rem 0.75rem !important;
+                    padding-block: 0.5rem !important;
+                    padding-inline: 0.75rem 2.25rem !important;
                     ${ surface.closed }
                     border-radius: 9999px !important;
                     cursor: pointer !important;
@@ -792,6 +794,9 @@ export function SwitcherView({
                     background-size: 1rem 1rem !important;
                     color: ${ textColor } !important;
                 }
+                .twp-native-select:dir(rtl) {
+                    background-position: left 0.75rem center !important;
+                }
                 .twp-native-admin {
                     display: inline-flex !important;
                     visibility: visible !important;
@@ -802,7 +807,8 @@ export function SwitcherView({
                     box-sizing: border-box !important;
                     width: 2.25rem !important;
                     height: 2.25rem !important;
-                    margin: 0 0 0 0.25rem !important;
+                    margin: 0 !important;
+                    margin-inline-start: 0.25rem !important;
                     padding: 0 !important;
                     ${ surface.closed }
                     border-radius: 9999px !important;
@@ -1064,7 +1070,7 @@ export function SwitcherView({
                                         aria-label={ __('by TranslateWP, opens in a new tab', 'translate') }
                                     >
                                         <span>by TranslateWP</span>
-                                        <ArrowUpRight size={12} />
+                                        <ArrowUpRight className="rtl:-scale-x-100" size={12} />
                                     </a>
                                 </>
                             ) }

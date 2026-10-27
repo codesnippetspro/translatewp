@@ -332,7 +332,7 @@ export const OverviewNextAction = () =>
                         <span className="text-sm text-translatewp-muted">
                             {__('Their text was no longer in the translation cache; it is being sent again. Nothing to do.', 'translate')}
                         </span>
-                        <PendingPagesLink className="self-end text-right" />
+                        <PendingPagesLink className="self-end text-end" />
                     </div>
                 );
 
@@ -351,7 +351,7 @@ export const OverviewNextAction = () =>
                                 action.total
                             )}
                         </span>
-                        <PendingPagesLink className="self-end text-right" />
+                        <PendingPagesLink className="self-end text-end" />
                     </div>
                 );
 
@@ -365,7 +365,7 @@ export const OverviewNextAction = () =>
                                 action.count
                             )}
                         </span>
-                        <PendingPagesLink className="self-end text-right" />
+                        <PendingPagesLink className="self-end text-end" />
                     </div>
                 );
 

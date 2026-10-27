@@ -23,7 +23,7 @@ class SwitcherWidget extends \WP_Widget {
 			.widgets-php .widget[id^="widget-translatewp_language_switcher"] .widget-title::before {
 				content: "\\f326";
 				font-family: dashicons;
-				margin-right: 0.4em;
+				margin-inline-end: 0.4em;
 			}
 		</style>
 		<?php

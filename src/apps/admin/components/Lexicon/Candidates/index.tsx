@@ -1,7 +1,8 @@
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { Button, Spinner } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 
 import { actOnLexiconCandidate, startLexiconScan } from '@/shared/api/admin';
 import { getLexiconCandidatesQueryOptions, getLexiconScanQueryOptions } from '@/shared/query-options/admin';
@@ -72,7 +73,7 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                         sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
                     }
                 </span>
-                <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+                <div className="flex flex-wrap items-center gap-2 lg:ms-auto">
                     {dismissed ? (
                         <>
                             <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
@@ -157,9 +158,37 @@ const CandidateList = ({ candidates, dismissed, busy, onAct, onAdd }: {
     const currentPage = Math.min(page, pages);
     const start = (currentPage - 1) * CANDIDATES_PER_PAGE;
 
+    const resultsId = dismissed ? 'dismissed-suggestions-results' : 'suggested-terms-results';
+
+    const paginationButton = useRef<HTMLButtonElement | null>(null);
+    const paginationAnnouncement = sprintf(
+        /* translators: 1: current page, 2: total pages, 3: total suggestions. */
+        __('Page %1$d of %2$d (%3$d suggestions)', 'translate'),
+        currentPage, pages, candidates.length
+                );
+    const lastPaginationAnnouncement = useRef('');
+    useEffect(() =>
+    {
+        if (!busy) lastPaginationAnnouncement.current = paginationAnnouncement;
+    }, [paginationAnnouncement, busy]);
+    useEffect(() =>
+    {
+        const button = paginationButton.current;
+        if (!button || busy) return;
+        paginationButton.current = null;
+        const active = document.activeElement;
+        if (active !== button && active !== document.body) return;
+        if (pages <= 1 || !button.isConnected || button.disabled)
+        {
+            document.getElementById(resultsId)?.focus();
+        }
+        else if (active === document.body) button.focus();
+    });
+
     return (
         <div className="flex min-w-0 flex-col gap-3">
-            <ol className="m-0! list-none divide-y divide-translatewp-border p-0!">
+            <ol id={resultsId} tabIndex={-1} aria-busy={busy}
+                className="m-0! list-none divide-y divide-translatewp-border p-0!">
                 {candidates.slice(start, start + CANDIDATES_PER_PAGE).map(candidate => (
                     <CandidateRow
                         key={candidate.id}
@@ -171,21 +200,44 @@ const CandidateList = ({ candidates, dismissed, busy, onAct, onAdd }: {
                     />
                 ))}
             </ol>
+            <span className="screen-reader-text" role="status" aria-live="polite" aria-atomic="true">
+                {busy ? lastPaginationAnnouncement.current : paginationAnnouncement}
+            </span>
             {pages > 1 && (
                 <nav
-                    className="flex flex-wrap items-center justify-between gap-3"
+                    className="flex flex-wrap items-center justify-between gap-4"
                     aria-label={dismissed ? __('Dismissed suggestions pages', 'translate') : __('Suggested terms pages', 'translate')}
                 >
-                    <span className="text-sm text-translatewp-muted" role="status">{sprintf(
-                        /* translators: 1: current page, 2: total pages, 3: total suggestions. */
-                        __('Page %1$d of %2$d (%3$d suggestions)', 'translate'),
-                        currentPage, pages, candidates.length
-                    )}</span>
+                    <span className="text-sm text-translatewp-muted">{paginationAnnouncement}</span>
                     <div className="flex items-center gap-2">
-                        <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={currentPage === 1 || busy} onClick={() => setPage(currentPage - 1)}>
+                        <Button
+                            variant="secondary" type="button" className="h-8! rounded-sm! px-3! text-sm!"
+                            aria-label={dismissed
+                                ? __('Previous page of dismissed suggestions', 'translate')
+                                : __('Previous page of suggested terms', 'translate')}
+                            aria-controls={resultsId}
+                            disabled={currentPage <= 1 || busy}
+                            onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                            {
+                                paginationButton.current = event.currentTarget;
+                                setPage(currentPage - 1);
+                            }}
+                        >
                             {__('Previous', 'translate')}
                         </Button>
-                        <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={currentPage === pages || busy} onClick={() => setPage(currentPage + 1)}>
+                        <Button
+                            variant="secondary" type="button" className="h-8! rounded-sm! px-3! text-sm!"
+                            aria-label={dismissed
+                                ? __('Next page of dismissed suggestions', 'translate')
+                                : __('Next page of suggested terms', 'translate')}
+                            aria-controls={resultsId}
+                            disabled={currentPage >= pages || busy}
+                            onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
+                            {
+                                paginationButton.current = event.currentTarget;
+                                setPage(currentPage + 1);
+                            }}
+                        >
                             {__('Next', 'translate')}
                         </Button>
                     </div>
@@ -247,7 +299,7 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
             {!open && candidatesQuery.isSuccess && candidates.length === 0 && scan?.state === 'done' && (
                 <p className="m-0 text-sm text-translatewp-muted">{__('Nothing waits for your decision.', 'translate')}</p>
             )}
-            {candidates.length > 0 && (
+            {!open && candidatesQuery.isSuccess && (
                 <CandidateList
                     key={scan?.id ?? 'new'}
                     candidates={candidates}
@@ -270,7 +322,7 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
                 {showDismissed && dismissedQuery.isSuccess && dismissed.length === 0 && (
                     <p className="m-0 text-sm text-translatewp-muted">{__('No suggestion is dismissed on this site.', 'translate')}</p>
                 )}
-                {showDismissed && dismissed.length > 0 && (
+                {showDismissed && dismissedQuery.isSuccess && (
                     <CandidateList
                         candidates={dismissed}
                         dismissed

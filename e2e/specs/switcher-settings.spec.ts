@@ -12,7 +12,7 @@ test('the native dropdown disables what it does not use, and says why', async ({
     await signIn(page);
     await page.goto('/wp-admin/admin.php?page=translatewp-settings#switcher');
 
-    await page.locator('[data-option-cards="switcher-type"] [role="radio"]', { hasText: 'Native dropdown' }).click();
+    await page.getByRole('radiogroup', { name: 'Switcher type', exact: true }).getByRole('radio', { name: 'Native dropdown', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
     expect(storedSwitcher().type).toBe('native_select');
 
@@ -24,7 +24,7 @@ test('the native dropdown disables what it does not use, and says why', async ({
 
     // A disabled choice cannot be picked.
     const before = storedSwitcher().trigger;
-    await page.locator('[data-option-cards="show-selected-language"] [role="radio"]', { hasText: 'Icon only' }).click({ force: true });
+    await page.getByRole('radiogroup', { name: 'Show selected language', exact: true }).getByRole('radio', { name: 'Icon only', exact: true, includeHidden: true }).click({ force: true });
     await page.waitForTimeout(500);
     expect(storedSwitcher().trigger).toBe(before);
 

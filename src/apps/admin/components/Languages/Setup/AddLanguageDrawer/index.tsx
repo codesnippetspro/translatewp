@@ -136,11 +136,11 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
 
                                     {draft.switcher_label && (
                                         <>
-                                            <span className='text-translatewp-muted text-sm pl-6 mb-2 block'>Add a custom label</span>
+                                            <span className='text-translatewp-muted text-sm ps-6 mb-2 block'>Add a custom label</span>
                                             <TextControl
                                                 __next40pxDefaultSize
                                                 __nextHasNoMarginBottom
-                                                className='[&_input]:border-translatewp-border! [&_input]:rounded-sm! pl-6'
+                                                className='[&_input]:border-translatewp-border! [&_input]:rounded-sm! ps-6'
                                                 placeholder={'My label'}
                                                 value={draft.switcher_label || ''}
                                                 onChange={(switcherLabel) => handleLanguageChange({ ...draft, switcher_label: switcherLabel })}

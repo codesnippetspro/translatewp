@@ -400,7 +400,7 @@ export const LanguagesIndexing = () =>
                     {__('Pinned pages are indexed before everything else.', 'translate')}
                 </p>
                 <div className="relative w-full" ref={pinSelectRef}>
-                    <div className="box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary">
+                    <div className="box-border px-3 py-2.75 w-full min-w-0 flex items-center gap-2 border border-translatewp-border rounded-sm hover:border-translatewp-primary focus-within:outline-2! focus-within:outline-solid! focus-within:outline-offset-2! focus-within:outline-translatewp-primary!">
                         <input
                             type="text"
                             value={filterValue}
@@ -414,12 +414,12 @@ export const LanguagesIndexing = () =>
                     </div>
 
                     {isPinSelectOpen && availableSearchResults.length > 0 && (
-                        <div className="absolute top-14 left-0 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto z-999999">
+                        <div className="absolute top-14 start-0 w-full bg-white border border-translatewp-border rounded-sm max-h-40 overflow-y-auto z-999999">
                             {availableSearchResults.map(result => (
                                 <button
                                     type="button"
                                     key={result.id}
-                                    className="px-3 py-2.75 w-full cursor-pointer bg-white border-0 hover:bg-translatewp-border text-left"
+                                    className="px-3 py-2.75 w-full cursor-pointer bg-white border-0 hover:bg-translatewp-border text-start"
                                     onClick={() => void handleAddPin(String(result.id))}
                                 >
                                     <span className="text-translatewp-neutral! text-sm!">
@@ -470,11 +470,11 @@ export const LanguagesIndexing = () =>
             {languages.length > 0 && (
                 <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
                     <thead>
-                        <tr className="text-left text-translatewp-muted">
-                            <th className="px-3 py-2 font-semibold">{__('Language', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold">{__('Progress', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold">{__('Failed', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold">{__('State', 'translate')}</th>
+                        <tr className="text-start text-translatewp-muted">
+                            <th className="px-3 py-2 font-semibold text-start">{__('Language', 'translate')}</th>
+                            <th className="px-3 py-2 font-semibold text-start">{__('Progress', 'translate')}</th>
+                            <th className="px-3 py-2 font-semibold text-start">{__('Failed', 'translate')}</th>
+                            <th className="px-3 py-2 font-semibold text-start">{__('State', 'translate')}</th>
                         </tr>
                     </thead>
                     <tbody>

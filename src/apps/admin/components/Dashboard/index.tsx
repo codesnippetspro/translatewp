@@ -175,14 +175,14 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                             <p className="m-0 text-sm text-translatewp-muted">No translation data yet.</p>
                         ) : (
                             <Table>
-                                <TableHeaderRow columnsClassName="grid-cols-3">
+                                <TableHeaderRow>
                                     <TableCell variant="header">Language</TableCell>
                                     <TableCell variant="header">Translations</TableCell>
                                     <TableCell variant="header">Share</TableCell>
                                 </TableHeaderRow>
 
                                 {data.languageUsage.map((lang, index) => (
-                                    <TableRow key={`${lang.locale}-${index}`} columnsClassName="grid-cols-3">
+                                    <TableRow key={`${lang.locale}-${index}`}>
                                         <TableCell as="div" className="flex items-center gap-2 text-translatewp-neutral">
                                             {getCountryFlagFromLocale(lang.locale)}
                                             <span>{getLanguageNameFromLocale(lang.locale) ?? lang.name}</span>
@@ -206,13 +206,13 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                             <p className="m-0 text-sm text-translatewp-muted">No translated content yet.</p>
                         ) : (
                             <Table>
-                                <TableHeaderRow columnsClassName="grid-cols-2">
+                                <TableHeaderRow>
                                     <TableCell variant="header">Page</TableCell>
                                     <TableCell variant="header">Language</TableCell>
                                 </TableHeaderRow>
 
                                 {data.recentContent.map((item, index) => (
-                                    <TableRow key={`${item.page}-${index}`} columnsClassName="grid-cols-2">
+                                    <TableRow key={`${item.page}-${index}`}>
                                         <TableCell as="div">
                                             <a href={item.href} className="text-translatewp-primary underline">
                                                 {item.page}
@@ -235,13 +235,13 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                             </div>
                         ) : (
                             <Table>
-                                <TableHeaderRow columnsClassName="grid-cols-2">
+                                <TableHeaderRow>
                                     <TableCell variant="header">Term</TableCell>
                                     <TableCell variant="header">Added</TableCell>
                                 </TableHeaderRow>
 
                                 {data.recentLexicon.map((entry, index) => (
-                                    <TableRow key={`${entry.term}-${index}`} columnsClassName="grid-cols-2">
+                                    <TableRow key={`${entry.term}-${index}`}>
                                         <TableCell as="div">
                                             <a href={entry.href} className="text-translatewp-primary underline">
                                                 {entry.term}

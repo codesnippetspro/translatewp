@@ -16,15 +16,15 @@ interface ProLockProps
      * leave the whole page blurred and unusable (e.g. a full-page `defaultOpen` gate).
      */
     onDismiss?: () => void;
-    /** Marker pinned to the top-right corner, kept crisp above the gated content; a button in it takes its own clicks. */
+    /** Marker pinned to the top inline-end corner, kept crisp above the gated content; a button in it takes its own clicks. */
     badge?: React.ReactNode;
-    /** Where the badge sits; the top right corner by default. */
+    /** Where the badge sits; the top inline-end corner by default. */
     badgeClassName?: string;
     /** Called once Pro is installed or activated from this lock, before the page reloads. */
     onProReady?: () => void;
 }
 
-export const ProLock = ({ children, feature, className, blur = false, defaultOpen = false, onDismiss, badge, badgeClassName = 'right-2 top-2', onProReady }: ProLockProps) =>
+export const ProLock = ({ children, feature, className, blur = false, defaultOpen = false, onDismiss, badge, badgeClassName = 'end-2 top-2', onProReady }: ProLockProps) =>
 {
     const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -35,8 +35,8 @@ export const ProLock = ({ children, feature, className, blur = false, defaultOpe
     };
 
     const gatedClasses = blur
-        ? 'blur-[3px] opacity-70 pointer-events-none select-none'
-        : 'opacity-50 grayscale pointer-events-none select-none';
+        ? 'blur-[3px] opacity-70 pointer-events-none select-none h-full'
+        : 'opacity-50 grayscale pointer-events-none select-none h-full';
 
     return (
         <div className={`relative ${className ?? ''}`}>

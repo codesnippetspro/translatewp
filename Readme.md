@@ -134,6 +134,10 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 ## Upgrade Notice
 
+### 1.0.3
+
+Lexicon entries are no longer reachable from public pages or WordPress's public routes. Clear any external CDN or edge page cache after updating; TranslateWP clears recognized WordPress page caches once.
+
 ### 1.0.2
 
 Keeps saved language switchers attached to the correct page element when the WordPress admin bar is visible.
@@ -147,6 +151,13 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 ## Changelog
+
+### 1.0.3
+
+* Keep Lexicon terms and categories out of public pages and WordPress's public routes; preserve access for authorized editors.
+* Fill the page translation store when a visitor and the background indexer request the same text at the same time.
+* Preserve crawler settings when saving languages.
+* Add full right-to-left layout support and improve admin accessibility.
 
 ### 1.0.2
 

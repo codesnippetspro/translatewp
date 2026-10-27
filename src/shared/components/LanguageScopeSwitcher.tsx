@@ -53,10 +53,12 @@ const ScopeTabs = ({ options, selected, onSelect, label }: Omit<LanguageScopeSwi
         }
 
         event.preventDefault();
+        const tabList = event.currentTarget.parentElement;
+        const isRtl = tabList && getComputedStyle(tabList).direction === 'rtl';
         const direction = 'ArrowRight' === event.key ? 1 : -1;
-        const next = (index + direction + options.length) % options.length;
+        const next = (index + direction * (isRtl ? -1 : 1) + options.length) % options.length;
         onSelect(options[next].value);
-        const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
+        const tabs = tabList?.querySelectorAll<HTMLElement>('[role="tab"]');
         tabs?.[next]?.focus();
     };
 

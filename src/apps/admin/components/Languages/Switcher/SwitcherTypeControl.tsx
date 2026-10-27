@@ -46,5 +46,5 @@ export const SwitcherTypeControl = ({ value, onChange }: SwitcherTypeControlProp
         ? { ...option, locked: { feature: __('the side tab', 'translate') } }
         : option);
 
-    return <OptionCards options={options} value={value} onChange={onChange} name="switcher-type" />;
+    return <OptionCards options={options} value={value} onChange={onChange} name="switcher-type" label={__('Switcher type', 'translate')} />;
 };

@@ -57,6 +57,9 @@ describe('the Support tab', () =>
     {
         const container = await render();
         const order = container.textContent ?? '';
+        const feedback = container.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+        const label = document.getElementById(feedback.getAttribute('aria-labelledby') ?? '');
+        expect(label?.textContent).toBe('Tell us what would make TranslateWP better');
         expect(order.indexOf('Help shape TranslateWP')).toBeLessThan(order.indexOf('Need a hand?'));
         expect(order.indexOf('Need a hand?')).toBeLessThan(order.indexOf('Support report'));
         // Asking for help and giving feedback sit side by side; the report has its own row.
@@ -93,6 +96,9 @@ describe('the Support tab', () =>
         const open = jest.spyOn(window, 'open').mockImplementation(() => null);
         const container = await render();
         const order = container.textContent ?? '';
+        const feedback = container.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+        const label = document.getElementById(feedback.getAttribute('aria-labelledby') ?? '');
+        expect(label?.textContent).toBe('Tell us what would make TranslateWP better');
         expect(order.indexOf('Need a hand?')).toBeLessThan(order.indexOf('Help shape TranslateWP'));
 
         await act(async () => { (container.querySelector('[data-open-ticket]') as HTMLButtonElement).click(); });

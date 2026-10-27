@@ -64,6 +64,10 @@ describe('Translations > Settings: who can manage translations', () =>
     it('lists the four capabilities as columns, the administrator first and locked, then each role', async () =>
     {
         const container = await render();
+        const scrollRegion = container.querySelector('[role="region"]') as HTMLElement;
+        expect(scrollRegion.getAttribute('aria-label')).toBe('Who can manage translations');
+        expect(scrollRegion.tabIndex).toBe(0);
+        expect(scrollRegion.querySelector('table')).not.toBeNull();
         expect(Array.from(container.querySelectorAll('thead th')).map(th => th.textContent)).toEqual(['Role', 'Edit translations', 'Retranslate', 'Manage settings', 'Manage the Lexicon']);
         expect(Array.from(container.querySelectorAll('[data-role-row]')).map(row => row.getAttribute('data-role-row'))).toEqual(['administrator', 'editor', 'author']);
         const admin = Array.from(container.querySelectorAll('[data-role-row="administrator"] input')) as HTMLInputElement[];

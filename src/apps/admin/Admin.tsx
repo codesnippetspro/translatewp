@@ -29,7 +29,7 @@ import { SlugClashActions } from '@/apps/admin/components/SlugClashActions';
 // owns it now (useNavigate), so old links and bookmarks keep working.
 const ROUTES = ['/', '/lexicon', '/seo', '/settings'];
 const SAVED_MESSAGE_MS = 3000;
-const TOAST_CLASS = 'fixed! bottom-6 right-6 z-50 flex max-w-[92vw] items-center gap-3 rounded-lg px-4 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.12)]';
+const TOAST_CLASS = 'fixed! bottom-6 end-6 z-50 flex max-w-[92vw] items-center gap-3 rounded-lg px-4 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.12)]';
 
 // The settings groups the form is loaded from, in the order the store reads
 // them. A user who manages translations by grant is not given the

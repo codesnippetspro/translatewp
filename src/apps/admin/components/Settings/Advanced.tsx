@@ -59,8 +59,14 @@ export const SettingsAdvanced = () =>
 
     return (
         <div className="flex flex-col gap-10">
+			<div className="flex flex-col gap-2">
+				<h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Advanced Settings', 'translate')}</h3>
+				<p className="text-sm text-translatewp-muted!">
+					{__('Manage the translation cache, uninstall preferences, and plugin data.', 'translate')}
+				</p>
+			</div>
             <div className="flex flex-col gap-4">
-                <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Translation cache', 'translate')}</h3>
+                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Translation cache', 'translate')}</h4>
                 <p className="text-sm text-translatewp-muted! m-0">
                     {__('Clearing the cache forces a fresh translation of every page on its next visit. Use it after a change the site did not pick up on its own.', 'translate')}
                 </p>
@@ -80,7 +86,7 @@ export const SettingsAdvanced = () =>
 
             {otherTranslationPlugins.length > 0 && (
             <div id="other-translation-plugins" className="flex flex-col gap-4">
-                <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Other translation plugins', 'translate')}</h3>
+                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Other translation plugins', 'translate')}</h4>
                 <div className="flex flex-col gap-3 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3" role="note">
                 <p className="text-sm text-translatewp-neutral! m-0">
                     {__('TranslateWP keeps working when another translation plugin is active, and changes nothing in it unless you ask. Two translation systems on one site can show mixed languages, duplicate language addresses and two language switchers.', 'translate')}
@@ -93,7 +99,7 @@ export const SettingsAdvanced = () =>
             )}
 
             <div className="flex flex-col gap-4">
-                <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Uninstall', 'translate')}</h3>
+                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Uninstall', 'translate')}</h4>
                 <ManagedByNetwork group="uninstall">
                 <ToggleControl
                     label={__('Delete all data on uninstall', 'translate')}
@@ -108,7 +114,7 @@ export const SettingsAdvanced = () =>
             </div>
 
             <div className="flex flex-col gap-4">
-                <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Danger zone', 'translate')}</h3>
+                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Danger zone', 'translate')}</h4>
                 <ManagedByNetwork group="account">
                 <p className="text-sm text-translatewp-muted! m-0">
                     {__('Disconnect from your TranslateWP account and delete every option, translated term, metric, and scheduled task this plugin created. This cannot be undone.', 'translate')}

@@ -49,7 +49,7 @@ export const SETTINGS_TABS = [
         content: (
             <div className="flex flex-col gap-8">
                 <div className="flex flex-col gap-2">
-                    <h3 className="font-semibold text-lg text-translatewp-neutral!">{__('Translation', 'translate')}</h3>
+                    <h3 className="font-semibold text-lg text-translatewp-neutral!">{__('Translation settings', 'translate')}</h3>
                     <p className="text-sm text-translatewp-muted!">{__('What is translated, how it reads, and what the translations know about your site.', 'translate')}</p>
                 </div>
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
@@ -67,7 +67,19 @@ export const SETTINGS_TABS = [
     {
         name: 'ai-model',
         title: (<AiModelsTabTitle />) as unknown as string,
-        content: <AiProviders embedded />,
+        content: (
+			<div className="flex flex-col gap-8">
+				<div className="flex flex-col gap-2">
+					<h3 className="font-semibold text-lg text-translatewp-neutral! m-0">
+						{__('AI models', 'translate')}
+					</h3>
+					<p className="text-sm text-translatewp-muted!">
+						{__('Choose the AI models used to translate your content.', 'translate')}
+					</p>
+				</div>
+				<AiProviders embedded />
+			</div>
+		),
     },
 ] as PageTab[];
 

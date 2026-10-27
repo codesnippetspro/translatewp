@@ -46,16 +46,16 @@ export const NetworkAdmin = ({ data }: { data: NetworkAdminData }) =>
                             >
                                 <div className="overflow-x-auto rounded-lg bg-white">
                                     <Table className="min-w-240">
-                                        <TableHeaderRow columnsClassName="grid-cols-[2fr_0.6fr_1.2fr_1.1fr_1.1fr_1.5fr]">
-                                            <TableCell variant="header">{__('Site', 'translate')}</TableCell>
-                                            <TableCell variant="header">{__('ID', 'translate')}</TableCell>
+                                        <TableHeaderRow>
+                                            <TableCell variant="header" className="w-[27%]">{__('Site', 'translate')}</TableCell>
+                                            <TableCell variant="header" className="w-[8%]">{__('ID', 'translate')}</TableCell>
                                             <TableCell variant="header">{__('Connection', 'translate')}</TableCell>
                                             <TableCell variant="header">{__('Setup', 'translate')}</TableCell>
                                             <TableCell variant="header">{__('Languages', 'translate')}</TableCell>
-                                            <TableCell variant="header" align="right">{__('Manage', 'translate')}</TableCell>
+                                            <TableCell variant="header" align="end">{__('Manage', 'translate')}</TableCell>
                                         </TableHeaderRow>
                                         {data.subsites.map(site => (
-                                            <TableRow key={site.id} columnsClassName="grid-cols-[2fr_0.6fr_1.2fr_1.1fr_1.1fr_1.5fr]">
+                                            <TableRow key={site.id}>
                                                 <TableCell className="min-w-0">
                                                     <strong className="block truncate text-translatewp-neutral">{site.name}</strong>
                                                     <a href={site.url} className="block truncate text-translatewp-primary">{site.url}</a>
@@ -72,12 +72,12 @@ export const NetworkAdmin = ({ data }: { data: NetworkAdminData }) =>
                                                     ) : (
                                                         <a href={site.dashboardUrl} className="inline-flex items-center gap-1.5 text-translatewp-primary" data-setup-state="complete">
                                                             {__('Complete', 'translate')}
-                                                            <ArrowRight size={16} aria-hidden="true" />
+                                                            <ArrowRight className="rtl:rotate-180" size={16} aria-hidden="true" />
                                                         </a>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>{site.languages.length ? site.languages.join(', ') : __('None yet', 'translate')}</TableCell>
-                                                <TableCell align="right" className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                                                <TableCell as="div" align="end" className="flex flex-wrap justify-end gap-x-3 gap-y-1">
                                                     <a href={site.dashboardUrl}>{__('Dashboard', 'translate')}</a>
                                                     <a href={site.seoUrl}>{__('SEO Tools', 'translate')}</a>
                                                     <a href={site.lexiconUrl}>{__('Lexicon', 'translate')}</a>
