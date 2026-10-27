@@ -45,8 +45,7 @@ class Lexicon {
 	/**
 	 * The terms the translator receives for one target language: every term
 	 * scoped to that language or to no language, reduced to the two fields the
-	 * translation service reads. The same reduction runs in the browser so the
-	 * two sides fingerprint the same settings.
+	 * translation service reads.
 	 *
 	 * @return array<int, array{term: string, description: string}>
 	 */
@@ -112,11 +111,14 @@ class Lexicon {
 					'all_items'          => __( 'Lexicon', 'translate' ),
 				],
 				'public'             => false,
+				'publicly_queryable' => false,
+				'exclude_from_search' => true,
 				'show_ui'            => false,
 				'show_in_menu'       => false,
-				'show_in_rest'       => true,
+				'show_in_rest'       => false,
 				'has_archive'        => false,
-				'rewrite'            => [ 'slug' => 'lexicon' ],
+				'rewrite'            => false,
+				'query_var'          => false,
 				'supports'           => [ 'title' ],
 				'menu_icon'          => 'dashicons-book-alt',
 				'taxonomies'         => [ self::CATEGORY_TAXONOMY ],
@@ -144,9 +146,10 @@ class Lexicon {
 				'show_admin_column' => false,
 				'show_tagcloud'     => false,
 				'show_in_nav_menus' => false,
-				'show_in_rest'      => true,
+				'show_in_rest'      => false,
 				'hierarchical'      => false,
 				'rewrite'           => false,
+				'query_var'         => false,
 			]
 		);
 	}

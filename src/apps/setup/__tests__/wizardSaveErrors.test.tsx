@@ -108,6 +108,23 @@ describe('the wizard never swallows a save error', () =>
         expect(container.querySelector('[role="alert"]')?.textContent).toBe('Your choices could not be saved. Try again.');
     });
 
+    it('keeps the language step visible when an unsafe address is refused', async () =>
+    {
+        mockApi.saveSetupStep.mockRejectedValueOnce({
+            code: 'invalid_language_address',
+            message: 'A language has an invalid code or address.',
+            data: { status: 400, locale: 'es-ES' },
+        });
+        const container = await renderWizard('languages');
+
+        await act(async () => { primary(container, 'Continue')!.click(); });
+        await settle();
+
+        expect(useStepStore.getState().step).toBe('languages');
+        expect(container.querySelector('[role="alert"]')?.textContent).toBe('A language has an invalid code or address.');
+        expect(primary(container, 'Continue')?.disabled).toBe(false);
+    });
+
     it('shows why Finish failed and keeps Finish usable', async () =>
     {
         mockApi.finishSetup.mockRejectedValueOnce({ code: 'invalid_default_language', message: 'A default language is required' });

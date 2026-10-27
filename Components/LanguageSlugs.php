@@ -3,6 +3,33 @@
 namespace TranslateWP\Components;
 
 class LanguageSlugs {
+	public static function valid_locale( string $locale ): bool {
+		return 1 === preg_match( '/^[A-Za-z0-9][A-Za-z0-9_.@-]*$/D', $locale );
+	}
+
+	public static function valid_slug( string $slug ): bool {
+		return 1 === preg_match( '/^[a-z0-9][a-z0-9._@-]*$/D', strtolower( $slug ) );
+	}
+
+	public static function address_refusal( array $languages ): ?\WP_Error {
+		foreach ( $languages as $language ) {
+			$locale = is_array( $language ) ? (string) ( $language['locale'] ?? '' ) : '';
+			$stored_slug = is_array( $language ) ? (string) ( $language['slug'] ?? '' ) : '';
+			$slug = '' !== $stored_slug ? $stored_slug : self::from_locale( $locale );
+			if ( ! self::valid_locale( $locale ) || ! self::valid_slug( $slug ) ) {
+				return new \WP_Error(
+					'invalid_language_address',
+					__( 'A language has an invalid code or address. Use letters, numbers, hyphens, underscores, periods or @.', 'translate' ),
+					[
+						'status' => 400,
+						'locale' => sanitize_text_field( $locale ),
+					]
+				);
+			}
+		}
+
+		return null;
+	}
 
 	public static function from_locale( string $locale ): string {
 		return strtolower( str_replace( '_', '-', trim( $locale ) ) );

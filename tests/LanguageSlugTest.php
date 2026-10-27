@@ -202,6 +202,43 @@ wp_test_reset( [] );
 new \TranslateWP\Functionality\LanguageSlugRepair( 'translatewp', TRANSLATEWP_VERSION );
 assert_true( is_callable( $GLOBALS['wp_test_filters']['init'] ?? null ), 'the stored slugs are checked on init' );
 
+// Language addresses must be safe before any of the three save routes writes.
+$stored = [ [ 'locale' => 'en_US', 'slug' => 'en', 'active' => true, 'default' => true ] ];
+$unsafe_slug = array_merge( $stored, [ [ 'locale' => 'es_ES', 'slug' => "es*\nDisallow: /", 'active' => true, 'default' => false ] ] );
+$unsafe_locale = array_merge( $stored, [ [ 'locale' => "es_ES\nDisallow: /", 'slug' => 'es', 'active' => true, 'default' => false ] ] );
+wp_test_reset( [ 'languages' => [ 'list' => $stored ], 'setup' => [ 'step' => 'languages' ], 'translations' => [ 'context' => [ 'text_context' => 'Approved content' ] ] ] );
+$admin = new Admin( 'translatewp', TRANSLATEWP_VERSION );
+foreach ( [ $unsafe_slug, $unsafe_locale ] as $unsafe_list ) {
+	$result = $admin->update_data( new WP_REST_Request( 'POST', '/translatewp/v1/admin/set-data', [ 'option' => 'languages.list', 'data' => $unsafe_list ] ) );
+	assert_true( $result instanceof WP_Error && 'invalid_language_address' === $result->get_error_code(), 'settings must refuse an unsafe language address' );
+	assert_true( $result instanceof WP_Error && 400 === (int) ( $result->get_error_data()['status'] ?? 0 ), 'settings must return 400 for an unsafe language address' );
+	assert_true( $stored === Options::get( 'languages.list', [] ), 'an unsafe settings save must preserve the language list' );
+	assert_true( 'languages' === Options::get( 'setup.step', '' ), 'an unsafe settings save must not advance setup' );
+	assert_true( 'Approved content' === Options::get( 'translations.context.text_context', '' ), 'an unsafe settings save must preserve context' );
+}
+
+$management = new Management( 'translatewp', TRANSLATEWP_VERSION );
+foreach ( [ 'save_step', 'finish_setup' ] as $method ) {
+	wp_test_reset( [ 'languages' => [ 'list' => $stored ], 'setup' => [ 'step' => 'languages' ], 'translations' => [ 'context' => [ 'text_context' => 'Approved content' ] ] ] );
+	$result = $management->$method( new WP_REST_Request( 'POST', '/translatewp/v1/management/' . $method, [
+		'step' => 'languages',
+		'resume_step' => 'translation',
+		'default_language' => 'en_US',
+		'languages' => [ "es_ES\nDisallow: /" ],
+		'context' => 'Must not be saved',
+	] ) );
+	assert_true( $result instanceof WP_Error && 'invalid_language_address' === $result->get_error_code(), $method . ' must refuse an unsafe language address' );
+	assert_true( $result instanceof WP_Error && 400 === (int) ( $result->get_error_data()['status'] ?? 0 ), $method . ' must return 400 for an unsafe language address' );
+	assert_true( 'languages' === Options::get( 'setup.step', '' ), $method . ' must not advance setup after refusing an address' );
+	assert_true( $stored === Options::get( 'languages.list', [] ), $method . ' must not rewrite the language list after refusing an address' );
+	assert_true( 'Approved content' === Options::get( 'translations.context.text_context', '' ), $method . ' must not write context after refusing an address' );
+	$reported_locale = $result instanceof WP_Error ? (string) ( $result->get_error_data()['locale'] ?? '' ) : '';
+	assert_true( str_starts_with( $reported_locale, 'es-ES' ) && ! str_contains( $reported_locale, "\n" ), $method . ' must identify the refused locale without reflecting the injected newline' );
+}
+
+assert_true( null === LanguageSlugs::address_refusal( [ [ 'locale' => 'pt_BR', 'slug' => '', 'active' => true, 'default' => false ] ] ), 'a regional locale may use its derived slug' );
+assert_true( null === LanguageSlugs::address_refusal( [ [ 'locale' => 'ca@valencia', 'slug' => 'ca@valencia', 'active' => true, 'default' => false ] ] ), 'a valid variant address must remain accepted' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "LanguageSlugTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

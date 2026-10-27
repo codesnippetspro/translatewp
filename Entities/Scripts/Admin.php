@@ -3,6 +3,7 @@
 namespace TranslateWP\Entities\Scripts;
 
 use TranslateWP\Components\ProEligibility;
+use TranslateWP\Components\Access;
 use TranslateWP\Components\RemoteApi;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\Sites;
@@ -46,7 +47,7 @@ class Admin extends Script {
                     'settings_scope'       => (object) \TranslateWP\Components\SettingsScope::subsite_scope(),
                 ],
                 'can'           => \TranslateWP\Entities\Scripts\TranslateWP::manager_flags()['can'],
-                'lexicon_terms' => Lexicon::get_all(),
+                'lexicon_terms' => Access::can( Access::LEXICON ) || Access::can( Access::EDIT ) ? Lexicon::get_all() : [],
             ],
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
         ) . ' );';

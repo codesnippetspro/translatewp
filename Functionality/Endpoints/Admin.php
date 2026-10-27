@@ -20,6 +20,7 @@ use TranslateWP\Entities\CPTs\Lexicon;
 use TranslateWP\Functionality\KeepWarm;
 
 class Admin extends BaseApiEndpoints {
+	public const SEO_CRAWLER_INHERIT_SUPPORTED = true;
 
 	private const ADMIN_DATA_PATHS = [
 		'languages.list',
@@ -44,7 +45,7 @@ class Admin extends BaseApiEndpoints {
 		'Applebot-Extended',
 	];
 
-	private const SEO_BOT_DEFAULT_DECISIONS = [ 'allow', 'deny' ];
+	private const SEO_BOT_DEFAULT_DECISIONS = [ 'allow', 'deny', 'inherit' ];
 
 	private const SEO_BOT_LANGUAGE_DECISIONS = [ 'allow', 'deny', 'inherit' ];
 
@@ -129,6 +130,14 @@ class Admin extends BaseApiEndpoints {
         );
         $get_lexicon_terms->useMiddleware( $cors );
 
+        $get_lexicon_categories = new GetEndpoint(
+            $this->namespace,
+            'get-lexicon-categories',
+            [ $this, 'get_lexicon_categories' ],
+            [ $this, 'lexicon_or_edit_permissions_check' ]
+        );
+        $get_lexicon_categories->useMiddleware( $cors );
+
         $clear_cache = new PostEndpoint(
             $this->namespace,
             'clear-cache',
@@ -178,6 +187,7 @@ class Admin extends BaseApiEndpoints {
             $update_lexicon_term,
             $delete_lexicon_term,
             $get_lexicon_terms,
+            $get_lexicon_categories,
             $clear_cache,
             $dashboard_metrics,
             $settings_revision,
@@ -385,6 +395,12 @@ class Admin extends BaseApiEndpoints {
                 [ 'status' => 400 ]
             );
         }
+		if ( 'languages.list' === $option ) {
+			$address_refusal = \TranslateWP\Components\LanguageSlugs::address_refusal( $data );
+			if ( null !== $address_refusal ) {
+				return $address_refusal;
+			}
+		}
 
         $slug_clash = 'languages.list' === $option ? \TranslateWP\Components\LanguageSlugs::clash( $data, Options::get( 'languages.list', [] ) ) : [];
         if ( [] !== $slug_clash ) {
@@ -832,6 +848,28 @@ class Admin extends BaseApiEndpoints {
         ];
     }
 
+    public function get_lexicon_categories( $request ) {
+        unset( $request );
+		$terms = get_terms(
+			[
+				'taxonomy'   => Lexicon::CATEGORY_TAXONOMY,
+				'hide_empty' => false,
+			]
+		);
+        if ( is_wp_error( $terms ) ) {
+            return $terms;
+        }
+
+        return array_map(
+			static fn( $term ): array => [
+				'id'   => (int) $term->term_id,
+				'name' => (string) $term->name,
+				'slug' => (string) $term->slug,
+            ],
+            $terms
+        );
+    }
+
 	private function is_admin_data_path_allowed( string $path ): bool {
 		return in_array( $path, self::ADMIN_DATA_PATHS, true );
 	}
@@ -1059,7 +1097,7 @@ class Admin extends BaseApiEndpoints {
 				}
 				$seen[ $lower ] = true;
 
-				$default_decision = self::SEO_BOT_DEFAULT_DECISIONS[0];
+				$default_decision = 'inherit';
 				if ( in_array( $bot_settings['default'] ?? null, self::SEO_BOT_DEFAULT_DECISIONS, true ) ) {
 					$default_decision = $bot_settings['default'];
 				}
