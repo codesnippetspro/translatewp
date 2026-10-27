@@ -3,7 +3,7 @@
  * Plugin Name:       TranslateWP
  * Plugin URI:        https://translatewp.ai/
  * Description:       Translate WordPress with AI, guide its wording with your Lexicon, and add a language switcher. Translations follow changes to your content.
- * Version:           1.0.2
+ * Version:           1.0.3
  * Author:            Code Snippets
  * Author URI:        https://translatewp.ai/
  * License:           GPL-3.0+
@@ -20,7 +20,7 @@ if ( ! defined( 'WPINC' ) ) {
 
 // PLUGIN CONSTANTS.
 define( 'TRANSLATEWP_NAME', 'translatewp' );
-define( 'TRANSLATEWP_VERSION', '1.0.2' );
+define( 'TRANSLATEWP_VERSION', '1.0.3' );
 define( 'TRANSLATEWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TRANSLATEWP_BASENAME', plugin_basename( __FILE__ ) );
 define( 'TRANSLATEWP_URL', plugin_dir_url( __FILE__ ) );

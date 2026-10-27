@@ -1,6 +1,6 @@
 {
 	"name": "@translatewp/translatewp",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"packageManager": "yarn@1.22.22",
 	"wpSlug": "translate",
 	"author": "TranslateWP",
