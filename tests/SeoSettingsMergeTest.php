@@ -73,6 +73,7 @@ $configured_languages = [
 wp_test_reset( [ 'languages' => [ 'list' => $configured_languages ] ] );
 
 $admin  = new Admin( 'translatewp', TRANSLATEWP_VERSION );
+assert_true( defined( Admin::class . '::SEO_CRAWLER_INHERIT_SUPPORTED' ) && true === Admin::SEO_CRAWLER_INHERIT_SUPPORTED, 'Pro can detect Free crawler inherit support' );
 $result = $admin->update_data(
 	seo_update_request(
 		[
@@ -132,6 +133,9 @@ $admin->update_data(
 						'default'   => 'deny',
 						'languages' => [],
 					],
+					'CCBot'               => [
+						'languages' => [ 'es-es' => 'deny' ],
+					],
 					"Bad\nName"           => [
 						'default'   => 'deny',
 						'languages' => [],
@@ -147,9 +151,11 @@ assert_true( isset( $stored_bots['CustomBot123'] ), 'A valid site-supplied crawl
 assert_true( ! isset( $stored_bots["Bad\nName"] ), 'A crawler name with a line break must be stripped' );
 assert_true( isset( $stored_bots['GPTBot'] ), 'Allowed bot names must be kept' );
 assert_true(
-	'allow' === ( $stored_bots['GPTBot']['default'] ?? null ),
-	'An invalid default decision must fall back to allow'
+	'inherit' === ( $stored_bots['GPTBot']['default'] ?? null ),
+	'An invalid default decision must inherit the site policy'
 );
+assert_true( 'inherit' === ( $stored_bots['CCBot']['default'] ?? null ), 'An omitted default must inherit the site policy' );
+assert_true( 'deny' === ( $stored_bots['CCBot']['languages']['es-es'] ?? null ), 'A language decision survives an omitted default' );
 assert_deep_equal(
 	$stored_bots['GPTBot']['languages'] ?? null,
 	[ 'en-us' => 'deny' ],

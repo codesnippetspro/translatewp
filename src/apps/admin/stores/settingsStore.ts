@@ -59,7 +59,7 @@ export type SEOSettings = {
     redirect_changed_slugs: string;
     ai_crawlers: {
         preset_answer_engines: boolean;
-        bots: Record<string, { default: 'allow' | 'deny'; languages: Record<string, 'allow' | 'deny' | 'inherit'> }>;
+        bots: Record<string, { default: 'allow' | 'deny' | 'inherit'; languages: Record<string, 'allow' | 'deny' | 'inherit'> }>;
     };
 };
 

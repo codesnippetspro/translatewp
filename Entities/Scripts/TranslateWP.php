@@ -327,7 +327,7 @@ class TranslateWP extends Script {
                 'includeAttributes' => ! (bool) $translation_settings['preserve_html_attributes'],
                 'excludedAreas'     => PageAreas::excluded( $translation_settings ),
             ],
-            'ai_settings'    => TranslationAiSettings::build(),
+            'ai_settings'    => TranslationAiSettings::build( '', false ),
         ];
     }
 }
