@@ -411,6 +411,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_queried_object_id']    = 0;
 	$GLOBALS['wp_test_is_singular']          = false;
 	$GLOBALS['wp_test_registered_post_meta'] = [];
+	$GLOBALS['wp_test_registered_post_types'] = [];
 	$GLOBALS['wp_test_front_page_html']      = null;
 	$GLOBALS['wp_test_front_page_fetches']   = 0;
 	$GLOBALS['wp_test_remote_get_response']  = null;
@@ -898,7 +899,7 @@ function wp_delete_post( $post_id, $force = false ) {
 }
 
 function register_post_type( $post_type, $args = [] ) {
-	unset( $post_type, $args );
+	$GLOBALS['wp_test_registered_post_types'][ $post_type ] = $args;
 	return true;
 }
 

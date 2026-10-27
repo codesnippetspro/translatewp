@@ -130,6 +130,14 @@ class Admin extends BaseApiEndpoints {
         );
         $get_lexicon_terms->useMiddleware( $cors );
 
+        $get_lexicon_categories = new GetEndpoint(
+            $this->namespace,
+            'get-lexicon-categories',
+            [ $this, 'get_lexicon_categories' ],
+            [ $this, 'lexicon_or_edit_permissions_check' ]
+        );
+        $get_lexicon_categories->useMiddleware( $cors );
+
         $clear_cache = new PostEndpoint(
             $this->namespace,
             'clear-cache',
@@ -179,6 +187,7 @@ class Admin extends BaseApiEndpoints {
             $update_lexicon_term,
             $delete_lexicon_term,
             $get_lexicon_terms,
+            $get_lexicon_categories,
             $clear_cache,
             $dashboard_metrics,
             $settings_revision,
@@ -837,6 +846,28 @@ class Admin extends BaseApiEndpoints {
                 'has_prev' => $page > 1,
             ],
         ];
+    }
+
+    public function get_lexicon_categories( $request ) {
+        unset( $request );
+		$terms = get_terms(
+			[
+				'taxonomy'   => Lexicon::CATEGORY_TAXONOMY,
+				'hide_empty' => false,
+			]
+		);
+        if ( is_wp_error( $terms ) ) {
+            return $terms;
+        }
+
+        return array_map(
+			static fn( $term ): array => [
+				'id'   => (int) $term->term_id,
+				'name' => (string) $term->name,
+				'slug' => (string) $term->slug,
+            ],
+            $terms
+        );
     }
 
 	private function is_admin_data_path_allowed( string $path ): bool {

@@ -27,10 +27,9 @@ class TranslationAiSettings {
 	/**
 	 * The translation settings sent with every job.
 	 *
-	 * @param string $language The target language the settings are for; empty for
-	 *                         the browser-bound copy that carries every term with its scope.
+	 * @param string $language The target language; empty includes every term when requested.
 	 */
-	public static function build( string $language = '' ): array {
+	public static function build( string $language = '', bool $include_lexicon = true ): array {
 		$translation_settings = array_merge(
 			[
 				'auto_translate'              => true,
@@ -69,7 +68,7 @@ class TranslationAiSettings {
 			'tone'                        => self::allowed_preset( (string) $style_settings['tone'], self::FREE_TONES, 'friendly' ),
 			'formality'                   => (int) $style_settings['formality'],
 			'creativity'                  => (int) $style_settings['creativity'],
-			'lexicon_terms'               => '' === $language ? Lexicon::get_all() : Lexicon::terms_for_language( $language ),
+			'lexicon_terms'               => $include_lexicon ? ( '' === $language ? Lexicon::get_all() : Lexicon::terms_for_language( $language ) ) : [],
 		];
 
 		return $settings + self::advanced_controls( $style_settings );

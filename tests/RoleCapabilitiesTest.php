@@ -135,10 +135,10 @@ function routes( array ...$sets ): array {
 	return $all;
 }
 
-const EDIT_ROUTES        = [ 'Admin POST create-lexicon-term', 'Admin GET get-lexicon-terms' ];
+const EDIT_ROUTES        = [ 'Admin POST create-lexicon-term', 'Admin GET get-lexicon-terms', 'Admin GET get-lexicon-categories' ];
 const RETRANSLATE_ROUTES = [ 'Admin GET retranslation-estimate', 'Indexing POST retranslate-page', 'Indexing POST retranslate-all', 'KeepWarmEndpoints POST apply-lexicon-now', 'KeepWarmEndpoints POST apply-localizer-now' ];
 const SETTINGS_ROUTES    = [ 'Admin GET get-post-types', 'Admin GET get-roles', 'Admin GET get-data', 'Admin POST update-data', 'Admin GET settings-revision', 'Admin POST switcher-position', 'KeepWarmEndpoints GET stale-translations' ];
-const LEXICON_ROUTES     = [ 'Admin POST create-lexicon-term', 'Admin POST update-lexicon-term', 'Admin POST delete-lexicon-term', 'Admin GET get-lexicon-terms', 'Admin GET get-data', 'KeepWarmEndpoints GET stale-translations', 'LexiconCandidates POST lexicon-candidates/scan', 'LexiconCandidates GET lexicon-candidates/scan', 'LexiconCandidates GET lexicon-candidates', 'LexiconCandidates POST lexicon-candidates/action' ];
+const LEXICON_ROUTES     = [ 'Admin POST create-lexicon-term', 'Admin POST update-lexicon-term', 'Admin POST delete-lexicon-term', 'Admin GET get-lexicon-terms', 'Admin GET get-lexicon-categories', 'Admin GET get-data', 'KeepWarmEndpoints GET stale-translations', 'LexiconCandidates POST lexicon-candidates/scan', 'LexiconCandidates GET lexicon-candidates/scan', 'LexiconCandidates GET lexicon-candidates', 'LexiconCandidates POST lexicon-candidates/action' ];
 
 /**
  * Whether the current user may read a settings path through get-data.
@@ -195,7 +195,7 @@ assert_true( [ [ 'edit' => false, 'retranslate' => false, 'settings' => false, '
 
 // --- Edit translations only ---
 editor_holds( [ 'edit_translations' ] );
-assert_true( routes( EDIT_ROUTES ) === reachable(), 'Edit only reaches Add to Lexicon and the term list, got ' . wp_json_encode( reachable() ) );
+assert_true( routes( EDIT_ROUTES ) === reachable(), 'Edit only reaches Add to Lexicon and the term and category lists, got ' . wp_json_encode( reachable() ) );
 assert_true( [] === menus(), 'Edit only has no admin menu' );
 assert_true( [ [ 'edit' => true, 'retranslate' => false, 'settings' => false, 'lexicon' => false ], false ] === page_flags(), 'Edit only: the edit flag, and canManage stays false' );
 assert_true( ! in_array( 'Admin GET get-data', reachable(), true ) && ! in_array( 'Admin POST update-data', reachable(), true ), 'Edit only reaches no settings data' );

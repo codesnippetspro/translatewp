@@ -60,7 +60,7 @@ export const getWordPressCategories = async () =>
 export const getWordPressLexiconCategories = async () =>
 {
     return await apiFetch({
-        path: '/wp/v2/lexicon_category?per_page=100&hide_empty=false',
+        path: '/translatewp/v1/admin/get-lexicon-categories',
         method: 'GET'
     });
 };

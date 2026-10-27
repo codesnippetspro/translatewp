@@ -16,6 +16,7 @@ class Migrations {
 
 	public const VERSION_OPTION = 'translatewp_version';
 	public const TRANSLATED_MARKS_OPTION = 'translatewp_translated_marks_backfilled';
+	public const LEXICON_PRIVATE_CACHE_PURGED_OPTION = 'translatewp_lexicon_private_cache_purged';
 
 	private const MIGRATIONS = [
 		'0.9.0-beta.1' => 'migrate_switcher_highlight_to_brand',
@@ -33,6 +34,11 @@ class Migrations {
 		$stored = (string) get_option( self::VERSION_OPTION, '' );
 
 		self::backfill_translated_marks();
+		if ( '' === $stored ) {
+			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+		} elseif ( version_compare( $stored, TRANSLATEWP_VERSION, '<=' ) ) {
+			self::purge_lexicon_private_cache_once();
+		}
 
 		if ( '' !== $stored && version_compare( $stored, TRANSLATEWP_VERSION, '>=' ) ) {
 			return;
@@ -80,7 +86,19 @@ class Migrations {
 		( new IndexQueue() )->delete_unindexable_rows();
 	}
 
+	private static function purge_lexicon_private_cache_once(): void {
+		if ( get_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION ) ) {
+			return;
+		}
+		// Mark before external cache hooks so a failing hook cannot repeat the purge on every init.
+		update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+		PageCachePurge::purge_all( 'lexicon_private' );
+	}
+
 	public static function seed_for_fresh_install(): void {
+		if ( '' === (string) get_option( self::VERSION_OPTION, '' ) ) {
+			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), false );
+		}
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 	}
 
