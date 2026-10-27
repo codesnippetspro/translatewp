@@ -20,7 +20,10 @@ class LanguageSlugs {
 				return new \WP_Error(
 					'invalid_language_address',
 					__( 'A language has an invalid code or address. Use letters, numbers, hyphens, underscores, periods or @.', 'translate' ),
-					[ 'status' => 400, 'locale' => sanitize_text_field( $locale ) ]
+					[
+						'status' => 400,
+						'locale' => sanitize_text_field( $locale ),
+					]
 				);
 			}
 		}
