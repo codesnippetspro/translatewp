@@ -1,7 +1,7 @@
 import { __ } from '@wordpress/i18n';
 import { FormToggle, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from '@wordpress/element';
+import { useId, useState } from '@wordpress/element';
 import { ColorPicker } from '@/shared/components/form/colorPicker';
 import { SwitcherTypeControl } from '@/apps/admin/components/Languages/Switcher/SwitcherTypeControl';
 import { ShowSelectedLanguageControl } from '@/apps/admin/components/Languages/Switcher/ShowSelectedLanguageControl';
@@ -31,30 +31,11 @@ const DEFAULT_TEXT_COLOR = '#393535';
 const TRANSPARENT_TEXT_COLOR = '#FFFFFF';
 const NATIVE_REASON = __('The native dropdown always shows the language name.', 'translate');
 
-const DESKTOP_QUERY = '(min-width: 1024px)';
-
 // A control reached with the keyboard scrolls into view below the sticky preview.
 const CLEAR_OF_PREVIEW = '[@media(min-height:640px)]:[&_:is(a,button,input,select,textarea,[tabindex])]:scroll-mt-64';
-
-const useDesktop = (): boolean =>
-{
-    const supported = typeof window !== 'undefined' && typeof window.matchMedia === 'function';
-    const [desktop, setDesktop] = useState(() => !supported || window.matchMedia(DESKTOP_QUERY).matches);
-
-    useEffect(() =>
-    {
-        if (!supported) {
-            return undefined;
-        }
-        const query = window.matchMedia(DESKTOP_QUERY);
-        const update = () => setDesktop(query.matches);
-        update();
-        query.addEventListener('change', update);
-        return () => query.removeEventListener('change', update);
-    }, [supported]);
-
-    return desktop;
-};
+const SECTION_CLASS = '@container flex min-w-0 flex-col gap-4 border-0 border-t border-solid border-translatewp-border py-8 [&>h3+p]:-mt-3';
+const FIRST_SECTION_CLASS = `${SECTION_CLASS} border-t-0 pt-0`;
+const TWO_COLUMN_GRID_CLASS = 'grid w-full min-w-0 grid-cols-1 gap-4 @min-[380px]:grid-cols-2 [&>*]:min-w-0';
 
 const FLAG_EXAMPLES = ['en-us', 'de', 'ja'];
 const flagExamples = (iconStyle: 'rectangle' | 'square' | 'circle') => <>{FLAG_EXAMPLES.map(locale => <span key={locale}>{getCountryFlagFromLocale(locale, { iconStyle })}</span>)}</>;
@@ -113,22 +94,6 @@ export const LanguagesSwitcher = () =>
     // presentationally only: no translation starts and no loading flag is saved.
     const [loadingPreview, setLoadingPreview] = useState(false);
 
-    // The translating message joins whichever desktop column is shorter once
-    // everything else is in place, measured once so no box moves while in use.
-    const desktop = useDesktop();
-    const leftColumn = useRef<HTMLDivElement>(null);
-    const rightColumn = useRef<HTMLDivElement>(null);
-    const [translatingMessageSide, setTranslatingMessageSide] = useState<'left' | 'right' | null>(null);
-
-    useLayoutEffect(() =>
-    {
-        if (!desktop || translatingMessageSide !== null) {
-            return;
-        }
-        const height = (column: HTMLElement | null) => column?.getBoundingClientRect().height ?? 0;
-        setTranslatingMessageSide(height(rightColumn.current) < height(leftColumn.current) ? 'right' : 'left');
-    }, [desktop, translatingMessageSide]);
-
     const snapBack = (key: MetricKey) => (event: { target: { value: string } }) =>
     {
         if (event.target.value === '' || !Number.isFinite(Number(event.target.value))) {
@@ -151,35 +116,8 @@ export const LanguagesSwitcher = () =>
         updateSetting(key, parsed < 0 ? 0 : Math.trunc(parsed));
     };
 
-    const whereItShows = (
-        <div data-switcher-section="where" className="flex min-w-0 flex-col gap-6">
-            <div className="rounded-lg border border-translatewp-border p-5">
-                <WhereItShows />
-            </div>
-            {settings.inline_placement && (
-            <div className="rounded-lg border border-translatewp-border p-5" data-anchor-fallback>
-                <div className='flex flex-col gap-2'>
-                    <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Pages without the placed spot', 'translate')}</h3>
-                    <p className='text-sm text-translatewp-muted!'>{__('Your switcher is placed next to an element of your site. On a page that does not have that element, show this instead.', 'translate')}</p>
-                    <OptionCards
-                        name="anchor-fallback"
-                        label={__('Pages without the placed spot', 'translate')}
-                        columns={2}
-                        value={settings.anchor_fallback ?? 'floating'}
-                        onChange={(value) => updateSetting('anchor_fallback', value)}
-                        options={[
-                            { value: 'floating', label: __('Show the floating switcher', 'translate'), description: __('The corner widget, as on a site with no anchor.', 'translate') },
-                            { value: 'none', label: __('Show no switcher', 'translate'), description: __('The page has no switcher; visitors use the language addresses.', 'translate') },
-                        ]}
-                    />
-                </div>
-            </div>
-            )}
-        </div>
-    );
-
     const translatingMessage = (
-        <div data-switcher-section="pending-message" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-2" data-pending-message>
+        <div data-switcher-section="pending-message" className={SECTION_CLASS} data-pending-message>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Translating message', 'translate')}</h3>
             <p className='text-sm text-translatewp-muted!'>{__('Shown to a visitor when a page takes longer than a few seconds to translate. Leave empty for the default line.', 'translate')}</p>
             <TextControl
@@ -197,7 +135,7 @@ export const LanguagesSwitcher = () =>
     );
 
     const languageNames = (
-        <div data-switcher-section="language-names" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-2" data-switcher-language-names>
+        <div data-switcher-section="language-names" className={SECTION_CLASS} data-switcher-language-names>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Language names', 'translate')}</h3>
             <p className='text-sm text-translatewp-muted!'>{__('How the switcher names a language that has a region.', 'translate')}</p>
             <ToggleControl label={
@@ -221,22 +159,22 @@ export const LanguagesSwitcher = () =>
     );
 
     const colors = (
-        <div data-switcher-section="colors" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4">
+        <div data-switcher-section="colors" className={SECTION_CLASS}>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Colors', 'translate')}</h3>
             {settings.background_style === 'transparent' && (
                 <p className='text-sm text-translatewp-muted! m-0' data-background-color-note>{__('With Transparent, the background colour is used for the open language list, which stays frosted so it reads over the page.', 'translate')}</p>
             )}
-            <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-primary-colors>
+            <div className={TWO_COLUMN_GRID_CLASS} data-primary-colors>
                 <ColorPicker label={__('Text color', 'translate')} value={settings.text_color} onChange={(value) => updateSetting('text_color', value)} />
                 <ColorPicker label={__('Background color', 'translate')} value={settings.background_color} onChange={(value) => updateSetting('background_color', value)} />
             </div>
             <Unavailable when={native} reason={__('The native dropdown\'s list is drawn by the browser, which chooses its own highlight.', 'translate')}>
-                <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-highlight-colors>
+                <div className={TWO_COLUMN_GRID_CLASS} data-highlight-colors>
                     <ColorPicker label={__('Highlight text color', 'translate')} value={settings.highlight_text} onChange={(value) => updateSetting('highlight_text', value)} />
                     <ColorPicker label={__('Highlight background', 'translate')} value={settings.highlight_bg} onChange={(value) => updateSetting('highlight_bg', value)} />
                 </div>
             </Unavailable>
-            <div className="grid w-full min-w-0 grid-cols-2 gap-4 [&>*]:min-w-0" data-border-colors>
+            <div className={TWO_COLUMN_GRID_CLASS} data-border-colors>
                 <ColorPicker label={__('Border color', 'translate')} value={settings.border_color} onChange={(value) => updateSetting('border_color', value)} />
                 <ColorPicker label={__('Loading border color', 'translate')} value={settings.loading_border_color} onChange={(value) => updateSetting('loading_border_color', value)} onOpenChange={setLoadingPreview} />
             </div>
@@ -244,22 +182,42 @@ export const LanguagesSwitcher = () =>
     );
 
     const preview = (
-        <div data-switcher-section="preview" className="top-[var(--wp-admin--admin-bar--height,32px)] z-10 [@media(min-height:640px)]:sticky" data-switcher-preview-column>
-            <div className="rounded-lg border border-translatewp-border bg-white/45 p-5 backdrop-blur-lg backdrop-saturate-150 [&_[data-twp-switcher-preview]]:bg-translatewp-neutral/5! [&_[data-twp-switcher-preview]]:border-translatewp-border/60! [&_[data-twp-switcher-preview]]:justify-center">
+        <div data-switcher-section="preview" className="order-first mb-4 min-w-0 min-[1280px]:order-none min-[1280px]:col-start-2 min-[1280px]:row-start-1 min-[1280px]:mb-0 min-[1280px]:sticky min-[1280px]:top-[calc(var(--wp-admin--admin-bar--height,32px)+16px)]" data-switcher-preview-column>
+            <div className="flex flex-col gap-4 rounded-lg border border-translatewp-border bg-white/45 p-5 backdrop-blur-lg backdrop-saturate-150 [&_[data-twp-switcher-preview]]:bg-translatewp-neutral/5! [&_[data-twp-switcher-preview]]:border-translatewp-border/60! [&_[data-twp-switcher-preview]]:justify-center">
                 <SwitcherPreview previewLoading={loadingPreview} />
+                <WhereItShows />
+                {settings.inline_placement && (
+                    <div className="@container flex flex-col gap-4 border-t border-translatewp-border pt-4" data-anchor-fallback>
+                        <div className='flex flex-col gap-1'>
+                            <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Pages without the placed spot', 'translate')}</h3>
+                            <p className='m-0! text-sm text-translatewp-muted!'>{__('Your switcher is placed next to an element of your site. On a page that does not have that element, show this instead.', 'translate')}</p>
+                        </div>
+                        <OptionCards
+                            name="anchor-fallback"
+                            label={__('Pages without the placed spot', 'translate')}
+                            columns={2}
+                            value={settings.anchor_fallback ?? 'floating'}
+                            onChange={(value) => updateSetting('anchor_fallback', value)}
+                            options={[
+                                { value: 'floating', label: __('Show the floating switcher', 'translate'), description: __('The corner widget, as on a site with no anchor.', 'translate') },
+                                { value: 'none', label: __('Show no switcher', 'translate'), description: __('The page has no switcher; visitors use the language addresses.', 'translate') },
+                            ]}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
 
     const switcherType = (
-        <div data-switcher-section="type" className="rounded-lg border border-translatewp-border p-5 flex min-w-0 flex-col gap-2">
+        <div data-switcher-section="type" className={FIRST_SECTION_CLASS}>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Switcher type', 'translate')}</h3>
             <SwitcherTypeControl value={renderedSwitcherType(settings.type)} onChange={(type) => updateSetting('type', type)} />
         </div>
     );
 
     const showSelectedLanguage = (
-        <div data-switcher-section="show-selected" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-2">
+        <div data-switcher-section="show-selected" className={SECTION_CLASS}>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Show selected language', 'translate')}</h3>
             <p className='text-sm text-translatewp-muted!'>{__('What the closed switcher shows, so visitors know it is a language switcher and which language is active.', 'translate')}</p>
             <Unavailable when={native} reason={NATIVE_REASON}>
@@ -269,7 +227,7 @@ export const LanguagesSwitcher = () =>
     );
 
     const flagIconStyle = (
-        <div data-switcher-section="flag-style" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4">
+        <div data-switcher-section="flag-style" className={SECTION_CLASS}>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Flag icon style', 'translate')}</h3>
             <ToggleControl label={
                 <div className='flex flex-col gap-1'>
@@ -299,7 +257,7 @@ export const LanguagesSwitcher = () =>
     );
 
     const background = (
-        <div data-switcher-section="background" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-2" data-switcher-background>
+        <div data-switcher-section="background" className={SECTION_CLASS} data-switcher-background>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Background', 'translate')}</h3>
             <p className='text-sm text-translatewp-muted!'>{__('How the switcher sits on your page. Transparent and Matte glass let a photo or video show through; the preview shows them on a busy background.', 'translate')}</p>
             <OptionCards
@@ -313,11 +271,11 @@ export const LanguagesSwitcher = () =>
     );
 
     const sizes = (
-        <div data-switcher-section="sizes" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4" data-switcher-sizes>
+        <div data-switcher-section="sizes" className={SECTION_CLASS} data-switcher-sizes>
             <h3 className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Sizes', 'translate')}</h3>
             {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The native dropdown is sized by the browser; only the offset applies.', 'translate')}</p>}
             {sideTab && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The side tab sits on the screen edge, so the offset does not apply.', 'translate')}</p>}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 @min-[380px]:grid-cols-2 @min-[500px]:grid-cols-3">
                 <div className={native ? 'pointer-events-none opacity-50' : ''} aria-disabled={native || undefined} data-size-icon>
                 <NumberControl
                     key={`icon_size-${metricKeys.icon_size}`}
@@ -368,52 +326,24 @@ export const LanguagesSwitcher = () =>
     );
 
     const support = <SupportTranslatewp />;
-    const column = (side: 'left' | 'right') => (
-        <div className="flex min-w-0 flex-col gap-6" ref={side === 'left' ? leftColumn : rightColumn} data-switcher-column={side}>
-            {side === 'left' ? (
-                <>
-                    {whereItShows}
-                    {flagIconStyle}
-                    {background}
-                    {colors}
-                </>
-            ) : (
-                <>
-                    {preview}
-                    {switcherType}
-                    {showSelectedLanguage}
-                    {languageNames}
-                    {sizes}
-                </>
-            )}
-            {translatingMessageSide === side && translatingMessage}
-            {side === 'right' && support}
-        </div>
-    );
 
     return (
         <div className='flex flex-col gap-8 min-w-0'>
             <ManagedByNetwork group="switcher_appearance">
-            {desktop ? (
-                <div className={`grid grid-cols-2 items-start gap-6 ${CLEAR_OF_PREVIEW}`} data-switcher-layout>
-                    {column('left')}
-                    {column('right')}
-                </div>
-            ) : (
-                <div className={`flex min-w-0 flex-col gap-6 ${CLEAR_OF_PREVIEW}`} data-switcher-layout>
-                    {whereItShows}
-                    {preview}
+                <div className={`grid min-w-0 grid-cols-1 items-start min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1280px]:gap-x-10 ${CLEAR_OF_PREVIEW}`} data-switcher-layout>
+                    <div className="min-w-0 min-[1280px]:col-start-1 min-[1280px]:row-start-1" data-switcher-column="settings">
                     {switcherType}
                     {showSelectedLanguage}
                     {flagIconStyle}
-                    {background}
-                    {colors}
                     {languageNames}
                     {sizes}
+                    {background}
+                    {colors}
                     {translatingMessage}
                     {support}
+                    </div>
+                    {preview}
                 </div>
-            )}
             </ManagedByNetwork>
         </div>
     )
@@ -451,7 +381,7 @@ const SupportTranslatewp = () =>
     );
 
     return (
-        <div data-switcher-section="support" className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4" data-support-translatewp>
+        <div data-switcher-section="support" className={SECTION_CLASS} data-support-translatewp>
             <div className='flex items-center gap-2'>
                 <span id={nameId} className='text-sm font-bold text-translatewp-neutral'>{__('Support TranslateWP', 'translate')}</span>
                 {!orbital && <ProMarker />}

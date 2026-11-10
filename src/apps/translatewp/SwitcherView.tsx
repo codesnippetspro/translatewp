@@ -415,6 +415,17 @@ export function SwitcherView({
                     inset-inline-end: auto !important;
                     align-items: flex-start !important;
                 }
+                .twp-inline[data-preview="true"] {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: flex-start !important;
+                }
+                .twp-inline[data-preview="true"] .twp-popover-stack {
+                    position: static !important;
+                    inset: auto !important;
+                    margin-top: 0.25rem !important;
+                    align-items: flex-start !important;
+                }
                 .twp-trigger {
                     display: flex !important;
                     align-items: center !important;
@@ -826,7 +837,7 @@ export function SwitcherView({
 				data-mobile-edge={sideTab ? tabPlaceMobile.edge : undefined}
 				data-half={sideTab ? sideTabHalf(tabPlace) : undefined}
 				data-mobile-half={sideTab ? sideTabHalf(tabPlaceMobile) : undefined}
-				data-preview={sideTab && variant === 'preview' ? 'true' : undefined}
+				data-preview={variant === 'preview' ? 'true' : undefined}
 				data-dragging={triggerBindings?.['data-dragging'] ? 'true' : undefined}
 				style={sideTab
 					? { '--twp-tab-share': String(tabPlace.offset), '--twp-tab-share-mobile': String(tabPlaceMobile.offset) } as React.CSSProperties
