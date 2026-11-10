@@ -90,12 +90,16 @@ export const WhereItShows = () =>
     const inlineLine = __('Anchor the switcher to any element of the page, on the side where it should sit, from edit mode on your site.', 'translate');
 
     return (
-        <div data-twp-where-it-shows className="flex flex-col gap-4">
+        <section
+            data-twp-where-it-shows
+            className="flex flex-col gap-4"
+            aria-labelledby="twp-switcher-placement"
+        >
             <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-sm font-bold text-translatewp-neutral!">
+                    <h3 id="twp-switcher-placement" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
                         {sideTab ? __('Side tab', 'translate') : __('Floating switcher', 'translate')}
-                    </span>
+                    </h3>
                     {saved && (
                         <Button variant="secondary" size="small" onClick={resetPosition}>{__('Reset position', 'translate')}</Button>
                     )}
@@ -165,6 +169,6 @@ export const WhereItShows = () =>
                 )}
                 </div>
             </details>
-        </div>
+        </section>
     );
 };

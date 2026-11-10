@@ -71,7 +71,11 @@ export const SETTINGS_PAGES = [
         title: __('AI models', 'translate'),
         heading: __('AI models', 'translate'),
         description: __('Choose the AI models used to translate your content.', 'translate'),
-        content: <AiProviders embedded />,
+        content: (
+            <section aria-labelledby="twp-ai-models">
+                <AiProviders embedded />
+            </section>
+        ),
     },
 ] as SettingsPageDefinition[];
 
@@ -93,6 +97,7 @@ export const SettingsPage = () =>
         <div className="flex flex-col">
             <PageHeader
                 title={current?.heading}
+                titleId={current?.name === 'ai-model' ? 'twp-ai-models' : undefined}
                 description={current?.description}
             />
 

@@ -120,7 +120,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     // The section renders only once the languages and pages are known, so it is brought into view as it mounts.
     const scrolledToPending = useRef(false);
-    const pendingSectionRef = (element: HTMLDivElement | null) =>
+    const pendingSectionRef = (element: HTMLElement | null) =>
     {
         if (!element || !openedForPending || scrolledToPending.current) return;
         scrolledToPending.current = true;
@@ -295,8 +295,8 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     if (!hasTargetLanguage) {
         return (
-            <div className="flex flex-col gap-1">
-                <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+            <section className="flex flex-col gap-1" aria-labelledby="twp-indexed-pages">
+                <h3 id="twp-indexed-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                     {__('Pages', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -304,16 +304,21 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                         {__('Add a target language first', 'translate')}
                     </a>
                 </p>
-            </div>
+            </section>
         );
     }
 
     return (
-        <div className="flex flex-col gap-3" id={PENDING_PAGES_SECTION} ref={pendingSectionRef}>
+        <section
+            className="flex flex-col gap-3"
+            id={PENDING_PAGES_SECTION}
+            ref={pendingSectionRef}
+            aria-labelledby="twp-indexed-pages"
+        >
             <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                     {getCountryFlagFromLocale(activeLanguage)}
-                    <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+                    <h3 id="twp-indexed-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                         {sprintf(
                             /* translators: %s: target language name. */
                             __('Pages in %s', 'translate'),
@@ -550,7 +555,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
             )}
 
             <ConfirmDialog {...confirmDialogProps} />
-        </div>
+        </section>
     );
 };
 

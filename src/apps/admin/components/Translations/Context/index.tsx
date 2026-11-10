@@ -114,9 +114,15 @@ export const TranslationsContext = () =>
     });
 
     return (
-        <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch lg:col-span-2" data-translation-context>
+        <section
+            className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch lg:col-span-2"
+            data-translation-context
+            aria-labelledby="twp-site-context"
+        >
             <div className="flex flex-col gap-1">
-                <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{ __('Site context', 'translate') }</h3>
+                <h3 id="twp-site-context" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                    { __('Site context', 'translate') }
+                </h3>
                 <p className="text-sm text-translatewp-muted!">{ __('What the translation AI should know about your site: who it is for, what it sells, how it speaks. The scan writes this brief for you; edit it freely.', 'translate') }</p>
             </div>
 
@@ -209,6 +215,6 @@ export const TranslationsContext = () =>
                 ) }
 
             </div>
-        </div>
+        </section>
     );
 }

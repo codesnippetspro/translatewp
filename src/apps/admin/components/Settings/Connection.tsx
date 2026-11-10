@@ -29,13 +29,23 @@ export const SettingsConnection = () =>
     return (
         <div className="flex flex-col gap-10">
 
-            <div className="flex flex-col gap-4">
-                <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Site connection', 'translate')}</h3>
+            <section className="flex flex-col gap-4" aria-labelledby="twp-site-connection">
+                <h3
+                    id="twp-site-connection"
+                    className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0"
+                >
+                    {__('Site connection', 'translate')}
+                </h3>
                 <ConnectionPanel />
-            </div>
+            </section>
 
-            <div className="flex flex-col gap-4">
-                <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Setup wizard', 'translate')}</h3>
+            <section className="flex flex-col gap-4" aria-labelledby="twp-setup-wizard">
+                <h3
+                    id="twp-setup-wizard"
+                    className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0"
+                >
+                    {__('Setup wizard', 'translate')}
+                </h3>
                 <p className="text-sm text-translatewp-muted! m-0">
                     {__('Reopen the setup wizard. Your languages, translation settings, and connection stay intact; the wizard opens prefilled.', 'translate')}
                 </p>
@@ -49,18 +59,23 @@ export const SettingsConnection = () =>
                         {__('Restart setup wizard', 'translate')}
                     </Button>
                 </div>
-            </div>
+            </section>
 
             {networkUrl && (
-                <div className="flex flex-col gap-4">
-                    <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Network', 'translate')}</h3>
+                <section className="flex flex-col gap-4" aria-labelledby="twp-connection-network">
+                    <h3
+                        id="twp-connection-network"
+                        className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0"
+                    >
+                        {__('Network', 'translate')}
+                    </h3>
                     <p className="text-sm text-translatewp-muted! m-0">
                         {__('Choose which settings the network shares, locks or leaves to each subsite.', 'translate')}
                     </p>
                     <div>
                         <Button variant="secondary" href={networkUrl}>{__('Open network settings', 'translate')}</Button>
                     </div>
-                </div>
+                </section>
             )}
 
             {errorMessage && <p className="text-sm text-translatewp-error m-0" role="alert">{errorMessage}</p>}
