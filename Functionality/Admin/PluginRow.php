@@ -2,6 +2,7 @@
 
 namespace TranslateWP\Functionality\Admin;
 
+use TranslateWP\Components\Access;
 use TranslateWP\Components\ProEligibility;
 
 /**
@@ -18,13 +19,43 @@ class PluginRow {
 		if ( defined( 'TRANSLATEWP_BASENAME' ) ) {
 			add_filter( 'plugin_action_links_' . TRANSLATEWP_BASENAME, [ $this, 'action_links' ] );
 			add_filter( 'network_admin_plugin_action_links_' . TRANSLATEWP_BASENAME, [ $this, 'action_links' ] );
+			$addon_file = ProEligibility::addon_basename();
+			add_filter( 'plugin_action_links_' . $addon_file, [ $this, 'settings_link' ] );
+			add_filter( 'network_admin_plugin_action_links_' . $addon_file, [ $this, 'settings_link' ] );
 			add_filter( 'plugin_row_meta', [ $this, 'row_meta' ], 10, 3 );
 		}
 	}
 
+	public function settings_link( $actions ) {
+		if ( ! is_array( $actions ) ) {
+			return $actions;
+		}
+
+		if ( is_network_admin() ) {
+			if ( ! current_user_can( 'manage_network_options' ) ) {
+				return $actions;
+			}
+			$url = network_admin_url( 'admin.php?page=' . MultisiteSettingsPage::PAGE_SLUG . '#settings' );
+		} else {
+			if ( ! current_user_can( Access::SETTINGS ) ) {
+				return $actions;
+			}
+			$url = admin_url( 'admin.php?page=translatewp-settings' );
+		}
+
+		return [ 'settings' => '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'translate' ) . '</a>' ] + $actions;
+	}
+
 	public function row_meta( $links, $plugin_file, $plugin_data ) {
 		$files = [ TRANSLATEWP_BASENAME, ProEligibility::addon_basename() ];
-		if ( ! in_array( $plugin_file, $files, true ) || empty( $plugin_data['AuthorURI'] ) ) {
+		if ( ! in_array( $plugin_file, $files, true ) ) {
+			return $links;
+		}
+
+		$links[] = '<a href="' . esc_url( 'https://translatewp.ai/docs/' ) . '">' . esc_html__( 'Docs', 'translate' ) . '</a>';
+		$links[] = '<a href="' . esc_url( 'https://translatewp.ai/support/' ) . '">' . esc_html__( 'Support', 'translate' ) . '</a>';
+
+		if ( empty( $plugin_data['AuthorURI'] ) ) {
 			return $links;
 		}
 
@@ -51,6 +82,7 @@ class PluginRow {
 	 * @param mixed $actions The row's actions, keyed by name.
 	 */
 	public function action_links( $actions ) {
+		$actions = $this->settings_link( $actions );
 		if ( ! is_array( $actions ) || ! ProEligibility::is_installed() ) {
 			return $actions;
 		}
