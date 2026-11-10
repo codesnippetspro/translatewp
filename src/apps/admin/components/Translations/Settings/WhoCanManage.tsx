@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getTranslationManagers, saveRolePermissions, saveTranslationManagers, type RolePermissions, type TranslationManager, type TranslationManagersCard } from '@/shared/api/admin';
 import { ManagedByNetworkNote } from '@/shared/components/managedByNetwork';
+import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 import { canAdminister } from '@/shared/lib/access';
 
 const QUERY_KEY = ['translationManagers'];
@@ -54,43 +55,48 @@ export const WhoCanManage = () =>
             {!editable && <ManagedByNetworkNote />}
             {isError && <p className="text-sm text-translatewp-error m-0" role="alert">{__('The roles could not be loaded. Reload the page to try again.', 'translate')}</p>}
             {data && (
-                <div className="max-w-full overflow-x-auto focus-visible:outline-2! focus-visible:outline-solid! focus-visible:outline-offset-2! focus-visible:outline-translatewp-primary!" tabIndex={0}
-                    role="region" aria-label={__('Who can manage translations', 'translate')}>
-                    <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
-                        <thead>
-                            <tr className="text-start text-translatewp-muted">
-                                <th className="px-3 py-2 font-semibold text-start">{__('Role', 'translate')}</th>
-                                {CAPABILITIES.map(capability => <th key={capability.key} className="px-3 py-2 font-semibold text-start">{capability.label}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr className="border-t border-translatewp-border" data-role-row="administrator">
-                                <td className="px-3 py-2 font-semibold text-translatewp-neutral">{data.administratorName ?? __('Administrator', 'translate')}</td>
-                                {CAPABILITIES.map(capability => (
-                                    <td key={capability.key} className="px-3 py-2">
-                                        <input type="checkbox" checked disabled readOnly aria-label={`${data.administratorName ?? __('Administrator', 'translate')}: ${capability.label}`} />
-                                    </td>
-                                ))}
-                            </tr>
-                            {roleList.map(role => (
-                                <tr key={role.slug} className="border-t border-translatewp-border" data-role-row={role.slug}>
-                                    <td className="px-3 py-2 font-semibold text-translatewp-neutral">{role.name}</td>
-                                    {CAPABILITIES.map(capability => (
-                                        <td key={capability.key} className="px-3 py-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={holds(capability.key, role.slug)}
-                                                disabled={!editable || busy}
-                                                aria-label={`${role.name}: ${capability.label}`}
-                                                onChange={event => toggle(capability.key, role.slug, event.target.checked)}
-                                            />
-                                        </td>
-                                    ))}
-                                </tr>
+                <Table
+                    containerProps={{
+                        className: 'focus-visible:outline-2! focus-visible:outline-solid! focus-visible:outline-offset-2! focus-visible:outline-translatewp-primary!',
+                        tabIndex: 0,
+                        role: 'region',
+                        'aria-label': __('Who can manage translations', 'translate'),
+                    }}
+                    header={(
+                        <TableHeaderRow>
+                            <TableCell variant="header">{__('Role', 'translate')}</TableCell>
+                            {CAPABILITIES.map(capability => (
+                                <TableCell key={capability.key} variant="header" align="center">{capability.label}</TableCell>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableHeaderRow>
+                    )}
+                >
+                    <TableRow data-role-row="administrator">
+                        <TableCell variant="row-header">{data.administratorName ?? __('Administrator', 'translate')}</TableCell>
+                        {CAPABILITIES.map(capability => (
+                            <TableCell key={capability.key} align="center">
+                                <input className="m-0! align-middle" type="checkbox" checked disabled readOnly aria-label={`${data.administratorName ?? __('Administrator', 'translate')}: ${capability.label}`} />
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                    {roleList.map(role => (
+                        <TableRow key={role.slug} data-role-row={role.slug}>
+                            <TableCell variant="row-header">{role.name}</TableCell>
+                            {CAPABILITIES.map(capability => (
+                                <TableCell key={capability.key} align="center">
+                                    <input
+                                        className="m-0! align-middle"
+                                        type="checkbox"
+                                        checked={holds(capability.key, role.slug)}
+                                        disabled={!editable || busy}
+                                        aria-label={`${role.name}: ${capability.label}`}
+                                        onChange={event => toggle(capability.key, role.slug, event.target.checked)}
+                                    />
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </Table>
             )}
             <p className="text-sm text-translatewp-muted! m-0">
                 {__('Edit translations opens edit mode, the editor and Add to Lexicon. Retranslate uses quota. Manage settings covers the translation and switcher settings. The connection, languages, your own AI key, billing and the Advanced page stay with administrators. Everyone sees the translated site.', 'translate')}
