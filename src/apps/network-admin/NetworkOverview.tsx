@@ -36,7 +36,7 @@ export const NetworkOverview = ({ data, subsitesHref }: { data: NetworkAdminData
     return (
         <>
             <ProStatus pro={data.connection.pro} onlyWhenActionable framed />
-            <Section title={__('Network at a glance', 'translate')}>
+            <Section heading={__('Network at a glance', 'translate')}>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                     <Card title={__('Subsites', 'translate')}>
                         <div className="flex flex-wrap gap-8">

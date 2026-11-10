@@ -327,7 +327,7 @@ export const SettingsScopeSection = ({ scope, form, account = null, proActive = 
 
     return (
         <Section
-            title={__('Settings scope', 'translate')}
+            heading={__('Settings scope', 'translate')}
             description={__('Choose who sets each group of settings, set the network value, and make exceptions for chosen subsites.', 'translate')}
         >
             {scope.status === 'scope-saved' && (

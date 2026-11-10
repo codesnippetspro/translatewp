@@ -99,7 +99,10 @@ export const Dashboard = () =>
                 )}
 
                 {/* The controls follow the figures, on the same store as Settings. */}
-                <Section title="Quick settings" description="The main settings, right here. Everything else lives under Settings.">
+                <Section
+                    heading={__("Quick settings", "translate")}
+                    description={__("The main settings, right here. Everything else lives under Settings.", "translate")}
+                >
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                         <LanguagesCard />
                         <TranslationCard />
@@ -157,12 +160,12 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
 {
     return (
         <>
-            <Section title="Today" description={__("Since midnight.", "translate")}>
+            <Section heading={__("Today", "translate")} description={__("Since midnight.", "translate")}>
                 <SummaryStats data={data} />
             </Section>
 
             <Section
-                title="Usage"
+                heading={__("Usage", "translate")}
                 description={connected
                     ? __("What is available to your account and where the translations went.", "translate")
                     : __("Where the translations went.", "translate")}
@@ -199,7 +202,10 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                 </div>
             </Section>
 
-            <Section title="Content" description="The pages visitors read most in another language, and the terms you fixed lately.">
+            <Section
+                heading={__("Content", "translate")}
+                description={__("The pages visitors read most in another language, and the terms you fixed lately.", "translate")}
+            >
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     <Card title="Most translated content">
                         {data.recentContent.length === 0 ? (
