@@ -1,4 +1,5 @@
-import { useEffect, useRef } from '@wordpress/element';
+import { useEffect, useId, useRef } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
@@ -27,6 +28,7 @@ export const Drawer = ({
 }: DrawerProps) =>
 {
     const previousOverflowRef = useRef<string | null>( null );
+    const titleId = useId();
 
     useEffect( () =>
     {
@@ -83,17 +85,23 @@ export const Drawer = ({
             <div
                 role="dialog"
                 aria-modal="true"
+                aria-labelledby={title ? titleId : undefined}
                 className={`absolute end-0 top-0 h-full bg-white shadow-xl transition-transform translate-x-0 ${widthClassName ?? 'w-80 sm:w-96'} ${className ?? ''}`}
                 onClick={( event ) => event.stopPropagation()}
             >
                 <div className="h-full overflow-y-auto px-7 py-8 flex flex-col gap-8">
                     {(title || showCloseButton) && (
                         <div className="flex items-center justify-between">
-                            <span className="text-lg font-semibold text-translatewp-neutral">{title}</span>
+                            {title && <h2 id={titleId} className="m-0! text-lg font-semibold text-translatewp-neutral">{title}</h2>}
                             
                             {showCloseButton && (
-                                <button type="button" className="text-translatewp-icons bg-white border-0 hover:text-translatewp-primary" onClick={onClose}>
-                                    <X className="w-6 h-6 text-translatewp-grip" />
+                                <button
+                                    type="button"
+                                    className="text-translatewp-icons bg-white border-0 hover:text-translatewp-primary"
+                                    onClick={onClose}
+                                    aria-label={__('Close', 'translate')}
+                                >
+                                    <X className="w-6 h-6 text-translatewp-grip" aria-hidden="true" />
                                 </button>
                             )}
                         </div>

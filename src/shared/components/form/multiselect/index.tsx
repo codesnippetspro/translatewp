@@ -141,7 +141,7 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
                     type="text"
                     value={filterValue}
                     placeholder={placeholder ?? 'Filter options'}
-                    className="min-w-0 flex-1 bg-transparent text-translatewp-neutral! text-sm! border-none! focus:ring-0! focus:outline-none!"
+                    className="min-w-0 flex-1 bg-transparent text-translatewp-neutral! text-[13px]! border-none! focus:ring-0! focus:outline-none!"
                     onChange={(event) => setFilterValue(event.target.value)}
                     onFocus={() => setIsOpen(true)}
                     onKeyDown={(event) =>
