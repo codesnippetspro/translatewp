@@ -187,15 +187,15 @@ export const Lexicon = () =>
     return (
         <div className="flex flex-col">
             <PageHeader
-                title="Lexicon"
-                description="Manage the lexicon of your website"
+                title={__('Lexicon', 'translate')}
+                description={__('Manage the lexicon of your website', 'translate')}
                 actions={(
                     <>
                         <Button variant='primary' className='rounded-sm! w-fit' onClick={() => {
                             setDrawerContext('add');
                             setSelectedTerm(null);
                             setIsDrawerOpen(true);
-                        }}>Add term</Button>
+                        }}>{__('Add term', 'translate')}</Button>
                         {stalePages > 0 && managerCan().retranslate && (
                             <Button
                                 variant='secondary'

@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 // A Pro inline placement is stored as a reproducible
 // description of where the switcher goes in the document, never as viewport
 // coordinates: an anchor is the CSS path of an element and the side of it the
@@ -14,11 +15,11 @@ export type InlinePlacement =
 export const SWITCHER_ZONES: SwitcherZone[] = ['header', 'before_content', 'after_content', 'sidebar', 'footer'];
 
 export const ZONE_LABELS: Record<SwitcherZone, string> = {
-    header: 'Header',
-    before_content: 'Before content',
-    after_content: 'After content',
-    sidebar: 'Sidebar',
-    footer: 'Footer',
+    header: __('Header', 'translate'),
+    before_content: __('Before content', 'translate'),
+    after_content: __('After content', 'translate'),
+    sidebar: __('Sidebar', 'translate'),
+    footer: __('Footer', 'translate'),
 };
 
 const ZONE_SELECTORS: Record<SwitcherZone, string[]> = {

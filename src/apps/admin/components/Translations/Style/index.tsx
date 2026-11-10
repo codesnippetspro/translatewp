@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { useAdminSettingsStore, type TranslationsStyle as TranslationsStyleType } from "@/apps/admin/stores/settingsStore";
 
 import { Range } from "@/shared/components/form/range";
@@ -32,9 +33,9 @@ export const TranslationsStyle = () =>
         <div className="flex flex-col gap-6 lg:col-span-2" data-translation-style>
             <ManagedByNetwork group="style_tone">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <StyleCard title="Preset style">
+                <StyleCard title={__('Preset style', 'translate')}>
                     <CustomOption
-                        feature="Custom style"
+                        feature={__('Custom style', 'translate')}
                         slot="translationStyle"
                         kind="style"
                         selected={style.type}
@@ -42,9 +43,9 @@ export const TranslationsStyle = () =>
                     />
                 </StyleCard>
 
-                <StyleCard title="Preset tone">
+                <StyleCard title={__('Preset tone', 'translate')}>
                     <CustomOption
-                        feature="Custom tone"
+                        feature={__('Custom tone', 'translate')}
                         slot="translationTone"
                         kind="tone"
                         selected={style.tone}
@@ -52,11 +53,11 @@ export const TranslationsStyle = () =>
                     />
                 </StyleCard>
 
-                <StyleCard title="Precision vs fluency">
+                <StyleCard title={__('Precision vs fluency', 'translate')}>
                     <Range
-                        label="Precision vs fluency"
-                        beginningLabel="Precise (literal)"
-                        endingLabel="Creative (fluid)"
+                        label={__('Precision vs fluency', 'translate')}
+                        beginningLabel={__('Precise (literal)', 'translate')}
+                        endingLabel={__('Creative (fluid)', 'translate')}
                         min={0}
                         max={10}
                         step={1}
@@ -65,11 +66,11 @@ export const TranslationsStyle = () =>
                     />
                 </StyleCard>
 
-                <StyleCard title="Formality">
+                <StyleCard title={__('Formality', 'translate')}>
                     <Range
-                        label="Formality"
-                        beginningLabel="Informal"
-                        endingLabel="Formal"
+                        label={__('Formality', 'translate')}
+                        beginningLabel={__('Informal', 'translate')}
+                        endingLabel={__('Formal', 'translate')}
                         min={0}
                         max={10}
                         step={1}

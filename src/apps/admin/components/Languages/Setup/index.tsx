@@ -187,9 +187,9 @@ export const LanguagesSetup = () =>
             <DefaultLanguageControl />
 
             <section className="flex flex-col gap-8" aria-labelledby="twp-translation-languages">
-                <Button variant='primary' className='rounded-sm! w-fit' onClick={handleAddLanguage}>Add languages</Button>
+                <Button variant='primary' className='rounded-sm! w-fit' onClick={handleAddLanguage}>{__('Add languages', 'translate')}</Button>
 
-                <h3 id="twp-translation-languages" className="font-semibold text-base! text-translatewp-neutral!">Translation languages</h3>
+                <h3 id="twp-translation-languages" className="font-semibold text-base! text-translatewp-neutral!">{__('Translation languages', 'translate')}</h3>
 
                 {isLoading ? (
                     <div className="flex items-center justify-center py-12">

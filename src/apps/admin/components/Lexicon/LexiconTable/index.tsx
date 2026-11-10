@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { Button } from '@wordpress/components';
 import { Pencil, Trash2 } from 'lucide-react';
 import { getCountryFlagFromLocale, getLanguageNameFromLocale } from '@/shared/lib/languages';
@@ -24,18 +25,18 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
     return (
         <Table>
             <TableHeaderRow>
-                <TableCell variant="header">Term</TableCell>
-                <TableCell variant="header">Languages</TableCell>
-                <TableCell variant="header">Categories</TableCell>
-                <TableCell variant="header" align="end">Actions</TableCell>
+                <TableCell variant="header">{__('Term', 'translate')}</TableCell>
+                <TableCell variant="header">{__('Languages', 'translate')}</TableCell>
+                <TableCell variant="header">{__('Categories', 'translate')}</TableCell>
+                <TableCell variant="header" align="end">{__('Actions', 'translate')}</TableCell>
             </TableHeaderRow>
 
             {rows.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={4} align="center" className="py-4 text-translatewp-muted">
                         <div className="flex flex-col items-center gap-3">
-                            <span>No terms found. Add your first term to get started.</span>
-                            <Button variant="primary" className="rounded-sm!" onClick={onAdd}>Add term</Button>
+                            <span>{__('No terms found. Add your first term to get started.', 'translate')}</span>
+                            <Button variant="primary" className="rounded-sm!" onClick={onAdd}>{__('Add term', 'translate')}</Button>
                         </div>
                     </TableCell>
                 </TableRow>
@@ -70,7 +71,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                     <TableCell as="div" align="end" className="flex justify-end gap-2">
                         <Button
                             variant='primary'
-                            label='Edit lexicon term'
+                            label={__('Edit lexicon term', 'translate')}
                             className='p-2! min-w-0! rounded-sm!'
                             onClick={() => onEdit(row.id)}
                         >
@@ -78,7 +79,7 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                         </Button>
                         <Button
                             variant='secondary'
-                            label='Delete lexicon term'
+                            label={__('Delete lexicon term', 'translate')}
                             className='p-2! min-w-0! rounded-sm!'
                             onClick={() => onDelete(row.id)}
                         >
