@@ -41,7 +41,7 @@ export const NetworkAdmin = ({ data }: { data: NetworkAdminData }) =>
                         title: __('Sites', 'translate'),
                         content: (
                             <Section
-                                title={__('Sites', 'translate')}
+                                heading={__('Sites', 'translate')}
                                 description={__('Connection, setup, languages, and direct controls for every site.', 'translate')}
                             >
                                 <div className="overflow-x-auto rounded-lg bg-white">
