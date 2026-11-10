@@ -14,7 +14,7 @@ export const Card = ({ title, badge, action, children, className }: { title: str
 export const Section = ({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) => (
     <section className="flex flex-col gap-4" aria-label={title}>
         <div className="flex flex-col gap-1">
-            <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-translatewp-muted!">{title}</h3>
+            <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-translatewp-neutral">{title}</h3>
             {description && <p className="m-0 text-sm text-translatewp-muted!">{description}</p>}
         </div>
         {children}

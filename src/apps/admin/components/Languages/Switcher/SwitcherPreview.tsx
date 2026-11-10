@@ -40,7 +40,7 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
             <div
                 data-twp-switcher-preview
                 data-busy-background={busy ? 'true' : undefined}
-                className="relative isolate flex min-h-24 items-start rounded-lg border border-translatewp-border! bg-translatewp-selection p-4"
+                className={`relative isolate flex items-start rounded-lg border border-translatewp-border! bg-translatewp-selection p-4 transition-[min-height] ${isOpen && switcher.type === 'side_tab' ? 'min-h-80' : 'min-h-24'}`}
                 style={busy ? { backgroundImage: BUSY_BACKGROUND, backgroundSize: 'cover' } : undefined}
             >
                 <SwitcherView
@@ -50,7 +50,7 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
                     isOpen={isOpen}
                     notice={null}
                     previewLoading={previewLoading}
-                    variant={switcher.type === 'side_tab' ? 'preview' : 'inline'}
+                    variant="preview"
                     onOpenChange={setIsOpen}
                     onLanguageSelect={() => setIsOpen(false)}
                     onDismissNotice={() => {}}

@@ -39,8 +39,8 @@ export const OptionCards = <Value extends string>({
 {
 	const id = useId();
 	const gridClassName = {
-		1: 'grid w-full min-w-0 grid-cols-1 gap-3 [&>*]:min-w-0',
-		2: 'grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0',
+		1: 'grid w-full min-w-0 grid-cols-1 gap-4 [&>*]:min-w-0',
+		2: 'grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 @max-[379px]:grid-cols-1 @min-[380px]:grid-cols-2 [&>*]:min-w-0',
 		3: OPTION_GRID_CLASS,
 	}[columns];
 

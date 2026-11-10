@@ -215,50 +215,64 @@ export const AddLexiconDrawer = ({ isDrawerOpen, setIsDrawerOpen, drawerContext,
         <Drawer
             isOpen={isDrawerOpen}
             onClose={handleCancel}
-            title={drawerContext === 'add' ? __('Add Term', 'translate') : __('Edit Term', 'translate')}
+            title={drawerContext === 'add' ? __('Add term', 'translate') : __('Edit term', 'translate')}
         >
             <div className="flex flex-col justify-between h-[calc(100%-8rem)]">
                 <div className="flex flex-col gap-8">
-                    <div className='flex flex-col gap-2'>
+                    <div className='flex flex-col gap-6'>
                         <TextControl
                             __next40pxDefaultSize
                             __nextHasNoMarginBottom
+                            label={
+                                <span className='flex items-baseline gap-2 text-sm font-semibold text-translatewp-neutral'>
+                                    <span>{__('Term', 'translate')}</span>
+                                    <span className='text-xs font-normal text-translatewp-muted'>{__('Required', 'translate')}</span>
+                                </span>
+                            }
                             value={term}
                             onChange={(value) => setTerm(value.slice(0, LEXICON_TERM_MAX_LENGTH))}
-                            placeholder={__('Your term', 'translate')}
+                            placeholder={__('For example: Black Friday', 'translate')}
                             maxLength={LEXICON_TERM_MAX_LENGTH}
-                            help={term.trim() === ''
-                                ? __('Enter the term first; Save stays off until it has one.', 'translate')
-                                : sprintf(
+                            help={term.length > 0
+                                ? sprintf(
                                     /* translators: 1: characters used, 2: maximum characters. */
                                     __('%1$d of %2$d characters', 'translate'),
                                     term.length,
                                     LEXICON_TERM_MAX_LENGTH
-                                )}
+                                ) : undefined}
                             className="[&_input]:border-translatewp-border! [&_input]:rounded-sm!"
                         />
 
                         <TextareaControl
                             __nextHasNoMarginBottom
+                            label={
+                                <span className='flex items-baseline gap-2 text-sm font-semibold text-translatewp-neutral'>
+                                    <span>{__('Context', 'translate')}</span>
+                                    <span className='text-xs font-normal text-translatewp-muted'>{__('Optional', 'translate')}</span>
+                                </span>
+                            }
+                            help={__('When and how to translate this term.', 'translate')}
                             value={description}
                             rows={5}
                             onChange={(value) => setDescription(value as string)}
-                            placeholder={__('Describe when and how this term should be interpreted...', 'translate')}
+                            placeholder={__('For example: Keep it in English. It is the name of our yearly sale.', 'translate')}
                             className="m-0! [&_textarea]:resize-none! [&_textarea]:border-translatewp-border! [&_textarea]:rounded-sm!"
                         />
                     </div>
 
-                    <CheckboxGrid
-                        label={__('Apply context to', 'translate')}
-                        options={languageOptions}
-                        selected={languageSelectionForGrid}
-                        columns={2}
-                        onChange={handleLanguagesChange}
-                    />
+                    <div className='[&>div>span]:font-semibold!'>
+                        <CheckboxGrid
+                            label={__('Apply context to', 'translate')}
+                            options={languageOptions}
+                            selected={languageSelectionForGrid}
+                            columns={2}
+                            onChange={handleLanguagesChange}
+                        />
+                    </div>
 
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-translatewp-neutral">{__('Categories', 'translate')}</span>
+                            <span className="text-sm font-semibold text-translatewp-neutral">{__('Categories', 'translate')}</span>
                             <button
                                 type="button"
                                 onClick={() => setIsCategoryHelpOpen(true)}
@@ -285,9 +299,9 @@ export const AddLexiconDrawer = ({ isDrawerOpen, setIsDrawerOpen, drawerContext,
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1">
-                    <Button variant="secondary" className="rounded-sm! px-9! py-3! text-base!" onClick={handleCancel} disabled={isPending}>{__('Cancel', 'translate')}</Button>
-                    <Button variant="primary" className="flex-1 justify-center rounded-sm! py-3! text-base!" onClick={handleDone} isBusy={isPending} disabled={!term.trim() || isPending}>{__('Save', 'translate')}</Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="secondary" className="h-10! min-h-10! flex-1 justify-center rounded-sm! py-0! text-sm!" onClick={handleCancel} disabled={isPending}>{__('Cancel', 'translate')}</Button>
+                    <Button variant="primary" className="h-10! min-h-10! flex-1 justify-center rounded-sm! py-0! text-sm!" onClick={handleDone} isBusy={isPending} disabled={!term.trim() || isPending}>{__('Save', 'translate')}</Button>
                 </div>
             </div>
         </Drawer>

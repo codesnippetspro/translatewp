@@ -69,9 +69,9 @@ describe('advanced style controls', () =>
         expect(advanced.children[0].querySelector('svg.lucide-sparkles')).not.toBeNull();
         expect(advanced.querySelectorAll('svg.lucide-sparkles')).toHaveLength(1);
 
-        const input = advanced.querySelector('[data-audience-field] input') as HTMLInputElement;
+        const input = advanced.querySelector('[data-audience-field] textarea') as HTMLTextAreaElement;
         expect(input.maxLength).toBe(200);
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
         act(() =>
         {
             setter.call(input, 'Small business owners');

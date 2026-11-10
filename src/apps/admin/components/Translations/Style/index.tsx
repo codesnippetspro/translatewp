@@ -83,7 +83,6 @@ export const TranslationsStyle = () =>
     );
 }
 
-// Audience, length and cultural adaptation stacked in one column, beside the site context.
 export const TranslationsAdvancedStyle = () =>
 {
     const style = useAdminSettingsStore(state => state.settings['translations.style']);
@@ -92,7 +91,7 @@ export const TranslationsAdvancedStyle = () =>
         setSetting('translations.style', previous => previous[key] === value ? previous : { ...previous, [key]: value });
 
     return (
-        <div className="flex flex-col gap-6" data-translation-advanced-style>
+        <div className="flex flex-col gap-6 lg:col-span-2" data-translation-advanced-style>
             <ManagedByNetwork group="style_tone">
                 <AdvancedStyleControls style={style} updateStyle={updateStyle} stacked />
             </ManagedByNetwork>

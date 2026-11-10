@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { TextControl } from '@wordpress/components';
+import { TextareaControl } from '@wordpress/components';
 import { Sparkles } from 'lucide-react';
 
 import { StyleCard } from '@/apps/admin/components/Translations/Style/StyleCard';
@@ -33,7 +33,9 @@ type CardProps = {
 
 const Card = ({ title, description, feature, locked, activeBadge, children }: CardProps) => (
     <StyleCard title={title} description={description} badge={locked ? <ProMarker /> : activeBadge}>
-        {locked ? <ProLock feature={feature}>{children}</ProLock> : children}
+        <div className="flex flex-1 flex-col">
+            {locked ? <ProLock feature={feature} className="flex-1">{children}</ProLock> : children}
+        </div>
     </StyleCard>
 );
 
@@ -42,18 +44,18 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
     const proActive = isProActive(getProState());
 
     const audience = (
-        <div data-audience-field>
-            <TextControl
-                __next40pxDefaultSize
+        <div className="h-full" data-audience-field>
+            <TextareaControl
                 __nextHasNoMarginBottom
                 label={__('Audience', 'translate')}
                 hideLabelFromVision
                 value={style.audience ?? ''}
+                rows={4}
                 maxLength={AUDIENCE_MAX_LENGTH}
                 placeholder={__('For example: first-time buyers, hospital staff, developers', 'translate')}
                 onChange={(value) => updateStyle('audience', value.slice(0, AUDIENCE_MAX_LENGTH))}
                 disabled={!proActive}
-                className="[&_input]:border-translatewp-border! [&_input]:rounded-sm!"
+                className="h-full [&_.components-base-control__field]:h-full [&_textarea]:box-border! [&_textarea]:h-full! [&_textarea]:min-h-24! [&_textarea]:resize-y [&_textarea]:border-translatewp-border! [&_textarea]:rounded-sm!"
             />
         </div>
     );
@@ -88,7 +90,7 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
     );
 
     return (
-        <div className={stacked ? 'grid grid-cols-1 items-start gap-6' : 'grid grid-cols-1 items-start gap-6 lg:grid-cols-3'} data-advanced-style>
+        <div className={stacked ? 'grid grid-cols-1 items-stretch gap-6 xl:grid-cols-3' : 'grid grid-cols-1 items-start gap-6 lg:grid-cols-3'} data-advanced-style>
             <Card
                 title={__('Audience', 'translate')}
                 description={AUDIENCE_DESCRIPTION}

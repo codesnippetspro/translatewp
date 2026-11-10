@@ -114,7 +114,7 @@ export const TranslationsContext = () =>
     });
 
     return (
-        <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch" data-translation-context>
+        <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch lg:col-span-2" data-translation-context>
             <div className="flex flex-col gap-1">
                 <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{ __('Site context', 'translate') }</h3>
                 <p className="text-sm text-translatewp-muted!">{ __('What the translation AI should know about your site: who it is for, what it sells, how it speaks. The scan writes this brief for you; edit it freely.', 'translate') }</p>
@@ -125,8 +125,8 @@ export const TranslationsContext = () =>
                 placeholder={ __('Share anything about your website that would help the AI understand your content, audience, and goals.', 'translate') }
                 value={context.text_context}
                 onChange={(event) => updateContext('text_context', event.target.value)}
-                rows={8}
-                className="block! w-full! min-h-48 grow resize-y rounded-sm! border! border-translatewp-border! bg-white! p-3! text-sm! leading-6! text-translatewp-neutral! shadow-none! focus:border-translatewp-primary! focus:shadow-none!"
+                rows={6}
+                className="block! h-[168px]! min-h-0! w-full! grow-0 resize-y rounded-sm! border! border-translatewp-border! bg-white! p-3! text-sm! leading-6! text-translatewp-neutral! shadow-none! focus:border-translatewp-primary! focus:shadow-none!"
                 data-site-context
             />
 
