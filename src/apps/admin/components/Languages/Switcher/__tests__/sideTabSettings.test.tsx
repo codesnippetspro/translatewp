@@ -87,19 +87,19 @@ describe('Settings, Switcher: the Side tab', () =>
         expect(tab?.getAttribute('data-preview')).toBe('true');
     });
 
-    it('names the edge in Where it shows, and Reset puts back only the side tab', async () =>
+    it('names the edge in Preview, and Reset puts back only the side tab', async () =>
     {
         setPro(true);
         const floating = { anchor: 'bottom-left', x: 4, y: 5 };
         store({ type: 'side_tab', side_tab_position: null, floating_position: floating });
         let container = await render();
-        expect(container.textContent).toContain('Position: bottom edge, the default. Drag it in edit mode on your site to move it.');
+        expect(container.textContent).toContain('Current position: bottom edge, the default.');
         await act(async () => { root?.unmount(); });
 
         store({ side_tab_position: { edge: 'left', offset: 30 } });
         container = await render();
-        expect(container.textContent).toContain('Position: left edge, where you dragged it in edit mode on your site.');
-        const reset = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Reset position') as HTMLInputElement;
+        expect(container.textContent).toContain('Current position: left edge, where you placed it in edit mode.');
+        const reset = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Reset position') as HTMLButtonElement;
         await act(async () => { reset.click(); });
         expect(switcher().side_tab_position).toBeNull();
         expect(switcher().floating_position).toEqual(floating);
@@ -113,7 +113,7 @@ describe('Settings, Switcher: the Side tab', () =>
 
         expect(typeCards(container).map(card => card.checked)).toEqual([true, false, false]);
         expect(container.querySelector('[data-twp-switcher-preview] .twp-side-tab')).toBeNull();
-        expect(container.textContent).toContain('Position: Top right, the default.');
+        expect(container.textContent).toContain('Current position: Top right, the default.');
         expect(container.querySelector('[data-size-offset]')?.getAttribute('aria-disabled')).toBeNull();
         expect(switcher().type).toBe('side_tab');
     });

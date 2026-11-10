@@ -101,8 +101,10 @@ describe('Settings > Switcher preview and where it shows', () =>
         const container = await render();
         const where = section(container);
         const locked = where.querySelector('[data-twp-locked-placements]') as HTMLElement;
+        const details = where.querySelector('[data-twp-placement-details]') as HTMLDetailsElement;
 
-        expect(where.textContent).toContain('Where it shows');
+        expect(details.open).toBe(false);
+        expect(details.querySelector('summary')?.textContent).toBe('Add it to your site');
         expect(where.textContent).toContain('Top right');
         expect(locked.textContent).toContain('Inline placement');
         expect(unlockControls(where)).toHaveLength(1);
