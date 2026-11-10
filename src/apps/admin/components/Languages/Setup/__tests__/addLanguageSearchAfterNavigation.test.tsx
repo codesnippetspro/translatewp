@@ -57,14 +57,12 @@ const flush = async (ms = 0) =>
     });
 };
 
-const clickTab = async (title: string) =>
+const navigateToPage = async (page: string) =>
 {
-    const tab = Array.from(document.querySelectorAll('button[role="tab"]'))
-        .find(candidate => (candidate.textContent ?? '').trim() === title);
-    expect(tab).toBeDefined();
     await act(async () =>
     {
-        (tab as HTMLButtonElement).click();
+        setHash(`#${page}`);
+        window.dispatchEvent(new Event('hashchange'));
     });
     await flush();
 };
@@ -104,7 +102,7 @@ const searchResultCount = () =>
     return document.querySelectorAll('[role="dialog"] input[type="checkbox"]').length;
 };
 
-describe('Add-language search after navigating between pages in the same tab', () =>
+describe('Add-language search after navigating between settings pages', () =>
 {
     beforeEach(() =>
     {
@@ -124,15 +122,22 @@ describe('Add-language search after navigating between pages in the same tab', (
         setHash('');
     });
 
-    it('still returns results after the tab panel has been navigated away and back', async () =>
+    it('still returns results after the Languages page has been navigated away and back', async () =>
     {
         const container = await renderLanguages();
 
-        // Navigate away to another Languages tab and back, remounting the setup
-        // panel through the TabPanel key, the in-place navigation that left the
-        // staging build returning zero results.
-        await clickTab('Switcher');
-        await clickTab('Languages');
+        const addLanguages = () => Array.from(container.querySelectorAll('button'))
+            .find(button => button.textContent?.trim() === 'Add languages');
+        const initialAddButton = addLanguages();
+        expect(initialAddButton).toBeDefined();
+
+        await navigateToPage('switcher');
+        expect(addLanguages()).toBeUndefined();
+        expect(initialAddButton?.isConnected).toBe(false);
+
+        await navigateToPage('languages');
+        expect(addLanguages()).toBeDefined();
+        expect(addLanguages()).not.toBe(initialAddButton);
 
         await clickButtonByText('Add languages');
         expect(container.querySelector('[role="dialog"]')).not.toBeNull();

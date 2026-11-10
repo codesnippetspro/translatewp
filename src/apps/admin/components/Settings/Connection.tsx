@@ -28,19 +28,14 @@ export const SettingsConnection = () =>
 
     return (
         <div className="flex flex-col gap-10">
-			<div className="flex flex-col gap-2">
-				<h3 className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Connection', 'translate')}</h3>
-				<p className="text-sm text-translatewp-muted!">
-					{__('Manage your site connection and reopen the setup wizard.', 'translate')}
-				</p>
-			</div>
+
             <div className="flex flex-col gap-4">
-                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Site connection', 'translate')}</h4>
+                <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Site connection', 'translate')}</h3>
                 <ConnectionPanel />
             </div>
 
             <div className="flex flex-col gap-4">
-                <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Setup wizard', 'translate')}</h4>
+                <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Setup wizard', 'translate')}</h3>
                 <p className="text-sm text-translatewp-muted! m-0">
                     {__('Reopen the setup wizard. Your languages, translation settings, and connection stay intact; the wizard opens prefilled.', 'translate')}
                 </p>
@@ -58,7 +53,7 @@ export const SettingsConnection = () =>
 
             {networkUrl && (
                 <div className="flex flex-col gap-4">
-                    <h4 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Network', 'translate')}</h4>
+                    <h3 className="font-semibold text-[1.3em]! text-translatewp-neutral! m-0">{__('Network', 'translate')}</h3>
                     <p className="text-sm text-translatewp-muted! m-0">
                         {__('Choose which settings the network shares, locks or leaves to each subsite.', 'translate')}
                     </p>

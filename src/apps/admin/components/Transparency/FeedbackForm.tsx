@@ -47,9 +47,9 @@ export const FeedbackForm = () =>
             aria-labelledby="feedback-heading"
         >
             <div className="mb-5">
-                <h2 id="feedback-heading" className="m-0 text-lg font-semibold text-translatewp-neutral">
+                <h3 id="feedback-heading" className="m-0 text-lg font-semibold text-translatewp-neutral">
                     Help shape TranslateWP
-                </h2>
+                </h3>
                 <p className="mb-0 mt-1 text-sm leading-6 text-translatewp-muted">
                     Share what is working, what is unclear, or what you need next.
                 </p>

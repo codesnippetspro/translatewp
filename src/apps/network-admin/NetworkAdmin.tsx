@@ -4,8 +4,8 @@ import { ArrowRight, CircleCheck } from 'lucide-react';
 import type { NetworkAdminData } from '@/apps/network-admin/types';
 import type { ConnectStatus } from '@/shared/api/connect';
 import { Header } from '@/apps/admin/components/Header';
-import { PageHeader, PageTabs, type PageTab } from '@/apps/admin/components/PageLayout';
-import { useTabHash } from '@/apps/admin/hooks/useTabHash';
+import { PageHeader, PageTabs, type NavigationPage } from '@/apps/admin/components/PageLayout';
+import { usePageHash } from '@/apps/admin/hooks/usePageHash';
 import { Section } from '@/shared/components/adminSurface';
 import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 import { SettingsScopeSection } from '@/apps/network-admin/SettingsScopeSection';
@@ -16,7 +16,7 @@ const NETWORK_TABS = ['overview', 'subsites', 'settings'];
 
 export const NetworkAdmin = ({ data }: { data: NetworkAdminData }) =>
 {
-    const { activeTabName, onSelectTab } = useTabHash(NETWORK_TABS, 'overview');
+    const { activePageName: activeTabName, onSelectPage: onSelectTab } = usePageHash(NETWORK_TABS, 'overview');
 
     const status = { connected: data.connection.connected, accountLabel: data.connection.accountLabel, pro: data.connection.pro } as ConnectStatus;
 
@@ -101,7 +101,7 @@ export const NetworkAdmin = ({ data }: { data: NetworkAdminData }) =>
                             />
                         ),
                     },
-                ] as PageTab[]}
+                ] as NavigationPage[]}
                 activeTabName={activeTabName}
                 onSelect={onSelectTab}
                 bodyClassName="gap-10 pt-6 md:pt-8"
