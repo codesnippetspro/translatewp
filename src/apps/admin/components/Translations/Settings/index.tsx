@@ -102,8 +102,13 @@ export const TranslationsSettings = () =>
     return (
         <div className="flex flex-col gap-6" data-translation-settings>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-content-behaviour>
-            <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Content', 'translate')}</h3>
+            <section
+                className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5"
+                aria-labelledby="twp-translation-content"
+            >
+            <h3 id="twp-translation-content" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                {__('Content', 'translate')}
+            </h3>
 
             <ToggleControl label={
                 <ToggleLabel title={__('Translate all public content', 'translate')} description={__('Every public page is translated. Turn it off to exclude post types or categories, for example your shop products.', 'translate')} />} checked={settings.translate_all_content} onChange={(value) => updateSetting('translate_all_content', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
@@ -132,10 +137,15 @@ export const TranslationsSettings = () =>
 
 {/* Browser detection lives in Settings > Languages > Visitor language. */}
 
-            </div>
+            </section>
 
-            <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Behaviour', 'translate')}</h3>
+            <section
+                className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5"
+                aria-labelledby="twp-translation-behaviour"
+            >
+            <h3 id="twp-translation-behaviour" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                {__('Behaviour', 'translate')}
+            </h3>
 
             <ManagedByNetwork group="translation_behaviour">
             <ToggleControl label={
@@ -163,7 +173,7 @@ export const TranslationsSettings = () =>
                 <ToggleLabel title={__('Enable units conversion', 'translate')} description={__('Measurements are recalculated for the reader: 5 miles becomes 8 km. Prices are never converted.', 'translate')} />} checked={settings.enable_units_conversion} onChange={(value) => updateSetting('enable_units_conversion', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             </ManagedByNetwork>
 
-            </div>
+            </section>
             </div>
 
             <WhoCanManage />

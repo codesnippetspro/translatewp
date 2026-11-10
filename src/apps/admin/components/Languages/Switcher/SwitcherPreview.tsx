@@ -35,8 +35,10 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
     const busy = switcher.background_style === 'transparent' || switcher.background_style === 'glass';
 
     return (
-        <div className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-translatewp-neutral">{__('Preview', 'translate')}</span>
+        <section className="flex flex-col gap-2" aria-labelledby="twp-switcher-preview">
+            <h3 id="twp-switcher-preview" className="text-sm! font-bold! text-translatewp-neutral m-0!">
+                {__('Preview', 'translate')}
+            </h3>
             <div
                 data-twp-switcher-preview
                 data-busy-background={busy ? 'true' : undefined}
@@ -56,6 +58,6 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
                     onDismissNotice={() => {}}
                 />
             </div>
-        </div>
+        </section>
     );
 };

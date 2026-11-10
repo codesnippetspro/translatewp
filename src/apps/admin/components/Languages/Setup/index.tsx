@@ -186,23 +186,25 @@ export const LanguagesSetup = () =>
         <div className="flex flex-col gap-8">
             <DefaultLanguageControl />
 
-            <Button variant='primary' className='rounded-sm! w-fit' onClick={handleAddLanguage}>Add languages</Button>
+            <section className="flex flex-col gap-8" aria-labelledby="twp-translation-languages">
+                <Button variant='primary' className='rounded-sm! w-fit' onClick={handleAddLanguage}>Add languages</Button>
 
-            <h3 className="font-semibold text-base! text-translatewp-neutral!">Translation languages</h3>
+                <h3 id="twp-translation-languages" className="font-semibold text-base! text-translatewp-neutral!">Translation languages</h3>
 
-            {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                    <Spinner />
-                </div>
-            ) : (
-                <LanguageTable
-                    languages={languages}
-                    setLanguages={handleUpdateLanguages}
-                    onEditLanguage={handleEditLanguage}
-                    onDeleteLanguage={handleDeleteLanguage}
-                    onAddLanguage={handleAddLanguage}
-                />
-            )}
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Spinner />
+                    </div>
+                ) : (
+                    <LanguageTable
+                        languages={languages}
+                        setLanguages={handleUpdateLanguages}
+                        onEditLanguage={handleEditLanguage}
+                        onDeleteLanguage={handleDeleteLanguage}
+                        onAddLanguage={handleAddLanguage}
+                    />
+                )}
+            </section>
 
             <AddLanguageDrawer
                 isDrawerOpen={isDrawerOpen}

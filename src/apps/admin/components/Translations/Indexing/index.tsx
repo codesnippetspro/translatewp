@@ -320,9 +320,9 @@ export const LanguagesIndexing = () =>
     );
 
     return (
-        <div className="flex w-full min-w-0 flex-col gap-6">
+        <section className="flex w-full min-w-0 flex-col gap-6" aria-labelledby="twp-reading-translating">
             <div className="flex flex-col gap-2">
-                <h3 className="font-semibold text-lg text-translatewp-neutral m-0">
+                <h3 id="twp-reading-translating" className="font-semibold text-lg text-translatewp-neutral m-0">
                     {__('Reading and translating', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -393,8 +393,8 @@ export const LanguagesIndexing = () =>
                 </p>
             )}
 
-            <div className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+            <section className="flex flex-col gap-2" aria-labelledby="twp-priority-pages">
+                <h3 id="twp-priority-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                     {__('Priority pages', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -458,7 +458,7 @@ export const LanguagesIndexing = () =>
                         </div>
                     )}
                 </div>
-            </div>
+            </section>
 
             {status !== null && languages.length === 0 && !statusFailed && (
                 <p className="text-sm text-translatewp-muted m-0">
@@ -523,6 +523,6 @@ export const LanguagesIndexing = () =>
             />
 
             <ConfirmDialog {...confirmDialogProps} />
-        </div>
+        </section>
     );
 };

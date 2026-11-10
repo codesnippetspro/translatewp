@@ -50,8 +50,14 @@ export const WhoCanManage = () =>
     };
 
     return (
-        <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5" data-who-can-manage>
-            <h3 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Who can manage translations', 'translate')}</h3>
+        <section
+            className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5"
+            data-who-can-manage
+            aria-labelledby="twp-who-can-manage"
+        >
+            <h3 id="twp-who-can-manage" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                {__('Who can manage translations', 'translate')}
+            </h3>
             {!editable && <ManagedByNetworkNote />}
             {isError && <p className="text-sm text-translatewp-error m-0" role="alert">{__('The roles could not be loaded. Reload the page to try again.', 'translate')}</p>}
             {data && (
@@ -121,6 +127,6 @@ export const WhoCanManage = () =>
                 </div>
             )}
             {failed && <p className="text-sm text-translatewp-error m-0" role="alert">{__('The change could not be saved. Try again.', 'translate')}</p>}
-        </div>
+        </section>
     );
 };
