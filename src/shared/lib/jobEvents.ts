@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 export type JobEventKind =
     | 'quota_block'
     | 'provider_error'
@@ -37,12 +38,12 @@ const KNOWN_KINDS: JobEventKind[] = [
 ];
 
 const EVENT_LABELS: Record<JobEventKind | 'unknown', string> = {
-    quota_block: 'Quota limit reached',
-    provider_error: 'Translation provider error',
-    timeout: 'Translation timed out',
-    cancelled: 'Translation cancelled',
-    state_persistence_error: 'Translation state could not be saved',
-    unknown: 'Translation event',
+    quota_block: __('Quota limit reached', 'translate'),
+    provider_error: __('Translation provider error', 'translate'),
+    timeout: __('Translation timed out', 'translate'),
+    cancelled: __('Translation cancelled', 'translate'),
+    state_persistence_error: __('Translation state could not be saved', 'translate'),
+    unknown: __('Translation event', 'translate'),
 };
 
 export const normalizeJobEventKind = (kind: string): JobEventKind | 'unknown' =>

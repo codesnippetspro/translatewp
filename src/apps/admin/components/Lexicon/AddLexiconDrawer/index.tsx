@@ -309,7 +309,7 @@ export const AddLexiconDrawer = ({ isDrawerOpen, setIsDrawerOpen, drawerContext,
         <Drawer
             isOpen={isCategoryHelpOpen}
             onClose={() => setIsCategoryHelpOpen(false)}
-            title="About categories"
+            title={__('About categories', 'translate')}
         >
             <div className="flex flex-col gap-6 text-sm text-translatewp-muted! leading-relaxed">
                 <p>
@@ -322,7 +322,7 @@ export const AddLexiconDrawer = ({ isDrawerOpen, setIsDrawerOpen, drawerContext,
                 </p>
 
                 <div className="flex flex-col gap-2">
-                    <span className="text-sm font-bold text-translatewp-neutral!">When to use them</span>
+                    <span className="text-sm font-bold text-translatewp-neutral!">{__('When to use them', 'translate')}</span>
                     <p>
                         Reach for categories once you have more than a handful of terms and want to
                         keep them tidy: grouping brand names, product names, or industry
@@ -332,7 +332,7 @@ export const AddLexiconDrawer = ({ isDrawerOpen, setIsDrawerOpen, drawerContext,
                 </div>
 
                 <div className="flex flex-col gap-2">
-                    <span className="text-sm font-bold text-translatewp-neutral!">How to create one</span>
+                    <span className="text-sm font-bold text-translatewp-neutral!">{__('How to create one', 'translate')}</span>
                     <p>
                         In the <strong className="text-translatewp-neutral!">Categories</strong>{' '}
                         field, type a new name and choose{' '}

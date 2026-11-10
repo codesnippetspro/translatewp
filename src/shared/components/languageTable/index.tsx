@@ -1,3 +1,4 @@
+import { __, sprintf } from '@wordpress/i18n';
 import { type Dispatch, type SetStateAction, useRef } from 'react';
 import { GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@wordpress/components';
@@ -64,16 +65,16 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
     return (
         <Table>
             <TableHeaderRow>
-                <TableCell variant="header" className="w-2/5">Language</TableCell>
-                <TableCell variant="header" align="center">Slug</TableCell>
-                <TableCell variant="header" align="center">Locale</TableCell>
-                <TableCell variant="header" align="end">Actions</TableCell>
+                <TableCell variant="header" className="w-2/5">{__('Language', 'translate')}</TableCell>
+                <TableCell variant="header" align="center">{__('Slug', 'translate')}</TableCell>
+                <TableCell variant="header" align="center">{__('Locale', 'translate')}</TableCell>
+                <TableCell variant="header" align="end">{__('Actions', 'translate')}</TableCell>
             </TableHeaderRow>
 
             {languages.length === 0 ? (
                 <TableRow>
                     <TableCell colSpan={4} align="center" className="py-4 text-translatewp-muted">
-                        <Button variant="primary" className="rounded-sm!" onClick={onAddLanguage}>Add a language</Button>
+                        <Button variant="primary" className="rounded-sm!" onClick={onAddLanguage}>{__('Add a language', 'translate')}</Button>
                     </TableCell>
                 </TableRow>
             ) : languages.map((language, index) =>
@@ -100,7 +101,11 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                         <TableCell as="div" align="end" className="flex justify-end gap-2">
                             <Button
                                 variant='primary'
-                                label={`Edit ${languageName}`}
+                                label={sprintf(
+                                    /* translators: %s: language name. */
+                                    __('Edit %s', 'translate'),
+                                    languageName
+                                )}
                                 onClick={() => onEditLanguage(language.locale)}
                                 className='p-2! min-w-0! rounded-sm!'
                             >
@@ -108,7 +113,11 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                             </Button>
                             <Button
                                 variant='secondary'
-                                label={`Delete ${languageName}`}
+                                label={sprintf(
+                                    /* translators: %s: language name. */
+                                    __('Delete %s', 'translate'),
+                                    languageName
+                                )}
                                 onClick={() => onDeleteLanguage(language.locale)}
                                 className='p-2! min-w-0! rounded-sm!'
                             >

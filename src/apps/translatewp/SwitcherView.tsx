@@ -1080,7 +1080,7 @@ export function SwitcherView({
                                         className="twp-promo"
                                         aria-label={ __('by TranslateWP, opens in a new tab', 'translate') }
                                     >
-                                        <span>by TranslateWP</span>
+                                        <span>{__('by TranslateWP', 'translate')}</span>
                                         <ArrowUpRight className="rtl:-scale-x-100" size={12} />
                                     </a>
                                 </>

@@ -56,7 +56,7 @@ export const Header = ({ status }: { status?: ConnectStatus } = {}) =>
                         onClick={() => setIsUpgradeModalOpen(true)}
                         className={`twp-header-action ${TWP_BUTTON_PRIMARY}`}
                     >
-                        Upgrade to PRO
+                        {__('Upgrade to PRO', 'translate')}
                     </button>
 
                     <ProModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} state={proState} />

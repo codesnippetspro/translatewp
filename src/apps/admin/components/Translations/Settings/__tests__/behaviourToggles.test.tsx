@@ -85,7 +85,9 @@ describe('Content and behaviour toggles', () =>
         const input = row.querySelector('input') as HTMLInputElement;
         expect(input.disabled).toBe(true);
         expect(input.checked).toBe(false);
-        expect(row.querySelector('button[aria-label^="Unlock"]')).not.toBeNull();
+        expect(row.querySelector(
+            'button[aria-label="T:Unlock T:image alt text translation with PRO"]'
+        )).not.toBeNull();
     });
 
     test('with Pro active the alt text setting is the live toggle', () =>
@@ -96,7 +98,9 @@ describe('Content and behaviour toggles', () =>
         const input = altRow().querySelector('input') as HTMLInputElement;
         expect(input.disabled).toBe(false);
         expect(input.checked).toBe(true);
-        expect(altRow().querySelector('button[aria-label^="Unlock"]')).toBeNull();
+        expect(altRow().querySelector(
+            'button[aria-label="T:Unlock T:image alt text translation with PRO"]'
+        )).toBeNull();
         delete (window as unknown as { translatewpPro?: unknown }).translatewpPro;
     });
 
