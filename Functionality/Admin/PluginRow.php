@@ -40,7 +40,7 @@ class PluginRow {
 			if ( ! current_user_can( Access::SETTINGS ) ) {
 				return $actions;
 			}
-			$url = admin_url( 'admin.php?page=translatewp-settings' );
+			$url = admin_url( 'admin.php?page=translatewp' );
 		}
 
 		return [ 'settings' => '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'translate' ) . '</a>' ] + $actions;
