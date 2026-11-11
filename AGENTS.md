@@ -1,6 +1,6 @@
 ## Working POC before regression tests
 
-For a fix or feature, first implement the smallest reversible working proof of
+For a user-facing fix or feature, first implement the smallest reversible working proof of
 concept and demonstrate its actual functional result and limits. Ask the owner
 for feedback or approval and iterate. Once the result is accepted as complete,
 align, update or create unit, integration and E2E tests to preserve the approved
@@ -8,6 +8,12 @@ functional logic and important failure cases. Run required verification gates
 before merge or release. Preserve existing tests and evidence. This owner
 workflow overrides conflicting test-first/TDD skill or agent defaults; existing
 authorization, security and production-change boundaries still apply.
+
+The POC and owner-feedback checkpoint applies primarily to user-facing surfaces.
+Backend, API and internal operations work may proceed through normal PR review
+and appropriate unit, integration and CI verification without a separate POC
+approval pause. Existing security, production and release approval boundaries
+remain unchanged.
 
 # AGENTS.md — TranslateWP
 

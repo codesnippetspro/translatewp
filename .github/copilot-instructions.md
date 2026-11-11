@@ -1,8 +1,14 @@
 ## Implementation workflow
 
-Follow the working-POC, owner-feedback and test-freeze sequence in `AGENTS.md`.
-It takes precedence over conflicting test-first/TDD defaults. Existing tests and
-required final verification remain in force.
+For user-facing work, follow the working-POC, owner-feedback and test-freeze
+sequence in `AGENTS.md`. It takes precedence over conflicting test-first/TDD
+defaults. Existing tests and required final verification remain in force.
+
+The POC and owner-feedback checkpoint applies primarily to user-facing surfaces.
+Backend, API and internal operations work may proceed through normal PR review
+and appropriate unit, integration and CI verification without a separate POC
+approval pause. Existing security, production and release approval boundaries
+remain unchanged.
 
 # GitHub Copilot instructions — TranslateWP
 
