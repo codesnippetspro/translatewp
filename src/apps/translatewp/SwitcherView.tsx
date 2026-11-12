@@ -140,7 +140,8 @@ export function SwitcherView({
     const selectedLanguage = languages.find((lang) => lang.locale === selectedLocale)
         ?? { locale: selectedLocale };
     const selectedLabel = switcherLabel(selectedLanguage, { nativeNames, regionalNames, flagShown: true });
-    const selectedFlag = getCountryFlagFromLocale(selectedLocale, { iconStyle });
+    const { insetPx, iconSizePx, triggerSizePx } = resolveSwitcherChrome(switcher ?? {});
+    const selectedFlag = getCountryFlagFromLocale(selectedLocale, { iconStyle, sizePx: iconSizePx });
     const requestedTrigger = switcher?.trigger === 'flag' || switcher?.trigger === 'icon' ? switcher.trigger : 'name_flag';
     // A locale with no flag falls back to the icon for Flag only.
     const trigger = requestedTrigger === 'flag' && !selectedFlag ? 'icon' : requestedTrigger;
@@ -154,7 +155,6 @@ export function SwitcherView({
     // The loading ring kept the highlight colour before it had its own; an
     // unset loading colour still reads as that highlight so a saved site looks unchanged.
     const loadingBorder = switcher?.loading_border_color || highlightBg;
-    const { insetPx, iconSizePx, triggerSizePx } = resolveSwitcherChrome(switcher ?? {});
     const paddingPx = (triggerSizePx - iconSizePx) / 2;
     // The flag and name trigger is wider than it is tall, so the edge clamps
     // use its measured width; a square trigger keeps triggerSizePx.

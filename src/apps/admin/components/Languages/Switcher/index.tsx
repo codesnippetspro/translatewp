@@ -282,7 +282,7 @@ export const LanguagesSwitcher = () =>
                     onBlur={snapBack('icon_size')}
                     __next40pxDefaultSize
                     label={__('Switcher icon size', 'translate')}
-                    help={__('Height of the flag or icon on the closed switcher. The text scales with it.', 'translate')}
+                    help={__('Width of the flag or size of the icon on the closed switcher.', 'translate')}
                     value={settings.icon_size}
                     onChange={(value) => updateMetric('icon_size', value)}
                     min={0}
