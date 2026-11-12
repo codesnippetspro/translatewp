@@ -69,6 +69,7 @@ class CleanupInventory {
 		'translatewp_pro_welcome_seen',
 		'translatewp_index_last_drain',
 		'translatewp_index_reported_languages',
+		TranslationProxyRateLimit::FIRST_PASS_OPTION,
 		'translatewp_index_priority_pins',
 		'translatewp_translation_cache_generation',
 		'translatewp_translation_cache_generations',

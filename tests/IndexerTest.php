@@ -401,8 +401,10 @@ update_option( 'translatewp_index_priority_pins', [ 11 ] );
 $queue   = new InMemoryIndexQueue();
 $indexer = make_indexer( $queue );
 
+update_option( 'translatewp_index_reported_languages', [ 'es' ] );
 $enqueued = $indexer->enqueue_for_languages( [ 'es', 'de' ] );
 assert_true( 6 === $enqueued, 'Three objects times two languages must enqueue six rows, got ' . $enqueued );
+assert_true( 400 === \TranslateWP\Components\TranslationProxyRateLimit::miss_items_limit( connected_options()['site']['id'], 'es' ), 'Re-enumerating an old reported language seeds its completion before clearing the reporting list' );
 $claimed = $indexer->claim_extract_batch( 2 );
 assert_true( 11 === $claimed[0]['object_id'] && 11 === $claimed[1]['object_id'], 'Pinned page 11 must be claimed first for both languages' );
 assert_true( 0 === $indexer->enqueue_for_languages( [ 'es', 'de' ] ), 'Re-enumeration must not duplicate live rows' );
