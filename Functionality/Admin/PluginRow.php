@@ -4,6 +4,7 @@ namespace TranslateWP\Functionality\Admin;
 
 use TranslateWP\Components\Access;
 use TranslateWP\Components\ProEligibility;
+use TranslateWP\Components\RemoteApi;
 
 /**
  * TranslateWP's row on the Plugins screens, the site's and the network's.
@@ -53,7 +54,7 @@ class PluginRow {
 		}
 
 		$links[] = '<a href="' . esc_url( 'https://translatewp.ai/docs/' ) . '">' . esc_html__( 'Docs', 'translate' ) . '</a>';
-		$links[] = '<a href="' . esc_url( 'https://translatewp.ai/support/' ) . '">' . esc_html__( 'Support', 'translate' ) . '</a>';
+		$links[] = '<a href="' . esc_url( RemoteApi::SUPPORT_URL ) . '">' . esc_html__( 'Support', 'translate' ) . '</a>';
 
 		if ( empty( $plugin_data['AuthorURI'] ) ) {
 			return $links;
