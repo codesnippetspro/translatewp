@@ -28,6 +28,7 @@ export type TranslationRunOptions = {
     onServePath?: (path: 'ready' | 'cold') => void;
     onGroupServeStarted?: (entries: TranslatableEntry[]) => void;
     onGroupServeFailed?: (entries: TranslatableEntry[]) => void;
+    onEntrySettled?: (entry: TranslatableEntry) => void;
 };
 
 export type TranslationEngineResult = TranslationBatchResult & {
@@ -189,6 +190,7 @@ export class TranslationEngine
             options.onEntryApplied?.(entry);
             const changed = options.onEntryWritten ? DOMWriter.read(entry) !== entry.value : false;
             DOMWriter.write(entry);
+            options.onEntrySettled?.(entry);
             if (options.onEntryWritten && entry.node.isConnected)
             {
                 options.onEntryWritten({ entry, changed });
@@ -228,6 +230,7 @@ export class TranslationEngine
                 onGroupServeFailed: (entries) =>
                 {
                     for (const entry of entries) unmark(entry);
+                    options.onGroupServeFailed?.(entries);
                 },
                 onEntryTranslated: (entry, served = true) =>
                 {
@@ -248,6 +251,7 @@ export class TranslationEngine
                         }
                     }
                     unmark(sourceById.get(entry.id) ?? entry);
+                    options.onEntrySettled?.(entry);
                 }
             });
             for (const entry of [...loading]) unmark(entry);
