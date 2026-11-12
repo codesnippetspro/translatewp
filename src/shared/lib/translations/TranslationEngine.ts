@@ -358,6 +358,7 @@ class DOMWriter
 
     static setLoading(entry: TranslatableEntry, isLoading: boolean): void
     {
+        if (entry.type !== EntryType.TEXT) return;
         if (!/\p{L}/u.test(entry.value)) return;
 
         const element = DOMWriter.#getLoadingElement(entry);
