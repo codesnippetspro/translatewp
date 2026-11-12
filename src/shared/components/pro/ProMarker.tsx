@@ -1,28 +1,32 @@
 import { __ } from '@wordpress/i18n';
+import { useState } from '@wordpress/element';
 
-import { ProBadge } from '@/shared/components/pro/ProBadge';
+import { ProBadge, PRO_TAG_CLASS } from '@/shared/components/pro/ProBadge';
 import { ProInstallAction } from '@/shared/components/pro/ProInstallAction';
-import { getProState, proNextStep } from '@/shared/lib/pro/proState';
+import { ProModal } from '@/shared/components/pro/ProModal';
+import { getProState, proNextStep, type ProState } from '@/shared/lib/pro/proState';
 
-const ACTION_CLASS = 'inline-flex items-center rounded-md border-0 bg-translatewp-primary! px-2 py-0.5 text-xs font-bold text-white! '
-    + 'cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-default';
-
-/**
- * The marker beside a Pro-locked feature: an account that already includes
- * Pro gets the one-click install or activation, never the Pro tag that reads
- * as "buy this".
- */
-export const ProMarker = () =>
+export const ProMarker = ({ state }: { state?: ProState } = {}) =>
 {
-    const step = proNextStep(getProState());
+    const [open, setOpen] = useState(false);
+    const step = proNextStep(state ?? getProState());
+    const className = `${PRO_TAG_CLASS} relative z-10 pointer-events-auto cursor-pointer`;
 
-    if (step === 'install') {
-        return <ProInstallAction step="install" label={__('Install Pro', 'translate')} className={ACTION_CLASS} />;
+    if (step === 'install' || step === 'activate') {
+        return <ProInstallAction
+            step={step}
+            label={__('Pro', 'translate')}
+            actionLabel={step === 'install' ? __('Install Pro', 'translate') : __('Activate Pro', 'translate')}
+            className={className}
+        />;
     }
+    if (step !== 'upgrade') return <ProBadge />;
 
-    if (step === 'activate') {
-        return <ProInstallAction step="activate" label={__('Activate Pro', 'translate')} className={ACTION_CLASS} />;
-    }
-
-    return <ProBadge />;
+    return <>
+        <button type="button" className={className} title={__('Upgrade to PRO', 'translate')}
+            aria-label={__('Upgrade to PRO', 'translate')} onClick={() => setOpen(true)}>
+            <span>{__('Pro', 'translate')}</span>
+        </button>
+        <ProModal state={state} isOpen={open} onClose={() => setOpen(false)} />
+    </>;
 };

@@ -8,7 +8,7 @@ import { actOnLexiconCandidate, startLexiconScan } from '@/shared/api/admin';
 import { getLexiconCandidatesQueryOptions, getLexiconScanQueryOptions } from '@/shared/query-options/admin';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 import { getProState } from '@/shared/lib/pro/proState';
-import { ProBadge } from '@/shared/components/pro/ProBadge';
+import { ProMarker } from '@/shared/components/pro/ProMarker';
 import { ProUnlockButton } from '@/shared/components/pro/ProUnlockButton';
 import { getLanguageNameFromLocale } from '@/shared/lib/languages';
 import { isScanOpen, type CandidateAction, type LexiconCandidate, type LexiconScan } from '@/shared/lib/lexiconCandidates';
@@ -336,7 +336,7 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
     );
 
     return (
-        <Card title={__('Suggested terms', 'translate')} badge={entitled ? undefined : <ProBadge />}>
+        <Card title={__('Suggested terms', 'translate')} badge={entitled ? undefined : <ProMarker />}>
             <p className="m-0 text-sm text-translatewp-muted">
                 {__('A scan reads your stored translations and points out terms that look wrong, inconsistent or left untranslated. Adding a term changes nothing until you retranslate.', 'translate')}
             </p>

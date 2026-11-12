@@ -19,10 +19,13 @@ import { getProState, isProActive } from '@/shared/lib/pro/proState';
 import { WhoCanManage } from '@/apps/admin/components/Translations/Settings/WhoCanManage';
 import { managerCan } from '@/shared/lib/access';
 
-const ToggleLabel = ({ title, description }: { title: string; description: string }) => (
-    <div className='flex flex-col gap-1'>
-        <p className='font-bold text-sm! text-translatewp-neutral!'>{title}</p>
-        <span className='text-sm text-translatewp-muted!'>{description}</span>
+const ToggleLabel = ({ title, description, badge }: { title: string; description: string; badge?: React.ReactNode }) => (
+    <div className="flex items-start gap-2">
+        <div className='flex min-w-0 flex-col gap-1'>
+            <p className='font-bold text-sm! text-translatewp-neutral!'>{title}</p>
+            <span className='text-sm text-translatewp-muted!'>{description}</span>
+        </div>
+        {badge}
     </div>
 );
 
@@ -164,9 +167,9 @@ export const TranslationsSettings = () =>
                     <ToggleControl label={
                         <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={settings.translate_image_alt_tags} onChange={(value) => updateSetting('translate_image_alt_tags', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
                 ) : (
-                    <ProLock feature={__('image alt text translation', 'translate')} badge={<ProMarker />}>
+                    <ProLock feature={__('image alt text translation', 'translate')}>
                         <ToggleControl label={
-                            <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                            <ToggleLabel title={__('Translate image alt tags', 'translate')} badge={<ProMarker />} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
                     </ProLock>
                 )}
             </div>

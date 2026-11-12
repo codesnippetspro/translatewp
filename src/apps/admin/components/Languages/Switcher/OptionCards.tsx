@@ -71,7 +71,7 @@ export const OptionCards = <Value extends string>({
 							className="absolute inset-0 m-0! h-full! w-full! cursor-pointer opacity-0!"
 						/>
 						<OptionRow
-							label={option.label}
+							label={option.locked ? <span className="flex flex-wrap items-center gap-2">{option.label}<ProMarker /></span> : option.label}
 							description={option.description}
 							descriptionId={`${id}-${option.value}-description`}
 							isSelected={value === option.value}
@@ -87,8 +87,6 @@ export const OptionCards = <Value extends string>({
 					<ProLock
 						key={option.value}
 						feature={option.locked.feature}
-						badge={<ProMarker />}
-						badgeClassName="end-4 top-4"
 						className="h-full"
 					>
 						{card}

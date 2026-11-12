@@ -32,7 +32,7 @@ type CardProps = {
 };
 
 const Card = ({ title, description, feature, locked, activeBadge, children }: CardProps) => (
-    <StyleCard title={title} description={description} badge={locked ? <ProMarker /> : activeBadge}>
+    <StyleCard title={title} description={description} badge={locked ? undefined : activeBadge}>
         <div className="flex flex-1 flex-col">
             {locked ? <ProLock feature={feature} className="flex-1">{children}</ProLock> : children}
         </div>
@@ -90,6 +90,11 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
     );
 
     return (
+        <section className="flex flex-col gap-4" aria-label={__('Pro style controls', 'translate')}>
+            {!proActive && <div className="flex flex-wrap items-center gap-2">
+                <h3 className="m-0! text-sm! font-bold! text-translatewp-neutral!">{__('Pro style controls', 'translate')}</h3>
+                <ProMarker />
+            </div>}
         <div className={stacked ? 'grid grid-cols-1 items-stretch gap-6 xl:grid-cols-3' : 'grid grid-cols-1 items-start gap-6 lg:grid-cols-3'} data-advanced-style>
             <Card
                 title={__('Audience', 'translate')}
@@ -103,5 +108,6 @@ export const AdvancedStyleControls = ({ style, updateStyle, stacked = false }: A
             <Card title={__('Length', 'translate')} description={LENGTH_DESCRIPTION} feature={__('Length', 'translate')} locked={!proActive}>{length}</Card>
             <Card title={__('Cultural adaptation', 'translate')} description={ADAPTATION_DESCRIPTION} feature={__('Cultural adaptation', 'translate')} locked={!proActive}>{adaptation}</Card>
         </div>
+        </section>
     );
 };

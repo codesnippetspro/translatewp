@@ -121,7 +121,7 @@ describe('the style and tone step', () =>
     it.each([
         [{ installed: false, active: false }, 'Install Pro'],
         [{ installed: true, active: false }, 'Activate Pro'],
-    ])('on an account that includes Pro but not on this site (%o) offers %s instead of the Pro tag', async (addon, action) =>
+    ])('on an account that includes Pro but not on this site (%o) keeps %s as the quiet tag action', async (addon, action) =>
     {
         (window as unknown as { translatewpPro?: unknown }).translatewpPro = { connected: true, entitled: true, version: '', upgradeUrl: '', ...addon };
         try {
@@ -129,7 +129,8 @@ describe('the style and tone step', () =>
             const rows = [...container.querySelectorAll('[data-preset-pro-row]')];
             expect(rows).toHaveLength(2);
             for (const row of rows) {
-                const labelled = [...row.querySelectorAll('button')].map(button => button.textContent?.trim()).filter(Boolean);
+                const labelled = [...row.querySelectorAll('button')].filter(button => button.textContent?.trim())
+                    .map(button => button.getAttribute('aria-label') ?? button.textContent?.trim());
                 expect(labelled).toEqual([action]);
                 expect((row.textContent?.match(/Pro/g) ?? []).length).toBe(1);
             }
