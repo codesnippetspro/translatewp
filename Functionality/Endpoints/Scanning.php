@@ -29,6 +29,9 @@ class Scanning extends BaseApiEndpoints {
     public const SCAN_HOOK = 'translatewp_context_scan_run';
     public const PRO_FOLLOWUP_HOOK = 'translatewp_pro_lexicon_followup';
     private const PRO_FOLLOWUP_OPTION = 'translations.context.pro_followup';
+    private const PRO_FOLLOWUP_RETRIES_OPTION = 'translations.context.pro_followup_retries';
+    private const PRO_FOLLOWUP_MAX_RETRIES = 3;
+    private const LEXICON_SUGGESTION_CAP = 12;
     private const SCAN_LOCK_RETRY_SECONDS = 60;
     private const SCAN_STATUS_OPTION = 'translations.context.scan_status';
     private const SCAN_RESULT_OPTION = 'translations.context.scan_result';
@@ -184,12 +187,12 @@ class Scanning extends BaseApiEndpoints {
         $read_only = $request instanceof \WP_REST_Request && '1' === sanitize_key( $request->get_param( 'read_only' ) );
         $run_followup = $request instanceof \WP_REST_Request && '1' === sanitize_key( $request->get_param( 'followup' ) );
         if ( $run_followup && ! $read_only ) {
-            \TranslateWP\Components\CronKick::maybe_run_due( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
+            $this->schedule_pro_followup();
         }
 
         $status = Options::get( self::SCAN_STATUS_OPTION, 'pending' );
 
-        if ( 'pending' === $status && ! $read_only ) {
+        if ( 'pending' === $status && ! $read_only && ! $run_followup ) {
             \TranslateWP\Components\CronKick::maybe_run_due( self::SCAN_HOOK, [ $this, 'run_scan' ] );
             $status = Options::get( self::SCAN_STATUS_OPTION, 'pending' );
         }
@@ -358,13 +361,32 @@ class Scanning extends BaseApiEndpoints {
             return;
         }
         Options::update( self::PRO_FOLLOWUP_OPTION, 'pending' );
-        if ( false === wp_schedule_single_event( time(), self::PRO_FOLLOWUP_HOOK ) ) {
-            Options::update( self::PRO_FOLLOWUP_OPTION, 'failed' );
+        Options::update( self::PRO_FOLLOWUP_RETRIES_OPTION, 0 );
+        if ( ! $this->queue_pro_followup( 0 ) ) {
             return;
         }
         if ( function_exists( 'spawn_cron' ) ) {
             spawn_cron();
         }
+    }
+
+    private function queue_pro_followup( int $delay ): bool {
+        if ( false === wp_schedule_single_event( time() + $delay, self::PRO_FOLLOWUP_HOOK )
+            && false === wp_next_scheduled( self::PRO_FOLLOWUP_HOOK ) ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'failed' );
+            return false;
+        }
+        return true;
+    }
+
+    private function retry_pro_followup(): void {
+        $retries = (int) Options::get( self::PRO_FOLLOWUP_RETRIES_OPTION, 0 );
+        if ( $retries >= self::PRO_FOLLOWUP_MAX_RETRIES ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'failed' );
+            return;
+        }
+        Options::update( self::PRO_FOLLOWUP_RETRIES_OPTION, $retries + 1 );
+        $this->queue_pro_followup( self::SCAN_LOCK_RETRY_SECONDS * ( 2 ** $retries ) );
     }
 
     public function run_pro_followup(): void {
@@ -376,7 +398,7 @@ class Scanning extends BaseApiEndpoints {
             return;
         }
         if ( get_transient( self::SCAN_LOCK_TRANSIENT ) ) {
-            wp_schedule_single_event( time() + self::SCAN_LOCK_RETRY_SECONDS, self::PRO_FOLLOWUP_HOOK );
+            $this->queue_pro_followup( self::SCAN_LOCK_RETRY_SECONDS );
             return;
         }
         set_transient( self::SCAN_LOCK_TRANSIENT, 1, self::SCAN_LOCK_SECONDS );
@@ -417,7 +439,11 @@ class Scanning extends BaseApiEndpoints {
         if ( is_wp_error( $response ) ) {
             $data = $response->get_error_data();
             $status = is_array( $data ) ? (int) ( $data['status'] ?? 0 ) : 0;
-            Options::update( self::PRO_FOLLOWUP_OPTION, in_array( $status, [ 400, 403 ], true ) ? 'unavailable' : 'failed' );
+            if ( in_array( $status, [ 400, 403 ], true ) ) {
+                Options::update( self::PRO_FOLLOWUP_OPTION, 'unavailable' );
+            } else {
+                $this->retry_pro_followup();
+            }
             return;
         }
         if ( ! is_array( $response ) || ! is_array( $response['lexicon'] ?? null ) ) {
@@ -437,7 +463,7 @@ class Scanning extends BaseApiEndpoints {
                 $terms[ $key ] = $entry;
             }
         }
-        $current['lexicon'] = array_values( $terms );
+        $current['lexicon'] = array_slice( array_values( $terms ), 0, self::LEXICON_SUGGESTION_CAP );
         $current['lexicon_applied'] = empty( $terms );
         $current['scanned_ids'] = array_values( array_unique( array_merge( $stored['scanned_ids'], $sampled_ids ) ) );
         Options::update( self::SCAN_RESULT_OPTION, $current );
