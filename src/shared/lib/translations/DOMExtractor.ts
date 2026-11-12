@@ -1,6 +1,6 @@
 import {
     DEFAULT_EXTRACTION_OPTIONS,
-    ADMIN_ONLY_CLASSES, DEFAULT_NO_TRANSLATE_CLASS,
+    ADMIN_ONLY_CLASSES, ADMIN_ONLY_IDS, DEFAULT_NO_TRANSLATE_CLASS,
     EntryType,
     type ExtractionOptions,
     TRANSLATABLE_ATTRIBUTES,
@@ -238,7 +238,7 @@ export class DOMExtractor
 
     static #normalizeNoTranslateIds(noTranslateIds: string[], noTranslateId?: string): string[]
     {
-        const ids = new Set<string>();
+        const ids = new Set<string>(ADMIN_ONLY_IDS);
 
         for (const id of noTranslateIds)
         {
