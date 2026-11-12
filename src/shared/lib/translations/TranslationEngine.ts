@@ -15,7 +15,7 @@ import {
     type TranslationBatchResult,
 } from '@/shared/lib/translations/Translator';
 
-const TRANSLATION_RUN_TIMEOUT_MS = 90_000;
+const TRANSLATION_RUN_TIMEOUT_MS = 180_000;
 
 export type TranslationEntryWrite = {
     entry: TranslatableEntry;
@@ -330,6 +330,7 @@ class DOMWriter
 {
     static #loadingClassName = 'translatewp-translating';
     static #loadingCountAttribute = 'data-translatewp-loading-count';
+    static #loadingElements = new WeakMap<Node, Element>();
     static #styleTagId = 'translatewp-translating-style';
 
     static ensureLoadingStyles(): void
@@ -361,7 +362,8 @@ class DOMWriter
     {
         for (const entry of entries)
         {
-            const element = DOMWriter.#getLoadingElement(entry);
+            const element = DOMWriter.#loadingElements.get(entry.node) ?? DOMWriter.#getLoadingElement(entry);
+            DOMWriter.#loadingElements.delete(entry.node);
             if (!element) continue;
             element.removeAttribute(DOMWriter.#loadingCountAttribute);
             element.classList.remove(DOMWriter.#loadingClassName);
@@ -374,8 +376,12 @@ class DOMWriter
         if (entry.type !== EntryType.TEXT) return;
         if (!/\p{L}/u.test(entry.value)) return;
 
-        const element = DOMWriter.#getLoadingElement(entry);
+        const element = isLoading
+            ? DOMWriter.#getLoadingElement(entry)
+            : DOMWriter.#loadingElements.get(entry.node) ?? DOMWriter.#getLoadingElement(entry);
         if (!element) return;
+        if (isLoading) DOMWriter.#loadingElements.set(entry.node, element);
+        else DOMWriter.#loadingElements.delete(entry.node);
 
         const currentCount = Number(element.getAttribute(DOMWriter.#loadingCountAttribute) || 0);
 

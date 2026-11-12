@@ -301,16 +301,16 @@ describe('CacheFirstTranslator miss polling', () =>
 
         const result = await translator.translateBatch(new DOMExtractor().extract(document.body));
 
-        // 90s budget / 2s Retry-After = 45 retries before the window is spent.
-        expect(missCalls).toBe(46);
-        expect(delays).toHaveLength(45);
+        // A retry at the 90s deadline has no time left to serve the response.
+        expect(missCalls).toBe(45);
+        expect(delays).toHaveLength(44);
         expect(delays.every(ms => ms === 2000)).toBe(true);
         expect(result.failures.length).toBeGreaterThan(0);
         expect(result.translated.every(entry => entry.value === 'Hello world' || entry.value === 'Second paragraph')).toBe(true);
         expect(console).toHaveWarned();
     });
 
-    it('caps the 429 retry delay at the poll timeout', async () =>
+    it('fails open when Retry-After exceeds the poll timeout', async () =>
     {
         const delays: number[] = [];
         let missCalls = 0;
@@ -331,8 +331,8 @@ describe('CacheFirstTranslator miss polling', () =>
 
         await translator.translateBatch(new DOMExtractor().extract(document.body));
 
-        expect(missCalls).toBe(2);
-        expect(delays).toEqual([90000]);
+        expect(missCalls).toBe(1);
+        expect(delays).toEqual([]);
         expect(console).toHaveWarned();
     });
 

@@ -31,11 +31,17 @@ export const runTranslationTask = <T>({ run, signal, timeoutMs }: TranslationTas
             () => fail(new DOMException('Translation timed out.', 'TimeoutError')), timeoutMs,
         );
         signal?.addEventListener('abort', abort, { once: true });
-        Promise.resolve().then(() =>
+        let task: Promise<T>;
+        try
         {
-            if (controller.signal.aborted) throw new DOMException('Translation aborted.', 'AbortError');
-            return run(controller.signal);
-        }).then(value =>
+            task = run(controller.signal);
+        }
+        catch (error)
+        {
+            fail(error);
+            return;
+        }
+        task.then(value =>
         {
             if (settled) return;
             settled = true;
