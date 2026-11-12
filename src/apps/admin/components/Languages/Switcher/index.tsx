@@ -1,3 +1,4 @@
+import { MIN_SWITCHER_FONT_SIZE, MAX_SWITCHER_FONT_SIZE, resolveSwitcherFontSize } from '@/shared/lib/switcherFontSize';
 import { __ } from '@wordpress/i18n';
 import { FormToggle, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
 
@@ -19,7 +20,7 @@ import { renderedSwitcherType } from '@/apps/admin/components/Languages/Switcher
 
 const PENDING_MESSAGE_MAX_LENGTH = 200;
 
-type MetricKey = 'offset' | 'icon_size' | 'padding';
+type MetricKey = 'offset' | 'icon_size' | 'padding' | 'font_size';
 
 const BACKGROUND_OPTIONS: OptionCard<'solid' | 'transparent' | 'glass'>[] = [
     { value: 'solid', label: __('Solid', 'translate'), description: __('Painted in the background colour.', 'translate') },
@@ -88,7 +89,7 @@ export const LanguagesSwitcher = () =>
 
     // A size field the browser has emptied keeps its own blank draft while the
     // stored value stands; leaving the field remounts it on the stored value.
-    const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0 });
+    const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0, font_size: 0 });
 
     // While the loading-border picker is open the preview shows the loading ring,
     // presentationally only: no translation starts and no loading flag is saved.
@@ -113,7 +114,7 @@ export const LanguagesSwitcher = () =>
             return;
         }
 
-        updateSetting(key, parsed < 0 ? 0 : Math.trunc(parsed));
+        updateSetting(key, key === 'font_size' ? resolveSwitcherFontSize(parsed) : Math.max(0, Math.trunc(parsed)));
     };
 
     const translatingMessage = (
@@ -273,9 +274,24 @@ export const LanguagesSwitcher = () =>
     const sizes = (
         <section data-switcher-section="sizes" className={SECTION_CLASS} data-switcher-sizes aria-labelledby="twp-switcher-sizes">
             <h3 id="twp-switcher-sizes" className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Sizes', 'translate')}</h3>
-            {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The native dropdown is sized by the browser; only the offset applies.', 'translate')}</p>}
+            {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The browser draws the native dropdown. Font size and offset still apply.', 'translate')}</p>}
             {sideTab && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The side tab sits on the screen edge, so the offset does not apply.', 'translate')}</p>}
             <div className="grid grid-cols-1 gap-4 @min-[380px]:grid-cols-2 @min-[500px]:grid-cols-3">
+                <div data-size-font>
+                <NumberControl
+                    key={`font_size-${metricKeys.font_size}`}
+                    onBlur={snapBack('font_size')}
+                    __next40pxDefaultSize
+                    label={__('Font size', 'translate')}
+                    help={__('Size of the language names in the switcher.', 'translate')}
+                    value={settings.font_size}
+                    onChange={(value) => updateMetric('font_size', value)}
+                    min={MIN_SWITCHER_FONT_SIZE}
+                    max={MAX_SWITCHER_FONT_SIZE}
+                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
+                    className='max-w-40'
+                />
+                </div>
                 <div className={native ? 'pointer-events-none opacity-50' : ''} aria-disabled={native || undefined} data-size-icon>
                 <NumberControl
                     key={`icon_size-${metricKeys.icon_size}`}

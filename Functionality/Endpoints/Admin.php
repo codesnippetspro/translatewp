@@ -882,6 +882,8 @@ class Admin extends BaseApiEndpoints {
 	private const SWITCHER_PIXEL_KEYS     = [ 'offset', 'icon_size', 'padding' ];
 	private const PENDING_MESSAGE_MAX_LENGTH = 200;
 	private const SWITCHER_PIXEL_MAX   = 500;
+	private const SWITCHER_FONT_SIZE_MIN = 10;
+	private const SWITCHER_FONT_SIZE_MAX = 32;
 	private const SWITCHER_POSITION_MAX = 100000;
 	private const SWITCHER_ANCHORS = [ 'top-left', 'top-right', 'bottom-left', 'bottom-right' ];
 
@@ -989,6 +991,11 @@ class Admin extends BaseApiEndpoints {
 			if ( null !== $color ) {
 				$patch[ $key ] = $color;
 			}
+		}
+
+		if ( array_key_exists( 'font_size', $data ) && is_numeric( $data['font_size'] )
+			&& is_finite( (float) $data['font_size'] ) ) {
+			$patch['font_size'] = min( self::SWITCHER_FONT_SIZE_MAX, max( self::SWITCHER_FONT_SIZE_MIN, (int) $data['font_size'] ) );
 		}
 
 		foreach ( self::SWITCHER_PIXEL_KEYS as $key ) {

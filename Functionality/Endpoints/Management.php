@@ -305,6 +305,7 @@ class Management extends BaseApiEndpoints {
 				'loading_border_color' => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
 				'offset'           => 24,
 				'icon_size'        => 24,
+				'font_size'        => 14,
 				'padding'          => 12,
             ];
             Options::update( 'languages.switcher', \TranslateWP\Components\SettingsScope::keep_locked( 'languages.switcher', $switcher_seed ) );
