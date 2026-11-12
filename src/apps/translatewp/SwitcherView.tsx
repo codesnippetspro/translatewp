@@ -1,3 +1,4 @@
+import { resolveSwitcherFontSize, SWITCHER_LANGUAGE_LINE_HEIGHT_RATIO } from '@/shared/lib/switcherFontSize';
 import { switcherSurface } from '@/apps/translatewp/switcherSurface';
 import type React from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from '@wordpress/element';
@@ -146,6 +147,8 @@ export function SwitcherView({
     // A locale with no flag falls back to the icon for Flag only.
     const trigger = requestedTrigger === 'flag' && !selectedFlag ? 'icon' : requestedTrigger;
 
+    const fontSizePx = resolveSwitcherFontSize(switcher?.font_size);
+    const languageLineHeightPx = fontSizePx * SWITCHER_LANGUAGE_LINE_HEIGHT_RATIO;
     const bgColor = switcher?.background_color || '#FFFFFF';
     const textColor = switcher?.text_color || '#393535';
     const borderColor = switcher?.border_color || '#E2E2E4';
@@ -455,11 +458,12 @@ export function SwitcherView({
                 }
                 .twp-trigger[data-twp-trigger="name_flag"] {
                     width: auto !important;
+                    height: max(${ triggerSizePx }px, ${ languageLineHeightPx }px) !important;
                     min-width: ${ triggerSizePx }px !important;
                     gap: 0.5rem !important;
                     padding: 0 ${ paddingPx }px !important;
-                    font-size: 0.875rem !important;
-                    line-height: 1.25rem !important;
+                    font-size: ${ fontSizePx }px !important;
+                    line-height: ${ languageLineHeightPx }px !important;
                     white-space: nowrap !important;
                     max-width: calc(100vw - 2 * ${ insetPx }px) !important;
                 }
@@ -594,8 +598,8 @@ export function SwitcherView({
                     width: 100% !important;
                     padding: 0.625rem 0.75rem !important;
                     text-align: start !important;
-                    font-size: 0.875rem !important;
-					line-height: 1.25rem !important;
+                    font-size: ${ fontSizePx }px !important;
+					line-height: ${ languageLineHeightPx }px !important;
                     font-family: inherit !important;
                     cursor: pointer !important;
                     transition: background-color 200ms, color 200ms !important;
@@ -796,8 +800,8 @@ export function SwitcherView({
                     ${ surface.closed }
                     border-radius: 9999px !important;
                     cursor: pointer !important;
-                    font-size: 0.875rem !important;
-                    line-height: 1.25rem !important;
+                    font-size: ${ fontSizePx }px !important;
+                    line-height: ${ languageLineHeightPx }px !important;
                     font-family: inherit !important;
                     background-image: url("data:image/svg+xml,${ encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='${ textColor }' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>`) }") !important;
                     background-repeat: no-repeat !important;

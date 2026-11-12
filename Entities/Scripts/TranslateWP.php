@@ -11,6 +11,7 @@ use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\RemoteApi;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\SwitcherPlacement;
+use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\Sites;
 use TranslateWP\Components\TranslationAiSettings;
 use TranslateWP\Components\TranslationStore;
@@ -283,6 +284,7 @@ class TranslateWP extends Script {
             'highlight_bg'     => \TranslateWP\Functionality\Endpoints\Management::DEFAULT_SWITCHER_HIGHLIGHT_BG,
             'offset'           => 24,
             'icon_size'        => 24,
+            'font_size'        => SwitcherFontSize::DEFAULT_SIZE,
             'padding'          => 12,
         ];
         $default_seo = [
