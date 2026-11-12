@@ -296,6 +296,7 @@ class Menus {
             return;
         }
 
+        do_action( 'translatewp_admin_page_load' );
         echo '<div id="translatewp-admin"></div>';
     }
 }

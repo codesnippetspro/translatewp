@@ -31,7 +31,6 @@ class Scanning extends BaseApiEndpoints {
     private const PRO_FOLLOWUP_OPTION = 'translations.context.pro_followup';
     private const PRO_FOLLOWUP_RETRIES_OPTION = 'translations.context.pro_followup_retries';
     private const PRO_FOLLOWUP_MAX_RETRIES = 3;
-    private const LEXICON_SUGGESTION_CAP = 12;
     private const SCAN_LOCK_RETRY_SECONDS = 60;
     private const SCAN_STATUS_OPTION = 'translations.context.scan_status';
     private const SCAN_RESULT_OPTION = 'translations.context.scan_result';
@@ -54,6 +53,7 @@ class Scanning extends BaseApiEndpoints {
         add_action( self::SCAN_HOOK, [ $this, 'run_scan' ] );
         add_action( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
         add_action( 'translatewp_pro_ready', [ $this, 'schedule_pro_followup' ] );
+        add_action( 'translatewp_admin_page_load', [ $this, 'resume_pro_followup' ] );
     }
 
     public function define_endpoints() {
@@ -370,6 +370,13 @@ class Scanning extends BaseApiEndpoints {
         }
     }
 
+    public function resume_pro_followup(): void {
+        if ( ! $this->admin_permissions_check() || 'pending' !== Options::get( self::PRO_FOLLOWUP_OPTION ) ) {
+            return;
+        }
+        \TranslateWP\Components\CronKick::maybe_run_due( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
+    }
+
     private function queue_pro_followup( int $delay ): bool {
         if ( false === wp_schedule_single_event( time() + $delay, self::PRO_FOLLOWUP_HOOK )
             && false === wp_next_scheduled( self::PRO_FOLLOWUP_HOOK ) ) {
@@ -463,7 +470,7 @@ class Scanning extends BaseApiEndpoints {
                 $terms[ $key ] = $entry;
             }
         }
-        $current['lexicon'] = array_slice( array_values( $terms ), 0, self::LEXICON_SUGGESTION_CAP );
+        $current['lexicon'] = array_values( $terms );
         $current['lexicon_applied'] = empty( $terms );
         $current['scanned_ids'] = array_values( array_unique( array_merge( $stored['scanned_ids'], $sampled_ids ) ) );
         Options::update( self::SCAN_RESULT_OPTION, $current );
