@@ -92,7 +92,7 @@ describe('Settings, Switcher: layout', () =>
     {
         const container = await render();
         const cards = Array.from(container.querySelectorAll<HTMLInputElement>('[data-option-cards] input[type="radio"]'))
-            .map(input => input.parentElement as HTMLElement);
+            .map(input => input.closest('.box-border') as HTMLElement);
 
         expect(cards.length).toBeGreaterThan(4);
         for (const card of cards)
