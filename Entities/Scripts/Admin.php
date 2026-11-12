@@ -55,7 +55,7 @@ class Admin extends Script {
 
 	public static function connect_return_data(): string {
 		return 'window.TranslateWP = Object.assign( window.TranslateWP || {}, ' . wp_json_encode(
-			[ 'connectReturnError' => SiteConnection::connect_return_error_message() ],
+			[ 'connectReturnError' => SiteConnection::connect_return_error() ],
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 		) . ' );';
 	}

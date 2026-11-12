@@ -317,13 +317,13 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     };
 
     if (isLoading) {
-        return <><ConnectReturnError /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
+        return <><ConnectReturnError connected={data?.connected} /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
     }
 
     if (isGroupLocked('account')) {
         return (
             <div className="flex flex-col gap-4">
-                <ConnectReturnError />
+                <ConnectReturnError connected={data?.connected} />
                 <ConnectionStatusText />
                 {data?.siteId && (
                     <p className="text-sm text-translatewp-muted! m-0">
@@ -344,7 +344,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     return (
         <div className="flex flex-col gap-4">
             <ConfirmDialog {...confirmDialogProps} />
-            <ConnectReturnError />
+            <ConnectReturnError connected={data?.connected} />
             <ConnectionStatusText />
             <AddressChangedNotice />
             {data?.connectionStatus !== 'invalidated' && (data?.connected ? (

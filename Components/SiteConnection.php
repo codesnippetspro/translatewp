@@ -1096,12 +1096,18 @@ class SiteConnection {
 		}
 	}
 
-	public static function connect_return_error_message(): string {
+	public static function connect_return_error(): ?array {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			return '';
+			return null;
 		}
 		$notice = self::current_notice();
-		return in_array( $notice, [ 'connected', 'reconnected' ], true ) ? '' : self::notice_message( $notice );
+		$message = in_array( $notice, [ 'connected', 'reconnected' ], true ) ? '' : self::notice_message( $notice );
+		return '' === $message ? null : [
+			'code' => $notice,
+			'message' => $message,
+			'portalSitesUrl' => self::portal_sites_url(),
+			'supportUrl' => 'https://translatewp.ai/support/',
+		];
 	}
 
 	private static function current_notice(): string {
