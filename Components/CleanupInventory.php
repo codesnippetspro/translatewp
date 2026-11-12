@@ -103,6 +103,7 @@ class CleanupInventory {
 	public const SCHEDULED_HOOKS = [
 		SiteLanguageSync::RETRY_HOOK,
 		Scanning::SCAN_HOOK,
+		Scanning::PRO_FOLLOWUP_HOOK,
 		Indexer::DRAIN_HOOK,
 		ReadinessReconcile::HOOK,
 		KeepWarm::LEXICON_DEBOUNCE_HOOK,
