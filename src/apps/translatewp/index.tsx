@@ -182,10 +182,7 @@ export const TranslateWP = () =>
 
     function clearRememberedLanguageSelection(): void
     {
-        if (seo.remember_last_choice ?? true)
-        {
-            document.cookie = `translatewp_last_choice=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        }
+        document.cookie = `translatewp_last_choice=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     }
 
     function beginLanguageSelection(locale: string, history: 'push' | 'replace'): void
@@ -203,10 +200,13 @@ export const TranslateWP = () =>
             .split('; ')
             .find((row) => row.startsWith('translatewp_last_choice='))
             ?.split('=')[1];
-        if ((seo.remember_last_choice ?? true) && currentChoice !== locale)
+        if (currentChoice !== locale)
         {
             const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-            document.cookie = `translatewp_last_choice=${locale}; path=/; SameSite=Lax${secure}; expires=${new Date(Date.now() + (seo.cookie_ttl ?? 30) * 24 * 60 * 60 * 1000).toUTCString()}`;
+            const expires = (seo.remember_last_choice ?? true)
+                ? `; expires=${new Date(Date.now() + (seo.cookie_ttl ?? 30) * 24 * 60 * 60 * 1000).toUTCString()}`
+                : '';
+            document.cookie = `translatewp_last_choice=${locale}; path=/; SameSite=Lax${secure}${expires}`;
         }
 
         const homeUrl = new URL(localizeUrl(window.TranslateWP.context.home_url, locale, languages, window.TranslateWP.context.home_url));
