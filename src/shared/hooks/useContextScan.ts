@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import { getScanContextStatus, scanContext, type ScanContextResponse, type ScanLexiconSuggestion } from '@/shared/api/setup';
+import { getScanContextStatus, resumeScanFollowup, scanContext, type ScanContextResponse, type ScanContextStatusResponse, type ScanLexiconSuggestion } from '@/shared/api/setup';
 
 const SCAN_POLL_INTERVAL_MS = 3000;
 // A safety net only: the server's own worst case (one attempt, an immediate
@@ -19,7 +19,7 @@ export type ScanProgress = { stage: 'collecting' | 'analysing'; sampled: number;
 export type ScanPollState =
     | { phase: 'idle' }
     | { phase: 'scanning'; elapsedSeconds: number; progress: ScanProgress }
-    | { phase: 'done'; context: string; result: ScanResult; applied: boolean; pages: number; lexiconSuggestions: ScanLexiconSuggestion[] }
+    | { phase: 'done'; context: string; result: ScanResult; applied: boolean; pages: number; lexiconSuggestions: ScanLexiconSuggestion[]; restored?: boolean }
     | { phase: 'failed'; message: string };
 
 /**
@@ -102,8 +102,26 @@ export function scanProgressMessage(elapsedSeconds: number, progress?: ScanProgr
     );
 }
 
-export const useContextScan = () =>
+const completedScanState = (status: ScanContextStatusResponse, { pages, restored = false }: { pages: number; restored?: boolean }): ScanPollState => ({
+    phase: 'done',
+    context: status.context ?? '',
+    applied: status.applied !== false,
+    pages,
+    lexiconSuggestions: status.lexiconSuggestions ?? [],
+    restored,
+    result: {
+        context: status.context ?? '',
+        language: status.language,
+        style: status.style,
+        tone: status.tone,
+        formality: status.formality,
+        creativity: status.creativity,
+    },
+});
+
+export const useContextScan = ({ restoreStored = false }: { restoreStored?: boolean } = {}) =>
 {
+    const scanGenerationRef = useRef(0);
     const [state, setState] = useState<ScanPollState>({ phase: 'idle' });
     const pollTimerRef = useRef<number | null>(null);
     const tickTimerRef = useRef<number | null>(null);
@@ -162,24 +180,9 @@ export const useContextScan = () =>
             if (status.status === 'done')
             {
                 stopTimers();
-                const context = status.context ?? '';
-                setState(current => ({
-                    phase: 'done',
-                    context,
-                    // A site that already holds translations gets the scan as a
-                    // proposal: the options are untouched until the owner saves.
-                    applied: status.applied !== false,
-                    pages: current.phase === 'scanning' ? current.progress.total : 0,
-                    lexiconSuggestions: status.lexiconSuggestions ?? [],
-                    result: {
-                        context,
-                        language: status.language,
-                        style: status.style,
-                        tone: status.tone,
-                        formality: status.formality,
-                        creativity: status.creativity,
-                    },
-                }));
+                setState(current => completedScanState(
+                    status, { pages: current.phase === 'scanning' ? current.progress.total : 0 },
+                ));
                 return;
             }
             if (status.status === 'failed')
@@ -197,8 +200,37 @@ export const useContextScan = () =>
         pollTimerRef.current = window.setTimeout(() => { void poll(); }, SCAN_POLL_INTERVAL_MS);
     }, [fail, stopTimers]);
 
+    useEffect(() =>
+    {
+        if (!restoreStored) return;
+        let active = true;
+        let followupInFlight = false;
+        const generation = scanGenerationRef.current;
+        const deadline = Date.now() + SCAN_POLL_TIMEOUT_MS;
+        const restore = async (runFollowup = false): Promise<void> =>
+        {
+            try
+            {
+                const status = await getScanContextStatus({ readOnly: !runFollowup, runFollowup });
+                if (!active || generation !== scanGenerationRef.current) return;
+                if (status.status === 'done') setState(completedScanState(status, { pages: 0, restored: true }));
+                if (runFollowup && status.followupPending && !followupInFlight)
+                {
+                    followupInFlight = true;
+                    void resumeScanFollowup().catch(() => {}).finally(() => { followupInFlight = false; });
+                }
+                if (status.followupPending && Date.now() < deadline)
+                    pollTimerRef.current = window.setTimeout(() => { void restore(true); }, SCAN_POLL_INTERVAL_MS);
+            }
+            catch {}
+        };
+        void restore();
+        return () => { active = false; stopTimers(); };
+    }, [restoreStored, stopTimers]);
+
     const startScan = useCallback(async () =>
     {
+        scanGenerationRef.current += 1;
         stopTimers();
         startedAtRef.current = Date.now();
         serverAheadRef.current = 0;

@@ -22,6 +22,7 @@ export type ScanContextStatusResponse = {
     applied?: boolean;
     /** Terms the scan proposes to a Pro site; a Free site gets none. They land only through applyScanLexicon. */
     lexiconSuggestions?: ScanLexiconSuggestion[];
+    followupPending?: boolean;
     context?: string;
     language?: string;
     style?: ScanContextResponse['style'];
@@ -49,10 +50,22 @@ export const applyScanLexicon = async (): Promise<{ added: number }> =>
     });
 }
 
-export const getScanContextStatus = async (): Promise<ScanContextStatusResponse> =>
+export const resumeScanFollowup = async (): Promise<{ pending: boolean }> =>
+{
+    return await apiFetch<{ pending: boolean }>({
+        path: 'translatewp/v1/scanning/context/followup',
+        method: 'POST',
+        data: {},
+    });
+}
+
+export const getScanContextStatus = async ({ readOnly = false, runFollowup = false }: {
+    readOnly?: boolean;
+    runFollowup?: boolean;
+} = {}): Promise<ScanContextStatusResponse> =>
 {
     return await apiFetch<ScanContextStatusResponse>({
-        path: 'translatewp/v1/scanning/context/status',
+        path: `translatewp/v1/scanning/context/status${readOnly ? '?read_only=1' : runFollowup ? '?followup=1' : ''}`,
         method: 'GET',
     });
 }

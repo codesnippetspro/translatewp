@@ -64,12 +64,12 @@ export const TranslationsContext = () =>
     // The scan runs on the site's scheduled tasks and finishes later; the
     // form fills in from the polled result, with the time elapsed shown
     // while it runs and a plain reason when it fails.
-    const { state: scanState, startScan } = useContextScan();
+    const { state: scanState, startScan } = useContextScan({ restoreStored: true });
     const isPending = scanState.phase === 'scanning';
 
     useEffect(() =>
     {
-        if (scanState.phase !== 'done')
+        if (scanState.phase !== 'done' || scanState.restored)
         {
             return;
         }
@@ -173,7 +173,7 @@ export const TranslationsContext = () =>
                     </p>
                 ) }
 
-                { scanState.phase === 'done' && (
+                { scanState.phase === 'done' && !scanState.restored && (
                     <p className="text-sm text-translatewp-muted!" role="status">
                         { scanDoneMessage(scanState.pages, scanState.applied) }
                     </p>
