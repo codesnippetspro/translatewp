@@ -12,7 +12,6 @@ import { buildAdminUrl, useNavigate } from '@/apps/admin/hooks/useNavigate';
 import { usePageHash } from '@/apps/admin/hooks/usePageHash';
 import codeSnippetsLogo from '@/shared/assets/code-snippets-logo.svg';
 import { Icon as TranslateWPIcon } from '@/shared/components/Icon';
-import { ProBadge } from '@/shared/components/pro/ProBadge';
 import { canAdminister, managerCan } from '@/shared/lib/access';
 
 const STORAGE_KEY = 'translatewp-sidebar-collapsed';
@@ -170,7 +169,6 @@ export const Sidebar = () =>
 									: <group.icon size={ICON_SIZE} aria-hidden='true' />}
 								<span className={`${collapsed ? 'hidden' : 'inline-flex'} items-center gap-2 [@media(max-width:782px)]:inline-flex!`}>
 									{group.title}
-									{group.route === '/seo' && <ProBadge />}
 								</span>
 							</a>
 						</Tooltip>
