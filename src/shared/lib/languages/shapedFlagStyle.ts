@@ -14,20 +14,27 @@ export const FLAG_BORDER_RADIUS = '3px';
 
 const SHAPED_FLAG_SIZE_PX = 16;
 
-export const getShapedFlagStyle = ( locale: string, shape: 'square' | 'circle' ): CSSProperties | null =>
+export type FlagStyleOptions = {
+    shape: FlagIconStyle;
+    sizePx?: number;
+};
+
+export const getShapedFlagStyle = ( locale: string, { shape, sizePx }: FlagStyleOptions ): CSSProperties | null =>
 {
     const position = flagSpritePositions[locale];
     if ( !position ) {
         return null;
     }
 
-    const scale = SHAPED_FLAG_SIZE_PX / FLAG_SPRITE_CELL_HEIGHT;
-    const scaledCellWidth = FLAG_SPRITE_CELL_WIDTH * scale;
-    const horizontalCrop = ( scaledCellWidth - SHAPED_FLAG_SIZE_PX ) / 2;
+    const rectangular = shape === 'rectangle';
+    const width = sizePx ?? ( rectangular ? FLAG_SPRITE_CELL_WIDTH : SHAPED_FLAG_SIZE_PX );
+    const scale = width / ( rectangular ? FLAG_SPRITE_CELL_WIDTH : FLAG_SPRITE_CELL_HEIGHT );
+    const height = rectangular ? FLAG_SPRITE_CELL_HEIGHT * scale : width;
+    const horizontalCrop = rectangular ? 0 : ( FLAG_SPRITE_CELL_WIDTH * scale - width ) / 2;
 
     return {
-        width: SHAPED_FLAG_SIZE_PX,
-        height: SHAPED_FLAG_SIZE_PX,
+        width,
+        height,
         display: 'inline-block',
         overflow: 'hidden',
         backgroundRepeat: 'no-repeat',
