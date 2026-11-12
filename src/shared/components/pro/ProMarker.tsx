@@ -10,7 +10,7 @@ export const ProMarker = ({ state }: { state?: ProState } = {}) =>
 {
     const [open, setOpen] = useState(false);
     const step = proNextStep(state ?? getProState());
-    const className = `${PRO_TAG_CLASS} relative z-10 pointer-events-auto cursor-pointer`;
+    const className = `${PRO_TAG_CLASS} cursor-pointer`;
 
     if (step === 'install' || step === 'activate') {
         return <ProInstallAction

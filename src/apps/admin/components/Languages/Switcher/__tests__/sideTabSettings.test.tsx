@@ -68,7 +68,7 @@ describe('Settings, Switcher: the Side tab', () =>
         const container = await render();
 
         const lock = container.querySelector('[data-option-cards="switcher-type"] button[aria-label*="side tab"]')?.parentElement as HTMLElement;
-        expect(lock.querySelector('button[title="Upgrade to PRO"]')?.textContent).toBe('Pro');
+        expect(lock.parentElement?.parentElement?.querySelector('button[title="Upgrade to PRO"]')?.textContent).toBe('Pro');
         expect(lock.querySelector('button[aria-label*="side tab"]')).not.toBeNull();
         expect(sideTabCard(container).disabled).toBe(true);
         await act(async () => { sideTabCard(container).click(); });

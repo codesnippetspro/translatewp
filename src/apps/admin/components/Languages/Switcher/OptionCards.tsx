@@ -48,17 +48,8 @@ export const OptionCards = <Value extends string>({
 		<div className={gridClassName} role="radiogroup" aria-label={label} data-option-cards={name}>
 			{options.map((option) =>
 			{
-				const card = (
-					<div
-						key={option.value}
-						className={`${OPTION_CARD_CLASS} relative transition-colors
-							focus-within:outline-2! focus-within:outline-solid!
-							focus-within:outline-offset-2! focus-within:outline-translatewp-primary! ${
-							value === option.value
-								? 'border-translatewp-primary! bg-translatewp-primary/5'
-								: 'border-translatewp-border! bg-white hover:border-translatewp-primary/40'
-						}`}
-					>
+				const content = (
+					<>
 						<input
 							type="radio"
 							name={`translatewp-option-${id}`}
@@ -71,7 +62,7 @@ export const OptionCards = <Value extends string>({
 							className="absolute inset-0 m-0! h-full! w-full! cursor-pointer opacity-0!"
 						/>
 						<OptionRow
-							label={option.locked ? <span className="flex flex-wrap items-center gap-2">{option.label}<ProMarker /></span> : option.label}
+							label={option.label}
 							description={option.description}
 							descriptionId={`${id}-${option.value}-description`}
 							isSelected={value === option.value}
@@ -81,17 +72,27 @@ export const OptionCards = <Value extends string>({
 								{option.example}
 							</div>
 						)}
+					</>
+				);
+				return (
+					<div
+						key={option.value}
+						className={`${OPTION_CARD_CLASS} relative transition-colors
+							focus-within:outline-2! focus-within:outline-solid!
+							focus-within:outline-offset-2! focus-within:outline-translatewp-primary! ${
+							value === option.value
+								? 'border-translatewp-primary! bg-translatewp-primary/5'
+								: 'border-translatewp-border! bg-white hover:border-translatewp-primary/40'
+						}`}
+					>
+						{option.locked ? <div className="flex items-start gap-2">
+							<ProLock feature={option.locked.feature} className="min-w-0 flex-1">
+								{content}
+							</ProLock>
+							<ProMarker />
+						</div> : content}
 					</div>
 				);
-				return option.locked ? (
-					<ProLock
-						key={option.value}
-						feature={option.locked.feature}
-						className="h-full"
-					>
-						{card}
-					</ProLock>
-				) : card;
 			})}
 		</div>
 	);

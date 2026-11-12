@@ -41,19 +41,20 @@ export const ProLock = ({ children, feature, className, blur = false, defaultOpe
 
     return (
         <div className={`relative ${className ?? ''}`}>
-            <div className={`relative ${gatedClasses}`}>
+            <div className={gatedClasses}>
                 {children}
-                <button
-                    type="button"
-                    aria-label={feature ? sprintf(
-                        /* translators: %s: name of the locked feature. */
-                        __('Unlock %s with PRO', 'translate'),
-                        feature
-                    ) : __('Unlock with PRO', 'translate')}
-                    onClick={() => setIsOpen(true)}
-                    className="pointer-events-auto absolute inset-0 w-full h-full cursor-pointer bg-transparent border-0 p-0 m-0"
-                />
             </div>
+
+            <button
+                type="button"
+                aria-label={feature ? sprintf(
+                    /* translators: %s: name of the locked feature. */
+                    __('Unlock %s with PRO', 'translate'),
+                    feature
+                ) : __('Unlock with PRO', 'translate')}
+                onClick={() => setIsOpen(true)}
+                className="absolute inset-0 w-full h-full cursor-pointer bg-transparent border-0 p-0 m-0"
+            />
 
             {badge && (
                 <div data-pro-lock-badge className={`pointer-events-none absolute z-10 [&_button]:pointer-events-auto ${badgeClassName}`}>

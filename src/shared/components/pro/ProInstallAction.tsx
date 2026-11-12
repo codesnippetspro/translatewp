@@ -50,7 +50,7 @@ export const ProInstallAction = ({ step, label, className, actionLabel, onDone }
     };
 
     return (
-        <span className="relative z-10 inline-flex shrink-0 flex-col items-stretch gap-1 pointer-events-auto">
+        <span className="inline-flex shrink-0 flex-col items-stretch gap-1">
             <button
                 type="button"
                 title={actionLabel}
