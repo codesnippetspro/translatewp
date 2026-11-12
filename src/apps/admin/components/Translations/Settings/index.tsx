@@ -124,16 +124,24 @@ export const TranslationsSettings = () =>
             <ManagedByNetwork group="content_areas">
             <div className="flex flex-col gap-5" data-page-areas>
             <ToggleControl label={
-                <ToggleLabel title={__('Translate comments', 'translate')} description={__('Off: visitor comments and the comment form stay as written.', 'translate')} />} checked={settings.translate_comments !== false} onChange={(value) => updateSetting('translate_comments', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate comments', 'translate')} description={settings.translate_comments !== false
+                    ? __('On: visitor comments and the comment form are translated.', 'translate')
+                    : __('Off: visitor comments and the comment form stay as written.', 'translate')} />} checked={settings.translate_comments !== false} onChange={(value) => updateSetting('translate_comments', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             <ToggleControl label={
-                <ToggleLabel title={__('Translate menus', 'translate')} description={__('Off: navigation menus keep their original labels.', 'translate')} />} checked={settings.translate_menus !== false} onChange={(value) => updateSetting('translate_menus', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate menus', 'translate')} description={settings.translate_menus !== false
+                    ? __('On: navigation menu labels are translated.', 'translate')
+                    : __('Off: navigation menus keep their original labels.', 'translate')} />} checked={settings.translate_menus !== false} onChange={(value) => updateSetting('translate_menus', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             <ToggleControl label={
-                <ToggleLabel title={__('Translate widgets', 'translate')} description={__('Off: sidebar and footer widgets stay as written.', 'translate')} />} checked={settings.translate_widgets !== false} onChange={(value) => updateSetting('translate_widgets', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate widgets', 'translate')} description={settings.translate_widgets !== false
+                    ? __('On: sidebar and footer widgets are translated.', 'translate')
+                    : __('Off: sidebar and footer widgets stay as written.', 'translate')} />} checked={settings.translate_widgets !== false} onChange={(value) => updateSetting('translate_widgets', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             </div>
             </ManagedByNetwork>
 
             <ToggleControl label={
-                <ToggleLabel title={__('Translate password-protected and private pages', 'translate')} description={__('Off: these pages stay in their original language and their text is never sent to the translation service. A single page can also be excluded in its editor.', 'translate')} />} checked={settings.translate_protected_pages === true} onChange={(value) => updateSetting('translate_protected_pages', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate password-protected and private pages', 'translate')} description={settings.translate_protected_pages === true
+                    ? __('On: password-protected and private pages are translated unless excluded in their editor. Their text is sent to the translation service.', 'translate')
+                    : __('Off: these pages stay in their original language and their text is never sent to the translation service. A single page can also be excluded in its editor.', 'translate')} />} checked={settings.translate_protected_pages === true} onChange={(value) => updateSetting('translate_protected_pages', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
 
 {/* Browser detection lives in Settings > Languages > Visitor language. */}
 

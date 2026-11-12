@@ -4,6 +4,8 @@ namespace TranslateWP\Components;
 
 class RemoteApi {
 
+	public const SUPPORT_URL = 'https://translatewp.ai/support/';
+
 	private const DEFAULT_BASE_URL     = 'https://api.translatewp.ai';
 	private const DEFAULT_APP_BASE_URL = 'https://app.translatewp.ai';
 

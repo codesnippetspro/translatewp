@@ -1,3 +1,4 @@
+import { MIN_SWITCHER_FONT_SIZE, MAX_SWITCHER_FONT_SIZE, resolveSwitcherFontSize } from '@/shared/lib/switcherFontSize';
 import { __ } from '@wordpress/i18n';
 import { FormToggle, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
 
@@ -89,6 +90,15 @@ export const LanguagesSwitcher = () =>
     // A size field the browser has emptied keeps its own blank draft while the
     // stored value stands; leaving the field remounts it on the stored value.
     const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0 });
+    const [fontSizeDraft, setFontSizeDraft] = useState<string | undefined>();
+
+    const commitFontSize = () =>
+    {
+        if (fontSizeDraft !== undefined && fontSizeDraft !== '' && Number.isFinite(Number(fontSizeDraft))) {
+            updateSetting('font_size', resolveSwitcherFontSize(Number(fontSizeDraft)));
+        }
+        setFontSizeDraft(undefined);
+    };
 
     // While the loading-border picker is open the preview shows the loading ring,
     // presentationally only: no translation starts and no loading flag is saved.
@@ -113,7 +123,7 @@ export const LanguagesSwitcher = () =>
             return;
         }
 
-        updateSetting(key, parsed < 0 ? 0 : Math.trunc(parsed));
+        updateSetting(key, Math.max(0, Math.trunc(parsed)));
     };
 
     const translatingMessage = (
@@ -273,16 +283,40 @@ export const LanguagesSwitcher = () =>
     const sizes = (
         <section data-switcher-section="sizes" className={SECTION_CLASS} data-switcher-sizes aria-labelledby="twp-switcher-sizes">
             <h3 id="twp-switcher-sizes" className='text-sm! font-bold! text-translatewp-neutral m-0!'>{__('Sizes', 'translate')}</h3>
-            {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The native dropdown is sized by the browser; only the offset applies.', 'translate')}</p>}
+            {native && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The browser draws the native dropdown. Font size and offset still apply.', 'translate')}</p>}
             {sideTab && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The side tab sits on the screen edge, so the offset does not apply.', 'translate')}</p>}
             <div className="grid grid-cols-1 gap-4 @min-[380px]:grid-cols-2 @min-[500px]:grid-cols-3">
+                <div data-size-font>
+                <NumberControl
+                    onBlur={commitFontSize}
+                    __next40pxDefaultSize
+                    label={__('Font size', 'translate')}
+                    help={__('Size of the language names in the switcher.', 'translate')}
+                    value={fontSizeDraft ?? settings.font_size}
+                    onChange={(value, { event }) =>
+                    {
+                        if (value !== undefined && value !== '' && Number.isFinite(Number(value))
+                            && (event.type === 'click' || (('key' in event) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')))) {
+                            updateSetting('font_size', resolveSwitcherFontSize(Number(value)));
+                            setFontSizeDraft(undefined);
+                        } else {
+                            setFontSizeDraft(value);
+                        }
+                    }}
+                    spinControls="custom"
+                    min={MIN_SWITCHER_FONT_SIZE}
+                    max={MAX_SWITCHER_FONT_SIZE}
+                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
+                    className='max-w-40'
+                />
+                </div>
                 <div className={native ? 'pointer-events-none opacity-50' : ''} aria-disabled={native || undefined} data-size-icon>
                 <NumberControl
                     key={`icon_size-${metricKeys.icon_size}`}
                     onBlur={snapBack('icon_size')}
                     __next40pxDefaultSize
                     label={__('Switcher icon size', 'translate')}
-                    help={__('Height of the flag or icon on the closed switcher. The text scales with it.', 'translate')}
+                    help={__('Width of the flag or size of the icon on the closed switcher.', 'translate')}
                     value={settings.icon_size}
                     onChange={(value) => updateMetric('icon_size', value)}
                     min={0}

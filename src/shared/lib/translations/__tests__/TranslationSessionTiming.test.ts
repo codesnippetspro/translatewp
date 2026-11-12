@@ -27,7 +27,7 @@ it('resets timing and ignores aborted writes across language switches and later 
 		const second = session.switchTo('de');
 		expect(events[0]).toMatchObject({ outcome: 'cancelled', firstAppliedMs: null });
 		release();
-		await first;
+		await expect(first).rejects.toMatchObject({ name: 'AbortError' });
 		await second;
 		await jest.advanceTimersByTimeAsync(CHANGE_SETTLE_MS + 1);
 		expect(document.querySelector('p')!.textContent).toBe('de:Hello world');

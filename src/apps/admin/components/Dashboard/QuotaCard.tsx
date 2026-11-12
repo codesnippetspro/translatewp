@@ -27,12 +27,12 @@ export const QuotaCard = () =>
     const { data, isError } = useQuery(getQuotaQueryOptions());
 
     return (
-        <Card title={__('Translations quota', 'translate')}>
+        <Card title={__('Translation usage', 'translate')}>
             {data && (
                 <div className="flex flex-col gap-3">
                     <span className="text-3xl font-semibold text-translatewp-neutral">
                         {sprintf(
-                            /* translators: %d: percentage of the account's translations quota still available. */
+                            /* translators: %d: percentage of the account's translation allowance still available. */
                             __('%d%% available', 'translate'),
                             data.percentAvailable
                         )}
@@ -43,7 +43,11 @@ export const QuotaCard = () =>
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={data.percentAvailable}
-                        aria-label={__('Translations quota available', 'translate')}
+                        aria-label={sprintf(
+                            /* translators: %d: percentage of translation usage still available. */
+                            __('Translation usage: %d%% available', 'translate'),
+                            data.percentAvailable
+                        )}
                         data-quota-level={quotaLevel(data.percentAvailable)}
                     >
                         <div
@@ -57,7 +61,7 @@ export const QuotaCard = () =>
                 </div>
             )}
             {!data && isError && (
-                <p className="m-0 text-sm text-translatewp-muted">{__('The quota could not be loaded.', 'translate')}</p>
+                <p className="m-0 text-sm text-translatewp-muted">{__('Translation usage could not be loaded.', 'translate')}</p>
             )}
             {!data && !isError && <Spinner />}
         </Card>
