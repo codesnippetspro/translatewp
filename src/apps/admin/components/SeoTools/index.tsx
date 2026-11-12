@@ -28,7 +28,10 @@ const BasicSeo = () =>
     return (
         <section className="flex flex-col gap-6" aria-labelledby="twp-seo-basic">
             <div className="flex flex-col gap-2">
-                <h3 id="twp-seo-basic" className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Basic', 'translate')}</h3>
+                <div className="flex items-center gap-3">
+                    <h3 id="twp-seo-basic" className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Basic', 'translate')}</h3>
+                    <ProMarker />
+                </div>
                 <p className="text-sm text-translatewp-muted! m-0">
                     {__('Included in TranslateWP Free. Every page names its own language version as the canonical address, so search engines index each language once.', 'translate')}
                 </p>
