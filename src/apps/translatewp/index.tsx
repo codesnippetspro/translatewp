@@ -142,13 +142,6 @@ export const TranslateWP = () =>
                     if (pageUnloadingRef.current) return;
                     console.error('[TranslateWP] Dynamic translation failed:', error);
                 },
-                onRehydrated: () =>
-                {
-                    if (translationSessionRef.current?.pendingTranslationCount() === 0)
-                    {
-                        hidePendingNotice();
-                    }
-                },
             });
         }
 
@@ -341,7 +334,7 @@ export const TranslateWP = () =>
             {
                 if (switchTokenRef.current !== switchToken) return;
                 viewportPending = pending;
-                if (pending === 0) hidePendingNotice();
+                if (pending === 0) setNotice(null);
                 else if (noticeDelayElapsed) setNotice(pendingNoticeMessage);
             },
         })

@@ -1,4 +1,4 @@
-import { isTextNodeInViewport } from '@/shared/lib/translations/viewportText';
+import { observePendingTextEntries } from '@/shared/lib/translations/viewportText';
 import {
     ServedTranslationTiming,
     type ServedTimingEvent,
@@ -187,15 +187,15 @@ export class TranslationSession
         this.#inFlightTranslations += 1;
         const engine = this.#createEngine(targetLang);
         const timing = this.#startTiming('switch', engine.translator);
-        const viewportPending = new Set<string>();
-        const reportViewportPending = () =>
+        let viewportProgress: ReturnType<typeof observePendingTextEntries> | undefined;
+        const reportViewportPending = (pending: number) =>
         {
             if (!this.#disposed && generation === this.#generation)
-                onViewportPendingChange?.(viewportPending.size);
+                onViewportPendingChange?.(pending);
         };
         const retireViewportEntry = (entry: TranslatableEntry) =>
         {
-            if (viewportPending.delete(entry.id)) reportViewportPending();
+            viewportProgress?.settle(entry);
         };
 
         try
@@ -208,9 +208,10 @@ export class TranslationSession
 
             if (onViewportPendingChange)
             {
-                for (const entry of translatable)
-                    if (entry.type === EntryType.TEXT && isTextNodeInViewport(entry.node)) viewportPending.add(entry.id);
-                reportViewportPending();
+                viewportProgress = observePendingTextEntries(
+                    translatable.filter(entry => entry.type === EntryType.TEXT), reportViewportPending,
+                );
+                controller.signal.addEventListener('abort', () => viewportProgress?.disconnect(), { once: true });
             }
 
             timing.observe(translatable);
@@ -219,8 +220,8 @@ export class TranslationSession
                 onEntryApplied: entry =>
                 {
                     this.#rememberExpectedWrite(entry);
-                    retireViewportEntry(entry);
                 },
+                onEntrySettled: retireViewportEntry,
                 onGroupServeFailed: entries => entries.forEach(retireViewportEntry),
                 ...this.#timingRunOptions(timing),
             });
@@ -246,11 +247,8 @@ export class TranslationSession
         }
         finally
         {
-            if (viewportPending.size)
-            {
-                viewportPending.clear();
-                reportViewportPending();
-            }
+            viewportProgress?.disconnect();
+            reportViewportPending(0);
             this.#inFlightTranslations -= 1;
             this.#settleTiming();
             if (this.#activeController === controller)
