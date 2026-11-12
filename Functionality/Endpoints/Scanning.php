@@ -27,6 +27,9 @@ class Scanning extends BaseApiEndpoints {
     // A scan of a large site takes the model a while; the request waits for it.
     private const SCAN_TIMEOUT_SECONDS = 90;
     public const SCAN_HOOK = 'translatewp_context_scan_run';
+    public const PRO_FOLLOWUP_HOOK = 'translatewp_pro_lexicon_followup';
+    private const PRO_FOLLOWUP_OPTION = 'translations.context.pro_followup';
+    private const SCAN_LOCK_RETRY_SECONDS = 60;
     private const SCAN_STATUS_OPTION = 'translations.context.scan_status';
     private const SCAN_RESULT_OPTION = 'translations.context.scan_result';
     private const SCAN_RETRY_OPTION = 'translations.context.scan_retried';
@@ -40,11 +43,14 @@ class Scanning extends BaseApiEndpoints {
     private const SELF_CHECK_TIMEOUT_SECONDS = 5;
 
     private bool $retry_scheduled = false;
+    private array $sampled_ids = [];
 
     public function __construct( $plugin_name, $plugin_version ) {
         parent::__construct( $plugin_name, $plugin_version, 'translatewp/v1/scanning' );
 
         add_action( self::SCAN_HOOK, [ $this, 'run_scan' ] );
+        add_action( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
+        add_action( 'translatewp_pro_ready', [ $this, 'schedule_pro_followup' ] );
     }
 
     public function define_endpoints() {
@@ -175,11 +181,15 @@ class Scanning extends BaseApiEndpoints {
     }
 
     public function scan_status( $request ) {
-        unset( $request );
+        $read_only = $request instanceof \WP_REST_Request && '1' === sanitize_key( $request->get_param( 'read_only' ) );
+        $run_followup = $request instanceof \WP_REST_Request && '1' === sanitize_key( $request->get_param( 'followup' ) );
+        if ( $run_followup && ! $read_only ) {
+            \TranslateWP\Components\CronKick::maybe_run_due( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
+        }
 
         $status = Options::get( self::SCAN_STATUS_OPTION, 'pending' );
 
-        if ( 'pending' === $status ) {
+        if ( 'pending' === $status && ! $read_only ) {
             \TranslateWP\Components\CronKick::maybe_run_due( self::SCAN_HOOK, [ $this, 'run_scan' ] );
             $status = Options::get( self::SCAN_STATUS_OPTION, 'pending' );
         }
@@ -189,6 +199,7 @@ class Scanning extends BaseApiEndpoints {
         if ( 'done' === $status && is_array( $result ) ) {
             return [
                 'status'     => 'done',
+                'followupPending' => 'pending' === Options::get( self::PRO_FOLLOWUP_OPTION ),
                 'applied'    => (bool) ( $result['applied'] ?? true ),
                 'context'    => (string) ( $result['context'] ?? '' ),
                 'language'   => (string) ( $result['language'] ?? '' ),
@@ -228,6 +239,7 @@ class Scanning extends BaseApiEndpoints {
         // One runner at a time: the scheduled event and the status route's
         // inline run must not analyse the same site twice.
         if ( get_transient( self::SCAN_LOCK_TRANSIENT ) ) {
+            wp_schedule_single_event( time() + self::SCAN_LOCK_RETRY_SECONDS, self::SCAN_HOOK );
             return;
         }
         set_transient( self::SCAN_LOCK_TRANSIENT, 1, self::SCAN_LOCK_SECONDS );
@@ -320,6 +332,8 @@ class Scanning extends BaseApiEndpoints {
         // only from the review.
         $apply                  = ! TranslationStore::has_translations();
         $scan_result['applied'] = $apply;
+        $scan_result['scanned_ids'] = $this->sampled_ids;
+        Options::update( self::PRO_FOLLOWUP_OPTION, null );
 
         Options::update( 'translations.context.last_scan_time', time() );
 
@@ -334,6 +348,104 @@ class Scanning extends BaseApiEndpoints {
         Options::update( self::SCAN_RESULT_OPTION, $scan_result );
         Options::update( self::SCAN_STATUS_OPTION, 'done' );
         Options::update( 'translations.context.scan_reason', '' );
+    }
+
+    public function schedule_pro_followup(): void {
+        $result = Options::get( self::SCAN_RESULT_OPTION );
+        if ( ! ProEligibility::is_pro_active() || ! Options::get( 'setup.ended', false )
+            || 'done' !== Options::get( self::SCAN_STATUS_OPTION ) || ! is_array( $result )
+            || ! is_array( $result['scanned_ids'] ?? null ) || Options::get( self::PRO_FOLLOWUP_OPTION ) ) {
+            return;
+        }
+        Options::update( self::PRO_FOLLOWUP_OPTION, 'pending' );
+        if ( false === wp_schedule_single_event( time(), self::PRO_FOLLOWUP_HOOK ) ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'failed' );
+            return;
+        }
+        if ( function_exists( 'spawn_cron' ) ) {
+            spawn_cron();
+        }
+    }
+
+    public function run_pro_followup(): void {
+        if ( 'pending' !== Options::get( self::PRO_FOLLOWUP_OPTION ) ) {
+            return;
+        }
+        if ( ! ProEligibility::is_pro_active() ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'skipped' );
+            return;
+        }
+        if ( get_transient( self::SCAN_LOCK_TRANSIENT ) ) {
+            wp_schedule_single_event( time() + self::SCAN_LOCK_RETRY_SECONDS, self::PRO_FOLLOWUP_HOOK );
+            return;
+        }
+        set_transient( self::SCAN_LOCK_TRANSIENT, 1, self::SCAN_LOCK_SECONDS );
+        try {
+            $this->run_pro_followup_locked();
+        } finally {
+            delete_transient( self::SCAN_LOCK_TRANSIENT );
+        }
+    }
+
+    private function run_pro_followup_locked(): void {
+        $stored = Options::get( self::SCAN_RESULT_OPTION );
+        if ( ! is_array( $stored ) || ! is_array( $stored['scanned_ids'] ?? null )
+            || 'done' !== Options::get( self::SCAN_STATUS_OPTION ) ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'skipped' );
+            return;
+        }
+        $samples = $this->collect_samples(
+            null,
+            [
+				'exclude_ids' => $stored['scanned_ids'],
+				'published_only' => true,
+			]
+        );
+        if ( empty( $samples ) ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'done' );
+            return;
+        }
+        $sampled_ids = $this->sampled_ids;
+        $response = SiteRequests::post(
+            '/v1/scanning/context',
+            [
+				'samples' => $this->bounded_samples( $samples ),
+				'mode' => 'lexicon',
+			],
+            self::SCAN_TIMEOUT_SECONDS
+        );
+        if ( is_wp_error( $response ) ) {
+            $data = $response->get_error_data();
+            $status = is_array( $data ) ? (int) ( $data['status'] ?? 0 ) : 0;
+            Options::update( self::PRO_FOLLOWUP_OPTION, in_array( $status, [ 400, 403 ], true ) ? 'unavailable' : 'failed' );
+            return;
+        }
+        if ( ! is_array( $response ) || ! is_array( $response['lexicon'] ?? null ) ) {
+            Options::update( self::PRO_FOLLOWUP_OPTION, 'failed' );
+            return;
+        }
+        $current = Options::get( self::SCAN_RESULT_OPTION );
+        if ( ! is_array( $current ) || ( $current['scanned_ids'] ?? null ) !== $stored['scanned_ids']
+            || 'done' !== Options::get( self::SCAN_STATUS_OPTION ) ) {
+            return;
+        }
+        $previous = empty( $current['lexicon_applied'] ) ? ( $current['lexicon'] ?? [] ) : [];
+        $terms = [];
+        foreach ( $this->suggested_terms( array_merge( $previous, $response['lexicon'] ) ) as $entry ) {
+            $key = self::term_key( $entry['term'] );
+            if ( ! isset( $terms[ $key ] ) ) {
+                $terms[ $key ] = $entry;
+            }
+        }
+        $current['lexicon'] = array_values( $terms );
+        $current['lexicon_applied'] = empty( $terms );
+        $current['scanned_ids'] = array_values( array_unique( array_merge( $stored['scanned_ids'], $sampled_ids ) ) );
+        Options::update( self::SCAN_RESULT_OPTION, $current );
+        Options::update( self::PRO_FOLLOWUP_OPTION, 'done' );
+    }
+
+    private static function term_key( string $term ): string {
+        return strtolower( trim( $term ) );
     }
 
     /**
@@ -397,17 +509,19 @@ class Scanning extends BaseApiEndpoints {
      *
      * @param callable|null $progress Called with (sampled, total) as posts are read.
      */
-    private function collect_samples( ?callable $progress = null ): array {
+    private function collect_samples( ?callable $progress = null, array $options = [] ): array {
+        $this->sampled_ids = [];
+        $exclude_ids = array_map( 'absint', $options['exclude_ids'] ?? [] );
         $post_types = get_post_types( [ 'public' => true ], 'names' );
         unset( $post_types['attachment'] );
 
         // Private pages are read only when the site translates them.
-        $statuses      = PageExclusion::protected_pages_translated() ? [ 'publish', 'private' ] : [ 'publish' ];
+        $statuses      = empty( $options['published_only'] ) && PageExclusion::protected_pages_translated() ? [ 'publish', 'private' ] : [ 'publish' ];
         $posts         = [];
         $front_page_id = (int) get_option( 'page_on_front' );
         $front_page    = $front_page_id ? get_post( $front_page_id ) : null;
 
-        if ( $front_page && in_array( $front_page->post_status, $statuses, true ) ) {
+        if ( $front_page && ! in_array( (int) $front_page->ID, $exclude_ids, true ) && in_array( $front_page->post_status, $statuses, true ) ) {
             $posts[] = $front_page;
         }
 
@@ -420,6 +534,7 @@ class Scanning extends BaseApiEndpoints {
                     $query + [
 						'post_type'        => array_values( $post_types ),
 						'post_status'      => $statuses,
+                        'post__not_in'     => $exclude_ids,
 						'numberposts'      => self::SAMPLE_QUERY_SIZE,
 						'orderby'          => 'date',
 						'order'            => $order,
@@ -431,7 +546,7 @@ class Scanning extends BaseApiEndpoints {
 
         $unique = [];
         foreach ( $posts as $post ) {
-            if ( PageExclusion::is_excluded( (int) $post->ID ) ) {
+            if ( in_array( (int) $post->ID, $exclude_ids, true ) || PageExclusion::is_excluded( (int) $post->ID ) ) {
                 continue;
             }
             $unique[ $post->ID ] = $post;
@@ -466,6 +581,7 @@ class Scanning extends BaseApiEndpoints {
 
             if ( '' !== $sample ) {
                 $samples[ $sample ] = $sample;
+                $this->sampled_ids[] = (int) $post->ID;
             }
         }
 
@@ -593,7 +709,7 @@ class Scanning extends BaseApiEndpoints {
 				'fields'         => 'ids',
 			]
         ) as $existing_id ) {
-            $existing_titles[ strtolower( trim( \TranslateWP\Components\PlainText::title( (int) $existing_id ) ) ) ] = true;
+            $existing_titles[ self::term_key( \TranslateWP\Components\PlainText::title( (int) $existing_id ) ) ] = true;
         }
 
         foreach ( $lexicon as $entry ) {
@@ -609,7 +725,7 @@ class Scanning extends BaseApiEndpoints {
                 continue;
             }
 
-            $normalized_title = strtolower( trim( $term ) );
+            $normalized_title = self::term_key( $term );
             if ( isset( $existing_titles[ $normalized_title ] ) ) {
                 continue;
             }
