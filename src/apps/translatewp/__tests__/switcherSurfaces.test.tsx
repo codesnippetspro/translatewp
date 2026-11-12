@@ -85,8 +85,14 @@ const installAdminBar = () =>
 
 describe('TranslateWP switcher surfaces', () =>
 {
+    const originalTextRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
+
     beforeEach(() =>
     {
+        Object.defineProperty(Range.prototype, 'getClientRects', {
+            configurable: true,
+            value: () => [{ top: 10, left: 10, right: 110, bottom: 30, width: 100, height: 20 }],
+        });
         jest.spyOn(CacheFirstTranslator.prototype, 'translateBatch').mockResolvedValue({
             translated: [],
             failures: [],
@@ -114,6 +120,8 @@ describe('TranslateWP switcher surfaces', () =>
         document.cookie = 'translatewp_last_choice=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.history.replaceState(null, '', '/');
         delete (window as { TranslateWP?: unknown }).TranslateWP;
+        if (originalTextRects) Object.defineProperty(Range.prototype, 'getClientRects', originalTextRects);
+        else delete (Range.prototype as Partial<Range>).getClientRects;
     });
 
     it('mounts an inline switcher into every data-twp-switcher placeholder', async () =>
@@ -379,6 +387,36 @@ describe('TranslateWP switcher surfaces', () =>
         }
     });
 
+    it('lets the visitor choose a language when the page holds a hidden copy of the switcher', async () =>
+    {
+        // Menus and page builder headers print a desktop copy and a hidden mobile copy.
+        installContext(true, 'dropdown');
+        window.TranslateWP.context.home_url = window.location.origin;
+        document.body.innerHTML = `
+            <nav class="desktop"><span data-twp-switcher></span></nav>
+            <nav class="mobile" hidden><span data-twp-switcher></span></nav>
+        `;
+        window.history.replaceState(null, '', '/about/');
+        pendingBatch();
+
+        await renderApp();
+
+        const desktop = document.querySelector('.desktop') as HTMLElement;
+        const mobile = document.querySelector('.mobile') as HTMLElement;
+        await act(async () => { (desktop.querySelector('.twp-trigger') as HTMLButtonElement).click(); });
+        expect(mobile.querySelector('.twp-dropdown-item')).toBeNull();
+
+        const option = Array.from(desktop.querySelectorAll('.twp-dropdown-item'))
+            .find((item) => item.textContent?.includes('Español')) as HTMLButtonElement;
+        expect(option).toBeDefined();
+        // A real click presses the mouse first; every other copy sees that press as outside itself.
+        await act(async () => { option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+        await act(async () => { option.click(); });
+
+        expect(window.location.pathname).toBe('/es/about/');
+        expect(document.documentElement.lang).toBe('es');
+    });
+
     it('translates an address in a language folder into that language and leaves the address alone', async () =>
     {
         installContext(true, 'dropdown');
@@ -529,7 +567,7 @@ describe('TranslateWP switcher surfaces', () =>
     it('dismisses the pending notice when the visitor resets to the default language', async () =>
     {
         installContext(true);
-        document.body.innerHTML = '<span data-twp-switcher></span>';
+        document.body.innerHTML = '<main><p>Visible text waiting for translation.</p></main><span data-twp-switcher></span>';
         installAdminBar();
         const timers: Array<{ callback: () => void; delay: number }> = [];
         const setTimeout = jest.spyOn(window, 'setTimeout').mockImplementation(((callback: TimerHandler, delay?: number) =>
@@ -553,9 +591,11 @@ describe('TranslateWP switcher surfaces', () =>
             });
             const spanish = Array.from(document.querySelectorAll('.twp-inline .twp-dropdown-item'))
                 .find((option) => option.textContent?.includes('Español')) as HTMLButtonElement;
-            act(() =>
+            await act(async () =>
             {
                 spanish.click();
+                await Promise.resolve();
+                await Promise.resolve();
             });
             act(() =>
             {
@@ -650,7 +690,7 @@ describe('TranslateWP switcher surfaces', () =>
     it('dismisses the pending notice when the active translation aborts', async () =>
     {
         installContext(true);
-        document.body.innerHTML = '<span data-twp-switcher></span>';
+        document.body.innerHTML = '<main><p>Visible text waiting for translation.</p></main><span data-twp-switcher></span>';
         installAdminBar();
         let rejectTranslation: (error: Error) => void = () => {};
         const timers: Array<{ callback: () => void; delay: number }> = [];

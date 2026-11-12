@@ -105,7 +105,7 @@ export const WhoCanManage = () =>
                 </Table>
             )}
             <p className="text-sm text-translatewp-muted! m-0">
-                {__('Edit translations opens edit mode, the editor and Add to Lexicon. Retranslate uses quota. Manage settings covers the translation and switcher settings. The connection, languages, your own AI key, billing and the Advanced page stay with administrators. Everyone sees the translated site.', 'translate')}
+                {__('Edit translations opens edit mode, the editor and Add to Lexicon. Retranslate counts towards usage. Manage settings covers the translation and switcher settings. The connection, languages, your own AI key, billing and the Advanced page stay with administrators. Everyone sees the translated site.', 'translate')}
             </p>
             {users.length > 0 && (
                 <div className="flex flex-col gap-2">

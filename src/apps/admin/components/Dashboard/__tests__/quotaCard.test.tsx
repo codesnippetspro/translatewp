@@ -43,7 +43,7 @@ describe('the quota bar colour', () =>
         const html = renderWith({ percentAvailable: 42, windowEndsAt: null, enforced: true });
         expect(html).toContain('data-quota-level="fair"');
         expect(html).toContain('width:42%');
-        expect(html).toContain('Translations quota');
+        expect(html).toContain('Translation usage');
         expect(html).not.toContain('Fair-use');
     });
 });

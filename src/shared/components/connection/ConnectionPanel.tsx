@@ -10,6 +10,7 @@ import {
 } from '@/shared/mutation-options/connect';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 import { AddressChangedNotice } from '@/shared/components/connection/AddressChangedNotice';
+import { ConnectReturnError } from '@/shared/components/connection/ConnectReturnError';
 import { ConnectionStatusText } from '@/shared/components/connection/ConnectionStatusText';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
@@ -316,12 +317,13 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     };
 
     if (isLoading) {
-        return <p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p>;
+        return <><ConnectReturnError /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
     }
 
     if (isGroupLocked('account')) {
         return (
             <div className="flex flex-col gap-4">
+                <ConnectReturnError connected={data?.connected} />
                 <ConnectionStatusText />
                 {data?.siteId && (
                     <p className="text-sm text-translatewp-muted! m-0">
@@ -342,6 +344,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     return (
         <div className="flex flex-col gap-4">
             <ConfirmDialog {...confirmDialogProps} />
+            <ConnectReturnError connected={data?.connected} />
             <ConnectionStatusText />
             <AddressChangedNotice />
             {data?.connectionStatus !== 'invalidated' && (data?.connected ? (

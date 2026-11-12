@@ -116,9 +116,10 @@ export class MissReportCoalescer
             {
                 const chunk = items.slice(offset, offset + MISS_REPORT_MAX_ITEMS);
                 const outcome = await postMissChunkWithBackoff({
-                    post: () => this.#fetchImpl(`${translationProxyBaseUrl}/miss`, {
+                    post: signal => this.#fetchImpl(`${translationProxyBaseUrl}/miss`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        signal,
                         body: JSON.stringify({ language: targetLang, url: pageUrl, pageTitle, items: toMissReportItems(chunk) }),
                     }),
                     throwIfAborted: () => {},

@@ -107,7 +107,7 @@ export const SeoTools = () =>
         <div className="flex flex-col">
             <PageHeader
                 title={__('SEO Tools', 'translate')}
-                description={__('How search engines and answer engines see every language of your site.', 'translate')}
+                description={__('How search engines and AI answer services such as ChatGPT and Perplexity see every language of your site.', 'translate')}
             />
 
             <PageBody>
