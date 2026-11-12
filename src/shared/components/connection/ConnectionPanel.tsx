@@ -103,7 +103,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     {pro.accountUrl !== '' && (
-                        <Button variant="primary" className="rounded-sm!" href={pro.accountUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="secondary" className="rounded-sm!" href={pro.accountUrl} target="_blank" rel="noopener noreferrer">
                             {__('Open your account', 'translate')}
                         </Button>
                     )}
@@ -127,7 +127,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     <Button
-                        variant="primary"
+                        variant="secondary"
                         className="rounded-sm!"
                         disabled={activateMutation.isPending}
                         isBusy={activateMutation.isPending}
@@ -154,7 +154,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                     )}
                 </p>
                 <div className="flex flex-wrap gap-3">
-                    <Button variant="primary" className="rounded-sm!" href={pro.updateUrl}>
+                    <Button variant="secondary" className="rounded-sm!" href={pro.updateUrl}>
                         {__('Update Pro', 'translate')}
                     </Button>
                 </div>
@@ -180,7 +180,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     <Button
-                        variant="primary"
+                        variant="secondary"
                         className="rounded-sm!"
                         disabled={installMutation.isPending}
                         isBusy={installMutation.isPending}

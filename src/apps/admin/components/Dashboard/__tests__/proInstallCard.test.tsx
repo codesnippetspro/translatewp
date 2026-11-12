@@ -100,7 +100,7 @@ describe('the Dashboard pushes an entitled site to install Pro', () =>
 
         expect(found).not.toBeNull();
         expect(found?.textContent).toContain('Your account includes Pro');
-        expect(Array.from(found!.querySelectorAll('button')).map(button => button.textContent)).toContain('Install Pro');
+        expect(Array.from(found!.querySelectorAll('button')).map(button => button.getAttribute('aria-label') ?? button.textContent)).toContain('Install Pro');
 
         const body = container.querySelector('[data-testid="pro-install-card"]')?.parentElement;
         expect(body?.firstElementChild).toBe(found);
@@ -111,7 +111,7 @@ describe('the Dashboard pushes an entitled site to install Pro', () =>
     {
         mockApi.installPro.mockReturnValue(new Promise(() => {}));
         const container = await render(pro({}));
-        const button = Array.from(card(container)!.querySelectorAll('button')).find(item => item.textContent === 'Install Pro');
+        const button = Array.from(card(container)!.querySelectorAll('button')).find(item => item.getAttribute('aria-label') === 'Install Pro');
 
         await act(async () => { button!.click(); });
 
@@ -124,7 +124,7 @@ describe('the Dashboard pushes an entitled site to install Pro', () =>
         const found = card(container);
 
         expect(found).not.toBeNull();
-        const labels = Array.from(found!.querySelectorAll('button')).map(button => button.textContent);
+        const labels = Array.from(found!.querySelectorAll('button')).map(button => button.getAttribute('aria-label') ?? button.textContent);
         expect(labels).toContain('Activate Pro');
         expect(labels).not.toContain('Install Pro');
     });

@@ -164,10 +164,13 @@ export const TranslationsSettings = () =>
                     <ToggleControl label={
                         <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={settings.translate_image_alt_tags} onChange={(value) => updateSetting('translate_image_alt_tags', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
                 ) : (
-                    <ProLock feature={__('image alt text translation', 'translate')} badge={<ProMarker />}>
-                        <ToggleControl label={
-                            <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
-                    </ProLock>
+                    <div className="flex items-start gap-2 [&_p]:m-0!">
+                        <ProLock feature={__('image alt text translation', 'translate')} className="min-w-0 flex-1">
+                            <ToggleControl label={
+                                <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                        </ProLock>
+                        <ProMarker />
+                    </div>
                 )}
             </div>
 

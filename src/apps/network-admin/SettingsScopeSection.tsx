@@ -7,7 +7,7 @@ import { Card, Section } from '@/shared/components/adminSurface';
 import { ColorPicker } from '@/shared/components/form/colorPicker';
 import { Range } from '@/shared/components/form/range';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
-import { ProBadge } from '@/shared/components/pro/ProBadge';
+import { ProMarker } from '@/shared/components/pro/ProMarker';
 import { ProLock } from '@/shared/components/pro/ProLock';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
 
@@ -230,11 +230,11 @@ const ValueForm = ({ group, form, subsites, requestConfirmation, proActive = fal
             <span className="text-sm font-bold text-translatewp-neutral">{__('Network value', 'translate')}</span>
             <div className="flex flex-col gap-4">
                 {group.fields.map(field => field.pro && !proActive ? (
-                    <div key={field.key} className="flex w-full max-w-xl items-end gap-3" data-pro-field={field.key}>
+                    <div key={field.key} className="flex w-full max-w-xl items-start gap-3" data-pro-field={field.key}>
                         <ProLock feature={field.label} className="min-w-0 w-fit max-w-full">
                             <FieldControl field={field} value={values[field.key]} onChange={() => undefined} />
                         </ProLock>
-                        <ProBadge />
+                        <ProMarker />
                     </div>
                 ) : (
                     <FieldControl key={field.key} field={field} value={values[field.key]} proActive={proActive} onChange={(next) => setValues(previous => ({ ...previous, [field.key]: next }))} />
@@ -362,7 +362,7 @@ export const SettingsScopeSection = ({ scope, form, account = null, proActive = 
                 </div>
             ))}
                 <div className="mb-6 break-inside-avoid last:mb-0" data-scope-group="switcher_position">
-                    <Card title={__('Switcher position', 'translate')} badge={<ProBadge />}>
+                    <Card title={__('Switcher position', 'translate')} badge={<ProMarker />}>
                         <p className="m-0 text-sm text-translatewp-muted!">
                             {__('Every subsite takes the floating switcher position you dragged into place on the main site.', 'translate')}
                         </p>
