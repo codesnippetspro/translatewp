@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use function TranslateWP\Components\class_exists;
+
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\TranslationFingerprint;
 use TranslateWP\Components\TranslationProxyRateLimit;
@@ -9,6 +11,7 @@ use TranslateWP\Components\TranslationProxySettings;
 use TranslateWP\Functionality\Endpoints\TranslationJobs;
 use TranslateWP\Functionality\Indexer;
 
+require_once __DIR__ . '/fixtures/formatting-runtime.php';
 require dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/wp-test-stubs.php';
 

@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use function TranslateWP\Components\class_exists;
+
 use TranslateWP\Components\TranslationProxyDedupe;
 use TranslateWP\Components\TranslationProxyStorage;
 use TranslateWP\Components\TranslationProxyRateLimit;
 
+require_once __DIR__ . '/fixtures/formatting-runtime.php';
 require dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/wp-test-stubs.php';
 
