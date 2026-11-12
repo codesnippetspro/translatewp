@@ -453,7 +453,7 @@ export function SwitcherView({
                 .twp-trigger svg[data-twp-mark] path:not([stroke]) {
                     fill: currentColor !important;
                 }
-                .twp-trigger[data-trigger="name_flag"] {
+                .twp-trigger[data-twp-trigger="name_flag"] {
                     width: auto !important;
                     min-width: ${ triggerSizePx }px !important;
                     gap: 0.5rem !important;
@@ -891,7 +891,7 @@ export function SwitcherView({
                         title={triggerBindings?.title ?? (isTranslating ? __('Translating…', 'translate') : undefined)}
                         className="twp-trigger"
                         ref={triggerRef}
-                        data-trigger={trigger}
+                        data-twp-trigger={trigger}
                         aria-label={trigger === 'name_flag'
                             ? undefined
                             /* translators: %s: the selected language, for example "English". */
