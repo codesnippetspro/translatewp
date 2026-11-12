@@ -317,7 +317,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     };
 
     if (isLoading) {
-        return <><ConnectReturnError connected={data?.connected} /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
+        return <><ConnectReturnError /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
     }
 
     if (isGroupLocked('account')) {
