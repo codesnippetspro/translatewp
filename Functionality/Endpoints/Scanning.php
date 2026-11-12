@@ -53,7 +53,6 @@ class Scanning extends BaseApiEndpoints {
         add_action( self::SCAN_HOOK, [ $this, 'run_scan' ] );
         add_action( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
         add_action( 'translatewp_pro_ready', [ $this, 'schedule_pro_followup' ] );
-        add_action( 'translatewp_admin_page_load', [ $this, 'resume_pro_followup' ] );
     }
 
     public function define_endpoints() {
@@ -83,10 +82,19 @@ class Scanning extends BaseApiEndpoints {
         );
         $apply_lexicon->useMiddleware( $cors );
 
+        $followup = new PostEndpoint(
+            $this->namespace,
+            'context/followup',
+            [ $this, 'resume_pro_followup' ],
+            [ $this, 'admin_write_permissions_check' ]
+        );
+        $followup->useMiddleware( $cors );
+
         return [
             $context,
             $status,
             $apply_lexicon,
+            $followup,
         ];
     }
 
@@ -370,11 +378,11 @@ class Scanning extends BaseApiEndpoints {
         }
     }
 
-    public function resume_pro_followup(): void {
-        if ( ! $this->admin_permissions_check() || 'pending' !== Options::get( self::PRO_FOLLOWUP_OPTION ) ) {
-            return;
+    public function resume_pro_followup(): array {
+        if ( 'pending' === Options::get( self::PRO_FOLLOWUP_OPTION ) ) {
+            \TranslateWP\Components\CronKick::maybe_run_due( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
         }
-        \TranslateWP\Components\CronKick::maybe_run_due( self::PRO_FOLLOWUP_HOOK, [ $this, 'run_pro_followup' ] );
+        return [ 'pending' => 'pending' === Options::get( self::PRO_FOLLOWUP_OPTION ) ];
     }
 
     private function queue_pro_followup( int $delay ): bool {

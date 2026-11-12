@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import { getScanContextStatus, scanContext, type ScanContextResponse, type ScanContextStatusResponse, type ScanLexiconSuggestion } from '@/shared/api/setup';
+import { getScanContextStatus, resumeScanFollowup, scanContext, type ScanContextResponse, type ScanContextStatusResponse, type ScanLexiconSuggestion } from '@/shared/api/setup';
 
 const SCAN_POLL_INTERVAL_MS = 3000;
 // A safety net only: the server's own worst case (one attempt, an immediate
@@ -204,6 +204,7 @@ export const useContextScan = ({ restoreStored = false }: { restoreStored?: bool
     {
         if (!restoreStored) return;
         let active = true;
+        let followupInFlight = false;
         const generation = scanGenerationRef.current;
         const deadline = Date.now() + SCAN_POLL_TIMEOUT_MS;
         const restore = async (runFollowup = false): Promise<void> =>
@@ -213,6 +214,11 @@ export const useContextScan = ({ restoreStored = false }: { restoreStored?: bool
                 const status = await getScanContextStatus({ readOnly: !runFollowup, runFollowup });
                 if (!active || generation !== scanGenerationRef.current) return;
                 if (status.status === 'done') setState(completedScanState(status, { pages: 0, restored: true }));
+                if (runFollowup && status.followupPending && !followupInFlight)
+                {
+                    followupInFlight = true;
+                    void resumeScanFollowup().catch(() => {}).finally(() => { followupInFlight = false; });
+                }
                 if (status.followupPending && Date.now() < deadline)
                     pollTimerRef.current = window.setTimeout(() => { void restore(true); }, SCAN_POLL_INTERVAL_MS);
             }

@@ -50,6 +50,15 @@ export const applyScanLexicon = async (): Promise<{ added: number }> =>
     });
 }
 
+export const resumeScanFollowup = async (): Promise<{ pending: boolean }> =>
+{
+    return await apiFetch<{ pending: boolean }>({
+        path: 'translatewp/v1/scanning/context/followup',
+        method: 'POST',
+        data: {},
+    });
+}
+
 export const getScanContextStatus = async ({ readOnly = false, runFollowup = false }: {
     readOnly?: boolean;
     runFollowup?: boolean;
