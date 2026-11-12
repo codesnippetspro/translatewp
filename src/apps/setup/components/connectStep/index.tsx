@@ -2,6 +2,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { useQuery } from '@tanstack/react-query';
 
 import { ConnectionPanel } from '@/shared/components/connection/ConnectionPanel';
+import { ConnectReturnError } from '@/shared/components/connection/ConnectReturnError';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 
 const STEPS = [
@@ -25,6 +26,7 @@ export const ConnectStep = () =>
                     {__('Your TranslateWP account holds the settings and usage of every site you connect. Connecting takes a minute.', 'translate')}
                 </p>
             </div>
+            {!needsPanel && <ConnectReturnError />}
             {needsPanel ? <ConnectionPanel showConnectAction={false} /> : (
                 <ol className="m-0 flex list-none flex-col p-0" data-connect-steps aria-label={__('Connect your site', 'translate')}>
                     {STEPS.map((text, index) => (

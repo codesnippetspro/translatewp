@@ -110,6 +110,7 @@ declare global {
             context: TranslateWPContext;
             options?: TranslateWPOptions;
             canManage?: boolean;
+            connectReturnError?: string;
             can?: { edit: boolean; retranslate: boolean; settings: boolean; lexicon: boolean };
             settingsUrl?: string;
             lexicon_terms?: TranslateWPLexiconTerm[];

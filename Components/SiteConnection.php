@@ -1096,6 +1096,20 @@ class SiteConnection {
 		}
 	}
 
+	public static function connect_return_error_message(): string {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return '';
+		}
+		$notice = self::current_notice();
+		return in_array( $notice, [ 'connected', 'reconnected' ], true ) ? '' : self::notice_message( $notice );
+	}
+
+	private static function current_notice(): string {
+		return isset( $_GET[ self::NOTICE_QUERY_ARG ] )
+			? sanitize_key( wp_unslash( $_GET[ self::NOTICE_QUERY_ARG ] ) )
+			: '';
+	}
+
 	public static function render_admin_notices(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
@@ -1118,9 +1132,7 @@ class SiteConnection {
 			return;
 		}
 
-		$notice = isset( $_GET[ self::NOTICE_QUERY_ARG ] )
-			? sanitize_key( wp_unslash( $_GET[ self::NOTICE_QUERY_ARG ] ) )
-			: '';
+		$notice = self::current_notice();
 		$message = self::notice_message( $notice );
 		if ( '' === $message ) {
 			$address_change = Sites::address_change_state();

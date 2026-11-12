@@ -23,7 +23,7 @@ class Admin extends Script {
     }
 
     public function admin_data(): string {
-        return $this->pro_data() . $this->context_data();
+        return $this->pro_data() . self::connect_return_data() . $this->context_data();
     }
 
     public function context_data(): string {
@@ -52,6 +52,13 @@ class Admin extends Script {
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
         ) . ' );';
     }
+
+	public static function connect_return_data(): string {
+		return 'window.TranslateWP = Object.assign( window.TranslateWP || {}, ' . wp_json_encode(
+			[ 'connectReturnError' => SiteConnection::connect_return_error_message() ],
+			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+		) . ' );';
+	}
 
     public static function pro_data(): string {
         $state = ProEligibility::cached();
