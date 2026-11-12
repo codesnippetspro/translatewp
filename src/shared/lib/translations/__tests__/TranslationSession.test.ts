@@ -61,6 +61,48 @@ describe('TranslationSession', () =>
         document.body.innerHTML = '';
     });
 
+    it.each(['it', 'en'])('supersedes a held run with %s and rejects late writes', async target =>
+    {
+        document.body.innerHTML = '<h1>Original heading</h1><img alt="Original image">';
+        let release!: () => void;
+        let started!: () => void;
+        const firstStarted = new Promise<void>(resolve => { started = resolve; });
+        const mock = Translator.prototype.translateBatch as jest.Mock;
+        mock.mockImplementationOnce(function (entries, options)
+        {
+            started();
+            options.onGroupServeStarted?.(entries);
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        const session = createSession({
+            root: document.body, sourceLang: 'en',
+            extractionOptions: { includeAlt: true, includeAttributes: true },
+        });
+        const first = session.switchTo('de');
+        const cancelled = first.catch(error => error);
+        await firstStarted;
+        const second = session.switchTo(target);
+        await second;
+        await cancelled;
+        const heading = target === 'en' ? 'Original heading' : 'it:Original heading';
+        const alt = target === 'en' ? 'Original image' : 'it:Original image';
+        expect(document.querySelector('h1')?.textContent).toBe(heading);
+        expect(document.querySelector('img')?.alt).toBe(alt);
+        release();
+        await Promise.resolve();
+        expect(document.querySelector('h1')?.textContent).toBe(heading);
+        expect(document.querySelector('img')?.alt).toBe(alt);
+        expect(document.querySelectorAll('[aria-busy="true"],.translatewp-translating')).toHaveLength(0);
+    });
+
     it('restores originals after a translated subtree is replaced', async () =>
     {
         document.body.innerHTML = '<footer><p>English footer</p></footer>';

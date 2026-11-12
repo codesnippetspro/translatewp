@@ -50,3 +50,20 @@ describe('DOMExtractor administrator-only links', () =>
         expect(texts.filter(text => text === 'Contact')).toHaveLength(1);
     });
 });
+
+
+describe('debug panel privacy', () =>
+{
+    it.each(['wpadminbar', 'query-monitor-main', 'query-monitor', 'debug-bar', 'querylist', '.qm'])(
+        'excludes diagnostic text and attributes under %s, including direct subtree collection', selector =>
+        {
+            document.body.innerHTML = `<p>Public content</p><aside ${selector.startsWith('.')
+                ? 'class="qm"' : `id="${selector}"`}><p title="Diagnostic title">Diagnostic SQL</p>
+                <img alt="Diagnostic path"></aside>`;
+            const extractor = new DOMExtractor({ noTranslateIds: ['custom-exclusion'] });
+            const options = { includeAlt: true, includeAttributes: true };
+            expect(extractor.extract(document.body, options).map(entry => entry.value)).toEqual(['Public content']);
+            expect(extractor.extract(document.querySelector('aside')!, options)).toEqual([]);
+        },
+    );
+});

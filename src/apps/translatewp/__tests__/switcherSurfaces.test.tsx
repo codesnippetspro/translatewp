@@ -124,6 +124,57 @@ describe('TranslateWP switcher surfaces', () =>
         else delete (Range.prototype as Partial<Range>).getClientRects;
     });
 
+    it.each([
+        [false, undefined, null, false],
+        [true, undefined, 30, false],
+        [true, 7, 7, false],
+        [undefined, undefined, 30, false],
+    ])('persists a choice with remember=%s and lifetime=%s', async (remember, ttl, days, secure) =>
+    {
+        installContext(true, 'dropdown', { remember_last_choice: remember, cookie_ttl: ttl });
+        document.body.innerHTML = '<span data-twp-switcher></span>';
+        const cookie = jest.spyOn(Document.prototype, 'cookie', 'set');
+        const before = Date.now();
+        await renderApp();
+        await act(async () => { (document.querySelector('.twp-trigger') as HTMLElement).click(); });
+        const option = Array.from(document.querySelectorAll('.twp-dropdown-item'))
+            .find(element => element.textContent?.includes('Español')) as HTMLElement;
+        await act(async () => { option.click(); });
+        const write = cookie.mock.calls.map(([value]) => value)
+            .find(value => value.startsWith('translatewp_last_choice=es;'))!;
+        expect(write).toBeDefined();
+        expect(write).toContain('; path=/; SameSite=Lax');
+        expect(write).not.toMatch(/max-age=/i);
+        if (days === null) expect(write).toBe(
+            'translatewp_last_choice=es; path=/; SameSite=Lax' + (secure ? '; Secure' : ''),
+        );
+        else
+        {
+            const expiry = Date.parse(write.split('expires=')[1]);
+            expect(expiry).toBeGreaterThanOrEqual(before + days! * 86400000 - 1000);
+            expect(expiry).toBeLessThanOrEqual(Date.now() + days! * 86400000);
+        }
+        expect(document.cookie).toContain('translatewp_last_choice=es');
+        expect(document.querySelector('[data-twp-switcher] [data-trigger]')).toBeNull();
+        expect(document.querySelector('[data-twp-trigger]')).not.toBeNull();
+        cookie.mockRestore();
+    });
+
+    it('keeps an existing persistent choice unchanged when Remember is switched off', async () =>
+    {
+        installContext(true, 'dropdown', { remember_last_choice: false });
+        window.TranslateWP.context.home_url = window.location.origin;
+        document.cookie = 'other_cookie=unrelated; path=/';
+        document.cookie = 'translatewp_last_choice=es; path=/; expires=Wed, 01 Jan 2031 00:00:00 GMT';
+        document.body.innerHTML = '<span data-twp-switcher></span>';
+        const cookie = jest.spyOn(Document.prototype, 'cookie', 'set');
+        await renderApp();
+        expect(cookie.mock.calls.some(([value]) => value.startsWith('translatewp_last_choice=es;'))).toBe(false);
+        expect(window.location.pathname).toBe('/es/');
+        cookie.mockRestore();
+        document.cookie = 'other_cookie=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    });
+
     it('mounts an inline switcher into every data-twp-switcher placeholder', async () =>
     {
         installContext(true);
@@ -269,6 +320,7 @@ describe('TranslateWP switcher surfaces', () =>
 
         expect(window.location.search).toBe('');
         expect(document.documentElement.lang).toBe('en');
+        expect(document.cookie).not.toContain('translatewp_last_choice=');
         expect(pushState).not.toHaveBeenCalled();
     });
 
