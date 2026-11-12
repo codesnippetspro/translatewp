@@ -211,7 +211,6 @@ export const TranslateWP = () =>
             ?.split('=')[1];
         if (currentChoice !== locale)
         {
-            // Without "remember", the choice still lasts for the browser session so links to unprefixed pages keep the language.
             const secure = window.location.protocol === 'https:' ? '; Secure' : '';
             const expires = (seo.remember_last_choice ?? true)
                 ? `; expires=${new Date(Date.now() + (seo.cookie_ttl ?? 30) * 24 * 60 * 60 * 1000).toUTCString()}`
