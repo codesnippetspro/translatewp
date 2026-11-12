@@ -34,3 +34,11 @@ Readme.md
 AGENTS.md
 CLAUDE.md
 CONTEXT.md
+
+# Mutation tooling and reports never ship.
+/stryker.cookie.config.cjs
+/stryker.viewport.config.cjs
+/infection.json
+/.stryker-tmp
+/.infection
+/reports
