@@ -327,31 +327,13 @@ class DOMWriter
         style.id = DOMWriter.#styleTagId;
         style.textContent = `
             .${DOMWriter.#loadingClassName} {
-                color: transparent !important;
-                border-radius: .2em;
-                background-image: linear-gradient(
-                    90deg,
-                    rgba(237, 237, 237, .92) 25%,
-                    rgba(245, 245, 245, .96) 37%,
-                    rgba(237, 237, 237, .92) 63%
-                );
-                background-size: 400% 100%;
-                animation: translatewp-skeleton-shimmer 1.2s ease-in-out infinite;
-            }
-
-            @keyframes translatewp-skeleton-shimmer {
-                0% {
-                    background-position: 100% 50%;
-                }
-                100% {
-                    background-position: 0 50%;
-                }
+                opacity: 0.65 !important;
+                transition: opacity 180ms ease;
             }
 
             @media (prefers-reduced-motion: reduce) {
                 .${DOMWriter.#loadingClassName} {
-                    animation: none;
-                    background-position: 50% 50%;
+                    transition: none;
                 }
             }
         `;
