@@ -90,6 +90,16 @@ export const LanguagesSwitcher = () =>
     // A size field the browser has emptied keeps its own blank draft while the
     // stored value stands; leaving the field remounts it on the stored value.
     const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0, font_size: 0 });
+    const [fontSizeDraft, setFontSizeDraft] = useState<string | undefined>();
+
+    const commitFontSize = () =>
+    {
+        if (fontSizeDraft !== undefined && fontSizeDraft !== '' && Number.isFinite(Number(fontSizeDraft))) {
+            updateSetting('font_size', resolveSwitcherFontSize(Number(fontSizeDraft)));
+        }
+        setFontSizeDraft(undefined);
+        setMetricKeys(previous => ({ ...previous, font_size: previous.font_size + 1 }));
+    };
 
     // While the loading-border picker is open the preview shows the loading ring,
     // presentationally only: no translation starts and no loading flag is saved.
@@ -102,7 +112,7 @@ export const LanguagesSwitcher = () =>
         }
     };
 
-    const updateMetric = (key: MetricKey, value: string | undefined) =>
+    const updateMetric = (key: Exclude<MetricKey, 'font_size'>, value: string | undefined) =>
     {
         if (value === undefined || value === '') {
             return;
@@ -114,7 +124,7 @@ export const LanguagesSwitcher = () =>
             return;
         }
 
-        updateSetting(key, key === 'font_size' ? resolveSwitcherFontSize(parsed) : Math.max(0, Math.trunc(parsed)));
+        updateSetting(key, Math.max(0, Math.trunc(parsed)));
     };
 
     const translatingMessage = (
@@ -280,12 +290,12 @@ export const LanguagesSwitcher = () =>
                 <div data-size-font>
                 <NumberControl
                     key={`font_size-${metricKeys.font_size}`}
-                    onBlur={snapBack('font_size')}
+                    onBlur={commitFontSize}
                     __next40pxDefaultSize
                     label={__('Font size', 'translate')}
                     help={__('Size of the language names in the switcher.', 'translate')}
-                    value={settings.font_size}
-                    onChange={(value) => updateMetric('font_size', value)}
+                    value={fontSizeDraft ?? settings.font_size}
+                    onChange={setFontSizeDraft}
                     min={MIN_SWITCHER_FONT_SIZE}
                     max={MAX_SWITCHER_FONT_SIZE}
                     suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
