@@ -5,7 +5,10 @@ import { ConnectionPanel } from '@/shared/components/connection/ConnectionPanel'
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 
 const STEPS = [
-    () => __('Sign in to TranslateWP, or create an account', 'translate'),
+    () => __(
+        'Click “Connect your site”, then sign in or create an account',
+        'translate'
+    ),
     () => __('Approve and connect this site to your account', 'translate'),
     () => __('Return here and continue setting up translations', 'translate'),
 ];
