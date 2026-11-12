@@ -61,7 +61,10 @@ export const TranslateWP = () =>
         [languagesList]
     );
     const defaultLocale = languages.find((l) => l.default)?.locale ?? languages[0]?.locale ?? '';
-    const [isOpen, setIsOpen] = useState(false);
+    // Which switcher on the page is open. A page can hold several copies,
+    // often one hidden for mobile, and only the one the visitor opened may
+    // close its own list.
+    const [openSwitcher, setOpenSwitcher] = useState<HTMLElement | 'floating' | null>(null);
     const [selectedLocale, setSelectedLocale] = useState(defaultLocale);
     const selectedLocaleRef = useRef(defaultLocale);
     selectedLocaleRef.current = selectedLocale;
@@ -200,7 +203,7 @@ export const TranslateWP = () =>
     function beginLanguageSelection(locale: string, history: 'push' | 'replace'): void
     {
         setActiveLocale(locale);
-        setIsOpen(false);
+        setOpenSwitcher(null);
         setLanguageAddress(locale, history);
         applyDocumentLanguage(locale);
         persistLanguageSelection(locale);
@@ -295,7 +298,7 @@ export const TranslateWP = () =>
             if (selectedLocale !== defaultLocale)
             {
                 resetToDefaultLanguage();
-                setIsOpen(false);
+                setOpenSwitcher(null);
                 restorePageTitle();
                 setIsTranslating(false);
 
@@ -600,11 +603,17 @@ export const TranslateWP = () =>
     const FrontendEditor = managerCan().edit ? resolveFrontendSlot('frontendEditor') : null;
 
     const viewProps: SwitcherViewProps = {
-        languages, switcher: switcher ?? {}, selectedLocale, isOpen, notice, isTranslating,
-        onOpenChange: setIsOpen,
+        languages, switcher: switcher ?? {}, selectedLocale, notice, isTranslating,
+        isOpen: openSwitcher === 'floating',
+        onOpenChange: open => setOpenSwitcher(current => (open ? 'floating' : (current === 'floating' ? null : current))),
         onLanguageSelect: language => translate(language),
         onDismissNotice: hidePendingNotice,
     };
+    const inlineProps = (placeholder: HTMLElement): SwitcherViewProps => ({
+        ...viewProps,
+        isOpen: openSwitcher === placeholder,
+        onOpenChange: open => setOpenSwitcher(current => (open ? placeholder : (current === placeholder ? null : current))),
+    });
 
     return (
         <>
@@ -622,7 +631,7 @@ export const TranslateWP = () =>
             )}
             {placeholders.map((placeholder) => (
                 createPortal(
-                    <SwitcherView {...viewProps} variant="inline" />,
+                    <SwitcherView {...inlineProps(placeholder)} variant="inline" />,
                     placeholder
                 )
             ))}
