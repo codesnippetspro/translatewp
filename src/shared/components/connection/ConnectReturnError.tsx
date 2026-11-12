@@ -1,4 +1,5 @@
 import { __ } from '@wordpress/i18n';
+import { useEffect } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 
 import { beginConnect } from '@/shared/api/connect';
@@ -9,6 +10,10 @@ export const ConnectReturnError = ({ connected = false }: { connected?: boolean 
 {
     const error = useConnectReturnError();
     const connect = useConnectStart(beginConnect);
+    useEffect(() =>
+    {
+        if (error) document.getElementById('translatewp-connect-return-notice')?.remove();
+    }, [error]);
     const message = error?.message ?? connect.errorMessage;
     if (!message && (connected || connect.tabState.kind === 'idle')) return null;
     const needsAccountAction = error?.code === 'site_conflict' || error?.code === 'address_taken';

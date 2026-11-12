@@ -1106,7 +1106,7 @@ class SiteConnection {
 			'code' => $notice,
 			'message' => $message,
 			'portalSitesUrl' => self::portal_sites_url(),
-			'supportUrl' => 'https://translatewp.ai/support/',
+			'supportUrl' => RemoteApi::SUPPORT_URL,
 		];
 	}
 
@@ -1167,7 +1167,7 @@ class SiteConnection {
 		}
 
 		$class = in_array( $notice, [ 'connected', 'reconnected' ], true ) ? 'notice-success' : 'notice-error';
-		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p>';
+		echo '<div id="translatewp-connect-return-notice" class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p>';
 		if ( 'invalid_state' === $notice ) {
 			printf(
 				'<p><a class="button button-primary" href="%s">%s</a></p>',
