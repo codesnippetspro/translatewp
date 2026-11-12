@@ -170,11 +170,14 @@ export class CacheFirstTranslator extends Translator
             const report = await this.#reportMisses(remaining, signal, throwIfAborted);
             const terminalFailures: GroupCache[] = [];
             let pending: GroupCache[] = [];
-            if (report.outcome === 'accepted')
+            const accepted = report.outcome === 'accepted'
+                ? remaining.filter(group => !report.acceptedHashes || report.acceptedHashes.includes(group.hash)) : [];
+            const rejected = remaining.filter(group => !accepted.includes(group));
+            if (accepted.length)
             {
                 remaining = await this.#deliverSubscriptions({
                     cacheClient,
-                    groups: remaining,
+                    groups: accepted,
                     subscriptions: report.subscriptions,
                     apply,
                     terminalFailures,
@@ -184,9 +187,9 @@ export class CacheFirstTranslator extends Translator
                 if (remaining.length)
                 {
                     pending = await this.#pollUntilServed({ cacheClient, groups: remaining, apply, throwIfAborted, signal });
-                    remaining = [];
                 }
             }
+            remaining = rejected;
             for (const groupCache of terminalFailures)
             {
                 failures.push({ groupId: groupCache.group.id, error: 'translation_failed' });
@@ -270,33 +273,35 @@ export class CacheFirstTranslator extends Translator
             body: JSON.stringify({ language: this.targetLang, url: pageUrl, pageTitle, items: toMissReportItems(items) }),
         });
 
+        const subscriptions: CoveredTranslationSubscription[] = [];
+        const acceptedHashes: string[] = [];
         try
         {
-            const subscriptions: CoveredTranslationSubscription[] = [];
             for (let offset = 0; offset < groups.length; offset += MISS_REPORT_MAX_ITEMS)
             {
                 const items = groups.slice(offset, offset + MISS_REPORT_MAX_ITEMS);
                 const result = await postMissChunkWithBackoff({
-                    post: requestSignal => post(items, requestSignal),
+                    hashes: items.map(item => item.hash),
+                    post: (requestSignal, hashes) => post(hashes ? items.filter(item => hashes.includes(item.hash)) : items, requestSignal),
                     signal,
                     throwIfAborted,
                     delay: this.delay,
                     random: this.random,
                     subscriptionOrigin: this._remoteApiBaseUrl(),
                 });
-                if (result.outcome === 'rejected') return { outcome: 'rejected', subscriptions: [] };
-                if (result.subscription)
-                {
-                    subscriptions.push({ ...result.subscription, hashes: items.map(item => item.hash) });
-                }
+                if (result.outcome === 'rejected') continue;
+                const admitted = result.acceptedHashes ?? items.map(item => item.hash);
+                acceptedHashes.push(...admitted);
+                subscriptions.push(...(result.subscriptions ?? (result.subscription
+                    ? [{ ...result.subscription, hashes: admitted }] : [])));
             }
-            return { outcome: 'accepted', subscriptions };
+            return { outcome: acceptedHashes.length ? 'accepted' : 'rejected', acceptedHashes, subscriptions };
         }
         catch (error)
         {
             if ((error as Error)?.name === 'AbortError') throw error;
             console.warn('[TranslateWP] Miss report failed; translations arrive on a later visit.', error);
-            return { outcome: 'rejected', subscriptions: [] };
+            return { outcome: acceptedHashes.length ? 'accepted' : 'rejected', acceptedHashes, subscriptions };
         }
     }
 

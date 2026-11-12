@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use TranslateWP\Components\TranslationProxyDedupe;
 use TranslateWP\Components\TranslationProxyStorage;
+use TranslateWP\Components\TranslationProxyRateLimit;
 
 require dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/wp-test-stubs.php';
@@ -127,6 +128,45 @@ $GLOBALS['wp_test_transients'][ TranslationProxyStorage::rate_limit_reset_key( $
 TranslationProxyStorage::increment_rate_limit( 'mutation', $site_id, '203.0.113.21', 5, 60 );
 assert_true( 2 === (int) get_transient( $slide_key ), 'An accepted request inside the window adds to the counter' );
 assert_true( $slide_ends === ( $GLOBALS['wp_test_transient_expirations'][ $slide_key ] ?? null ), 'An accepted request must not push the window end back' );
+
+wp_test_reset( [] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'Missing first-pass state uses the normal limit for its first request' );
+assert_true( 2000 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'A persisted first observation enables the 2000-item first-pass limit' );
+$observed = get_option( TranslationProxyRateLimit::FIRST_PASS_OPTION );
+$record = $observed[ $site_id ]['de'];
+TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' );
+assert_true( $record === get_option( TranslationProxyRateLimit::FIRST_PASS_OPTION )[ $site_id ]['de'], 'Visitors cannot move first observation forward' );
+$observed[ $site_id ]['de']['observed_at'] = time() - 14 * DAY_IN_SECONDS;
+update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, $observed );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'The first-pass allowance expires after fourteen days' );
+TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' );
+assert_true( 2000 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'One language expiry does not affect a new language' );
+TranslationProxyRateLimit::complete_first_pass( $site_id, 'es' );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Completion restores the normal item limit' );
+update_option( 'translatewp_index_reported_languages', [] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Clearing reported languages for retranslation cannot renew the allowance' );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( 'another-site', 'de' ), 'A different site starts without trusted first-pass state' );
+wp_test_reset( [] );
+update_option( 'translatewp_index_reported_languages', [ 'de' ] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'Already reported languages seed as completed' );
+update_option( 'translatewp_index_reported_languages', [] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'A seeded completion survives retranslation' );
+update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, 'invalid' );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Corrupt state cannot grant extra item capacity' );
+
+wp_test_reset( [] );
+update_option( 'translatewp_index_reported_languages', [ 'de' ] );
+TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' );
+update_option( 'translatewp_index_reported_languages', [] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'Seed every reported language before retranslation can clear the list' );
+assert_true( ! \TranslateWP\Components\TranslationFormatting::is_free( '⟪x⟫Paid text⟪x⟫100', 'en', 'de' ), 'Duplicate marker ids cannot hide paid text from the exemption check' );
+
+assert_true( '57b32b5cc26b3196fb6af66aa4dd80305cd5dcd1bc6f162cb524eacf7a942b4b' === hash_file( 'sha256', __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), 'The shared service eligibility fixture has the same pinned bytes in both repositories' );
+$format_vectors = json_decode( file_get_contents( __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), true );
+foreach ( $format_vectors as $vector ) {
+    $expected = class_exists( '\NumberFormatter' ) ? $vector['free'] : $vector['withoutIntl'];
+    assert_true( $expected === \TranslateWP\Components\TranslationFormatting::is_free( $vector['payload'], $vector['source'], $vector['target'] ), 'Formatting eligibility matches the service fixture: ' . wp_json_encode( $vector ) );
+}
 
 // --- Invalid rate limit params ---
 assert_wp_error_code( TranslationProxyStorage::increment_rate_limit( '', $site_id, '203.0.113.10', 5, 60 ), 'invalid_parameter' );

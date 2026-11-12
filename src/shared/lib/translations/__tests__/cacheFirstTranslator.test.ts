@@ -5,6 +5,7 @@ if (typeof globalThis.TextEncoder === 'undefined')
     globalThis.TextEncoder = TextEncoder as typeof globalThis.TextEncoder;
 }
 
+import { TranslationEngine } from '@/shared/lib/translations/TranslationEngine';
 import { CacheFirstTranslator } from '@/shared/lib/translations/CacheFirstTranslator';
 import { DOMExtractor } from '@/shared/lib/translations/DOMExtractor';
 import { HydrationStore, type HydrationBackend } from '@/shared/lib/translations/hydrationStore';
@@ -134,6 +135,47 @@ afterEach(() =>
 
 describe('CacheFirstTranslator', () =>
 {
+    it.each([false, true])('serves admitted groups and settles refused groups with coalescing=%s', async coalesced =>
+    {
+        const seed = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+        const plan = await seed.prepare(new DOMExtractor().extract(document.body));
+        const [first, second] = plan.groupsForCache;
+        let reported = false;
+        let posts = 0;
+        const polled: string[][] = [];
+        const fetchImpl = (async (url: string, init?: RequestInit) =>
+        {
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+            if (isLookup(url))
+            {
+                const hashes = lookupHashes(url, body);
+                if (reported) polled.push(hashes);
+                return { ok: true, status: 200, json: async () => ({ items: reported ? { [first.hash]: first.markerPayload.replace('Hello world', 'Hola mundo') } : {} }) } as Response;
+            }
+            if (url.endsWith('/miss'))
+            {
+                posts++;
+                reported = true;
+                return { ok: true, status: 200, json: async () => ({ accepted: 1, acceptedHashes: [first.hash], retryHashes: [second.hash], retryAfter: 600 }) } as Response;
+            }
+            throw new Error('Unexpected request');
+        }) as unknown as typeof fetch;
+        const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, delay: async () => {}, random: () => 0,
+            ...(coalesced ? { missCoalescer: new MissReportCoalescer({ fetchImpl, delay: async () => {}, random: () => 0 }) } : {}) });
+        translator._createCacheClient = () => new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, fetchImpl, sampleOrigin: () => false });
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = await engine.run(document.body);
+        expect(document.querySelectorAll('p')[0].textContent).toBe('Hola mundo');
+        expect(document.querySelectorAll('p')[1].textContent).toBe('Second paragraph');
+        expect(result.failures).toHaveLength(1);
+        expect(result.failures[0].error).toBe('miss_report_rejected');
+        expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(0);
+        expect(posts).toBe(1);
+        expect(polled.length).toBeGreaterThan(0);
+        expect(polled.flat()).not.toContain(second.hash);
+        expect(console).toHaveWarned();
+    });
+
     it('skips a stale local copy after a retranslation bump and serves the freshly overwritten value', async () =>
     {
         const entries = new DOMExtractor().extract(document.body);

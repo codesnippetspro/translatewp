@@ -1518,6 +1518,7 @@ class Indexer {
 			);
 
 			if ( ! is_wp_error( $response ) ) {
+				\TranslateWP\Components\TranslationProxyRateLimit::complete_first_pass( Sites::registered_id(), (string) $language );
 				$reported[] = (string) $language;
 				$changed    = true;
 			}

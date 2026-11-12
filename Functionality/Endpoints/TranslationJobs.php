@@ -269,15 +269,34 @@ class TranslationJobs extends BaseApiEndpoints {
 			);
 			$hashes[] = $hash;
 		}
+		$item_limit = TranslationProxyRateLimit::miss_items_limit( $site_id, $language );
+		$retry_hashes = [];
+		$retry_after = 0;
 		if ( $items ) {
-			// Only text newly claimed for translation spends the client's item
-			// budget; a report of text already queued is free.
-			$budget = TranslationProxyRateLimit::charge_miss_items( $site_id, TranslationProxyClientIp::resolve(), count( $items ) );
-			if ( is_wp_error( $budget ) ) {
-				TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
+			$admitted = [];
+			foreach ( $items as $item ) {
+				$budget = \TranslateWP\Components\TranslationFormatting::is_free( $item['markerPayload'], $source_lang, $language )
+					? true : TranslationProxyRateLimit::charge_miss_items( $site_id, TranslationProxyClientIp::resolve(), 1, $item_limit );
+				if ( is_wp_error( $budget ) ) {
+					if ( 'rate_limited' !== $budget->get_error_code() ) {
+						TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
+						return $budget;
+					}
+					$retry_hashes[] = $item['cache']['hash'];
+					$retry_after = (int) ( $budget->get_error_data()['retry_after'] ?? 1 );
+					continue;
+				}
+				$admitted[] = $item;
+			}
+			TranslationProxyDedupe::release_segments( $site_id, $language, $retry_hashes );
+			$hashes = array_values( array_diff( $hashes, $retry_hashes ) );
+			$subscription_hashes = array_values( array_diff( $subscription_hashes, $retry_hashes ) );
+			$items = $admitted;
+			if ( ! $items && ! $deduped && $retry_hashes ) {
 				return self::with_retry_after( $budget );
 			}
-
+		}
+		if ( $items ) {
 			// One queue row per page and language carries every missed group,
 			// so a miss costs one row, not one row per segment.
 			$queued_row = $queue->enqueue_miss_page(
@@ -326,6 +345,11 @@ class TranslationJobs extends BaseApiEndpoints {
 			'deduped'  => $deduped,
 			'skipped'  => $skipped,
 		];
+		if ( $retry_hashes ) {
+			$response['acceptedHashes'] = array_values( array_unique( $subscription_hashes ) );
+			$response['retryHashes'] = array_values( array_unique( $retry_hashes ) );
+			$response['retryAfter'] = $retry_after;
+		}
 		$subscription = TranslationSubscription::mint( $language, array_values( array_unique( $subscription_hashes ) ) );
 		if ( null !== $subscription ) {
 			$response['subscription'] = $subscription;
