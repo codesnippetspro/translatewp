@@ -124,7 +124,6 @@ export const TranslateWP = () =>
                 root: document.body,
                 sourceLang: defaultLocale,
                 extractionOptions,
-                noTranslateIds: ['wpadminbar'],
                 // The public path is cache-first, the
                 // browser job pipeline is retired from visitor translations.
                 // missCoalescer is the page-level collector every chunk this
@@ -464,7 +463,6 @@ export const TranslateWP = () =>
             activeLang: hydrationStoreRef.current.activeLanguage() ?? selectedLocale,
             configuredLangs: languages.map((l) => l.locale),
             extractionOptions,
-            noTranslateIds: ['wpadminbar'],
             store: hydrationStoreRef.current,
         });
     }, [languages.length]);

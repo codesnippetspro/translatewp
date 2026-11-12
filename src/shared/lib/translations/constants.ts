@@ -53,9 +53,10 @@ export const TRANSLATABLE_VALUE_INPUT_TYPES = Object.freeze(new Set([
  */
 export const DEFAULT_NO_TRANSLATE_CLASS = 'translatewp-no-translate';
 
-// WordPress core renders these edit links only for signed-in editors; a visitor
-// never sees them, so they are never content to translate.
-export const ADMIN_ONLY_CLASSES = Object.freeze(['post-edit-link', 'comment-edit-link']);
+export const ADMIN_ONLY_CLASSES = Object.freeze(['post-edit-link', 'comment-edit-link', 'qm']);
+export const ADMIN_ONLY_IDS = Object.freeze([
+    'wpadminbar', 'query-monitor-main', 'query-monitor', 'debug-bar', 'querylist',
+]);
 
 /**
  * Tags whose text content must never be extracted.
