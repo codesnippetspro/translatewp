@@ -7,9 +7,10 @@ class TranslationFormatting {
 	private const NUMERIC_TEXT = '/^[\s\x{00a0}\x{202f}0-9.,()%‰+\-−–\x{2014}€$£¥₩₽¢₴₺₹]*$/u';
 	private const NUMBER_TOKEN = '/[0-9](?:[0-9.,\x{00a0}\x{202f} ]*[0-9])?/u';
 	private const MAX_INTEGER_DIGITS = 15;
+	private const LOCALE = '/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/D';
 
 	public static function is_free( string $payload, string $source, string $target ): bool {
-		if ( '' === $source || 'auto' === $source || '' === $target
+		if ( 'auto' === $source || ! preg_match( self::LOCALE, $source ) || ! preg_match( self::LOCALE, $target )
 			|| is_wp_error( TranslationMarkerPayload::validate( $payload ) ) ) {
 			return false;
 		}

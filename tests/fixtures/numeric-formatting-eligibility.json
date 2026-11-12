@@ -138,5 +138,19 @@
     "target": "pl",
     "free": false,
     "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "en_US",
+    "target": "de",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "en",
+    "target": "de_DE",
+    "free": false,
+    "withoutIntl": false
   }
 ]

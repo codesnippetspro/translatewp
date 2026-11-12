@@ -161,7 +161,7 @@ update_option( 'translatewp_index_reported_languages', [] );
 assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'Seed every reported language before retranslation can clear the list' );
 assert_true( ! \TranslateWP\Components\TranslationFormatting::is_free( '⟪x⟫Paid text⟪x⟫100', 'en', 'de' ), 'Duplicate marker ids cannot hide paid text from the exemption check' );
 
-assert_true( '57b32b5cc26b3196fb6af66aa4dd80305cd5dcd1bc6f162cb524eacf7a942b4b' === hash_file( 'sha256', __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), 'The shared service eligibility fixture has the same pinned bytes in both repositories' );
+assert_true( '4302552a498eeb989ea7a6e524bc82efab596aaf63d27a557c34badcde3e986e' === hash_file( 'sha256', __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), 'The shared service eligibility fixture has the same pinned bytes in both repositories' );
 $format_vectors = json_decode( file_get_contents( __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), true );
 foreach ( $format_vectors as $vector ) {
     $expected = class_exists( '\NumberFormatter' ) ? $vector['free'] : $vector['withoutIntl'];
