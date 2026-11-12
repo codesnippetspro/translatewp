@@ -230,7 +230,7 @@ const ValueForm = ({ group, form, subsites, requestConfirmation, proActive = fal
             <span className="text-sm font-bold text-translatewp-neutral">{__('Network value', 'translate')}</span>
             <div className="flex flex-col gap-4">
                 {group.fields.map(field => field.pro && !proActive ? (
-                    <div key={field.key} className="flex w-full max-w-xl items-end gap-3" data-pro-field={field.key}>
+                    <div key={field.key} className="flex w-full max-w-xl items-start gap-3" data-pro-field={field.key}>
                         <ProLock feature={field.label} className="min-w-0 w-fit max-w-full">
                             <FieldControl field={field} value={values[field.key]} onChange={() => undefined} />
                         </ProLock>
