@@ -344,7 +344,7 @@ class Scanning extends BaseApiEndpoints {
         $apply                  = ! TranslationStore::has_translations();
         $scan_result['applied'] = $apply;
         $scan_result['scanned_ids'] = $this->sampled_ids;
-        Options::update( self::PRO_FOLLOWUP_OPTION, null );
+        Options::update( self::PRO_FOLLOWUP_OPTION, ProEligibility::is_pro_active() ? 'done' : null );
 
         Options::update( 'translations.context.last_scan_time', time() );
 
