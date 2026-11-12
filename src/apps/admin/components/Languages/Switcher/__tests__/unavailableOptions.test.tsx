@@ -50,7 +50,7 @@ describe('Settings, Switcher: options that do nothing for the current switcher',
         expect(said).toContain('always shows the language name');
         expect(said).toContain('emoji flags');
         expect(said).toContain('chooses its own highlight');
-        expect(said).toContain('only the offset applies');
+        expect(said).toContain('Font size and offset still apply');
         expect(container.querySelectorAll('[data-option-cards="show-selected-language"] input[type="radio"]').length).toBe(3);
         expect(container.querySelector('[data-size-icon]')?.getAttribute('aria-disabled')).toBe('true');
         expect(container.querySelector('[data-size-padding]')?.getAttribute('aria-disabled')).toBe('true');
