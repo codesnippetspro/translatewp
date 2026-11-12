@@ -23,12 +23,35 @@ class TranslationUrl {
 		'preview',
 		'preview_id',
 		'preview_nonce',
-		'elementor-preview',
-		'et_fb',
-		'vc_editable',
-		'fl_builder',
 		'wp_customize',
 	];
+
+	private const BUILDER_QUERY_PARAMS = [
+		'elementor-preview'  => null,
+		'bricks'             => [ 'run' ],
+		'ct_builder'         => null,
+		'breakdance'         => [ 'builder', 'iframe' ],
+		'breakdance_iframe'  => null,
+		'et_fb'              => [ '1' ],
+		'fl_builder'         => null,
+		'vc_editable'        => [ 'true' ],
+	];
+
+	public static function is_builder_canvas_url( string $url ): bool {
+		$query = wp_parse_url( $url, PHP_URL_QUERY );
+		if ( ! is_string( $query ) || '' === $query ) {
+			return false;
+		}
+		$params = [];
+		parse_str( $query, $params );
+		foreach ( self::BUILDER_QUERY_PARAMS as $key => $values ) {
+			if ( array_key_exists( $key, $params )
+				&& ( null === $values || in_array( $params[ $key ], $values, true ) ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	/**
 	 * A queued page keeps its path when the site's address changes;
@@ -125,7 +148,7 @@ class TranslationUrl {
 		$params = [];
 		parse_str( $query, $params );
 
-		foreach ( self::BLOCKED_QUERY_PARAMS as $blocked_param ) {
+		foreach ( array_merge( self::BLOCKED_QUERY_PARAMS, array_keys( self::BUILDER_QUERY_PARAMS ) ) as $blocked_param ) {
 			if ( array_key_exists( $blocked_param, $params ) ) {
 				return false;
 			}

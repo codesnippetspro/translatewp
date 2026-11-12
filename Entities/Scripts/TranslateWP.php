@@ -15,6 +15,7 @@ use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\Sites;
 use TranslateWP\Components\TranslationAiSettings;
 use TranslateWP\Components\TranslationStore;
+use TranslateWP\Components\TranslationUrl;
 use TranslateWP\Entities\Script;
 
 class TranslateWP extends Script {
@@ -74,6 +75,11 @@ class TranslateWP extends Script {
      * can say why visitors see nothing and link to the fix.
      */
     public static function loads_on_front_end(): bool {
+        $request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+        if ( TranslationUrl::is_builder_canvas_url( $request_uri ) ) {
+            return false;
+        }
+
         // A page left out of translation is sent no runtime at all, so its
         // text is neither translated nor reported, for a manager either.
         if ( PageExclusion::is_current_page_excluded() ) {
