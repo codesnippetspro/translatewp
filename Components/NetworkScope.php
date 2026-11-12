@@ -35,7 +35,7 @@ class NetworkScope {
 				self::field( 'advanced.delete_on_uninstall', __( 'Delete TranslateWP data when the plugin is deleted', 'translate' ), 'boolean', false ),
 			],
 			'ai_crawlers'           => [
-				self::field( 'languages.seo.ai_crawlers.preset_answer_engines', __( 'Let answer engines index my translations', 'translate' ), 'boolean', true ),
+				self::field( 'languages.seo.ai_crawlers.preset_answer_engines', __( 'Let AI answer services read my translations', 'translate' ), 'boolean', true ),
 			],
 			'switcher_appearance'   => [
 				self::field(
