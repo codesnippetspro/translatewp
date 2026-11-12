@@ -301,7 +301,6 @@ describe('CacheFirstTranslator miss polling', () =>
 
         const result = await translator.translateBatch(new DOMExtractor().extract(document.body));
 
-        // A retry at the 90s deadline has no time left to serve the response.
         expect(missCalls).toBe(45);
         expect(delays).toHaveLength(44);
         expect(delays.every(ms => ms === 2000)).toBe(true);
