@@ -101,7 +101,7 @@ class NetworkScope {
 				self::field( 'languages.switcher.highlight_bg', __( 'Highlight background', 'translate' ), 'color', '#0e3ecd' ),
 				self::field( 'languages.switcher.loading_border_color', __( 'Loading border color', 'translate' ), 'color', '#0e3ecd' ),
 				self::field( 'languages.switcher.icon_size', __( 'Switcher icon size', 'translate' ), 'number', 24 ),
-				self::field( 'languages.switcher.font_size', __( 'Font size', 'translate' ), 'number', 14 ),
+				self::field( 'languages.switcher.font_size', __( 'Font size', 'translate' ), 'number', SwitcherFontSize::DEFAULT_SIZE ),
 				self::field( 'languages.switcher.padding', __( 'Switcher padding', 'translate' ), 'number', 12 ),
 				self::field( 'languages.switcher.offset', __( 'Switcher offset', 'translate' ), 'number', 24 ),
 				self::field(
@@ -412,7 +412,7 @@ class NetworkScope {
 				return in_array( $raw, [ true, 1, '1', 'true', 'on' ], true );
 			case 'number':
 				if ( 'languages.switcher.font_size' === $field['key'] ) {
-					return is_numeric( $raw ) ? min( 32, max( 10, (int) $raw ) ) : null;
+					return is_numeric( $raw ) ? min( SwitcherFontSize::MAX, max( SwitcherFontSize::MIN, (int) $raw ) ) : null;
 				}
 				return is_numeric( $raw ) ? min( self::PIXEL_MAX, max( 0, (int) $raw ) ) : null;
 			case 'range':

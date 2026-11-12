@@ -20,7 +20,7 @@ import { renderedSwitcherType } from '@/apps/admin/components/Languages/Switcher
 
 const PENDING_MESSAGE_MAX_LENGTH = 200;
 
-type MetricKey = 'offset' | 'icon_size' | 'padding' | 'font_size';
+type MetricKey = 'offset' | 'icon_size' | 'padding';
 
 const BACKGROUND_OPTIONS: OptionCard<'solid' | 'transparent' | 'glass'>[] = [
     { value: 'solid', label: __('Solid', 'translate'), description: __('Painted in the background colour.', 'translate') },
@@ -89,7 +89,7 @@ export const LanguagesSwitcher = () =>
 
     // A size field the browser has emptied keeps its own blank draft while the
     // stored value stands; leaving the field remounts it on the stored value.
-    const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0, font_size: 0 });
+    const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0 });
     const [fontSizeDraft, setFontSizeDraft] = useState<string | undefined>();
 
     const commitFontSize = () =>
@@ -98,7 +98,6 @@ export const LanguagesSwitcher = () =>
             updateSetting('font_size', resolveSwitcherFontSize(Number(fontSizeDraft)));
         }
         setFontSizeDraft(undefined);
-        setMetricKeys(previous => ({ ...previous, font_size: previous.font_size + 1 }));
     };
 
     // While the loading-border picker is open the preview shows the loading ring,
@@ -112,7 +111,7 @@ export const LanguagesSwitcher = () =>
         }
     };
 
-    const updateMetric = (key: Exclude<MetricKey, 'font_size'>, value: string | undefined) =>
+    const updateMetric = (key: MetricKey, value: string | undefined) =>
     {
         if (value === undefined || value === '') {
             return;
@@ -289,13 +288,22 @@ export const LanguagesSwitcher = () =>
             <div className="grid grid-cols-1 gap-4 @min-[380px]:grid-cols-2 @min-[500px]:grid-cols-3">
                 <div data-size-font>
                 <NumberControl
-                    key={`font_size-${metricKeys.font_size}`}
                     onBlur={commitFontSize}
                     __next40pxDefaultSize
                     label={__('Font size', 'translate')}
                     help={__('Size of the language names in the switcher.', 'translate')}
                     value={fontSizeDraft ?? settings.font_size}
-                    onChange={setFontSizeDraft}
+                    onChange={(value, { event }) =>
+                    {
+                        if (value !== undefined && value !== '' && Number.isFinite(Number(value))
+                            && (event.type === 'click' || (('key' in event) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')))) {
+                            updateSetting('font_size', resolveSwitcherFontSize(Number(value)));
+                            setFontSizeDraft(undefined);
+                        } else {
+                            setFontSizeDraft(value);
+                        }
+                    }}
+                    spinControls="custom"
                     min={MIN_SWITCHER_FONT_SIZE}
                     max={MAX_SWITCHER_FONT_SIZE}
                     suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
