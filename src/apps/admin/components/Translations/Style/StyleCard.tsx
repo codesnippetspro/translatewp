@@ -18,7 +18,7 @@ export const StyleCard = ({ title, badge, description, children }: StyleCardProp
             aria-labelledby={headingId}
         >
             <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center justify-between gap-3">
                     <h3 id={headingId} className="text-sm! font-bold! text-translatewp-neutral! m-0!">
                         {title}
                     </h3>

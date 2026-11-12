@@ -2,8 +2,9 @@ import { __ } from '@wordpress/i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 
-import { ProMarker } from '@/shared/components/pro/ProMarker';
-import { getProState, pendingProAction } from '@/shared/lib/pro/proState';
+import { ProInstallAction } from '@/shared/components/pro/ProInstallAction';
+import { TWP_BUTTON_SECONDARY } from '@/shared/components/buttonStyles';
+import { pendingProAction } from '@/shared/lib/pro/proState';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 
 /**
@@ -20,6 +21,7 @@ export const ProInstallCard = () =>
         return null;
     }
 
+    const actionLabel = step === 'install' ? __('Install Pro', 'translate') : __('Activate Pro', 'translate');
     const body = step === 'install'
         ? __('Install it on this site in one click to unlock SEO Tools, custom styles and tones, and your own AI provider.', 'translate')
         : __('It is installed on this site but not active. Activate it in one click to unlock SEO Tools, custom styles and tones, and your own AI provider.', 'translate');
@@ -35,7 +37,7 @@ export const ProInstallCard = () =>
                 <p className="m-0 text-base font-semibold text-translatewp-neutral">{__('Your account includes Pro', 'translate')}</p>
                 <p className="m-0 text-sm text-translatewp-neutral">{body}</p>
             </div>
-            <ProMarker state={getProState(data)} />
+            <ProInstallAction step={step} label={actionLabel} actionLabel={actionLabel} className={TWP_BUTTON_SECONDARY} />
         </div>
     );
 };
