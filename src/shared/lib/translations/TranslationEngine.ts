@@ -1,3 +1,4 @@
+import { runTranslationTask } from '@/shared/lib/translations/runTranslationTask';
 import {
     DEFAULT_EXTRACTION_OPTIONS,
     DEFAULT_NO_TRANSLATE_CLASS,
@@ -13,6 +14,8 @@ import {
     Translator,
     type TranslationBatchResult,
 } from '@/shared/lib/translations/Translator';
+
+const TRANSLATION_RUN_TIMEOUT_MS = 90_000;
 
 export type TranslationEntryWrite = {
     entry: TranslatableEntry;
@@ -215,44 +218,50 @@ export class TranslationEngine
         };
         try
         {
-            const result = await this.translator.translateBatch(remote, {
+            const result = await runTranslationTask({
                 signal: options.signal,
-                onServePath: options.onServePath,
-                onGroupServeStarted: (entries) =>
-                {
-                    for (const entry of entries)
+                timeoutMs: TRANSLATION_RUN_TIMEOUT_MS,
+                run: signal => this.translator.translateBatch(remote, {
+                    signal,
+                    onServePath: options.onServePath,
+                    onGroupServeStarted: (entries) =>
                     {
-                        if (loading.has(entry)) continue;
-                        loading.add(entry);
-                        DOMWriter.setLoading(entry, true);
-                    }
-                },
-                onGroupServeFailed: (entries) =>
-                {
-                    for (const entry of entries) unmark(entry);
-                    options.onGroupServeFailed?.(entries);
-                },
-                onEntryTranslated: (entry, served = true) =>
-                {
-                    if (options.signal?.aborted) return;
-                    const applied = TranslationEngine.#withCurrentNumbers(sourceById.get(entry.id), entry);
-                    if (applied)
-                    {
-                        options.onEntryApplied?.(applied);
-                        const changed = options.onEntryWritten
-                            ? DOMWriter.read(applied) !== applied.value
-                            : false;
-                        DOMWriter.write(applied);
-                        if (options.onEntryWritten && served && applied.node.isConnected)
+                        if (signal.aborted) return;
+                        for (const entry of entries)
                         {
-                            options.onEntryWritten({
-                                entry: applied, changed, sourceValue: sourceById.get(entry.id)?.value,
-                            });
+                            if (loading.has(entry)) continue;
+                            loading.add(entry);
+                            DOMWriter.setLoading(entry, true);
                         }
+                    },
+                    onGroupServeFailed: (entries) =>
+                    {
+                        if (signal.aborted) return;
+                        for (const entry of entries) unmark(entry);
+                        options.onGroupServeFailed?.(entries);
+                    },
+                    onEntryTranslated: (entry, served = true) =>
+                    {
+                        if (signal.aborted) return;
+                        const applied = TranslationEngine.#withCurrentNumbers(sourceById.get(entry.id), entry);
+                        if (applied)
+                        {
+                            options.onEntryApplied?.(applied);
+                            const changed = options.onEntryWritten
+                                ? DOMWriter.read(applied) !== applied.value
+                                : false;
+                            DOMWriter.write(applied);
+                            if (options.onEntryWritten && served && applied.node.isConnected)
+                            {
+                                options.onEntryWritten({
+                                    entry: applied, changed, sourceValue: sourceById.get(entry.id)?.value,
+                                });
+                            }
+                        }
+                        unmark(sourceById.get(entry.id) ?? entry);
+                        options.onEntrySettled?.(entry);
                     }
-                    unmark(sourceById.get(entry.id) ?? entry);
-                    options.onEntrySettled?.(entry);
-                }
+                }),
             });
             for (const entry of [...loading]) unmark(entry);
 

@@ -1,4 +1,5 @@
 import { orderByViewport } from '@/shared/lib/translations/viewportOrder';
+import { runTranslationTask, TRANSLATION_IO_TIMEOUT_MS } from '@/shared/lib/translations/runTranslationTask';
 import { CONFIRMED_SAME_PREFIX, HydrationStore } from '@/shared/lib/translations/hydrationStore';
 import type {
     CoveredTranslationSubscription,
@@ -26,6 +27,14 @@ const MISS_POLL_MAX_INTERVAL_MS = 2000;
 const MISS_POLL_WINDOW_MS = 60_000;
 
 type GroupCache = TranslationCachePlan['groupsForCache'][number];
+
+type CacheLookupTask = {
+    cacheClient: TranslationCacheClient;
+    groups: GroupCache[];
+    apply: (groupCache: GroupCache, payload: string) => void;
+    transport?: 'edge' | 'origin';
+    signal?: AbortSignal;
+};
 
 export type CacheFirstTranslatorOptions = {
     sourceLang?: string;
@@ -141,14 +150,13 @@ export class CacheFirstTranslator extends Translator
             const unresolved: GroupCache[] = [];
             // The visible and rest lookups are issued together; the visible
             // batch is applied the moment it answers, before the rest does.
-            const visibleLookup = visible.length ? this.#lookupAndApply(cacheClient, visible, apply) : Promise.resolve([] as GroupCache[]);
-            const restLookup = rest.length ? this.#lookupAndApply(cacheClient, rest, apply) : Promise.resolve([] as GroupCache[]);
-            unresolved.push(...await visibleLookup);
-            if (rest.length)
-            {
-                throwIfAborted();
-                unresolved.push(...await restLookup);
-            }
+            const visibleLookup = visible.length
+                ? this.#lookupAndApply({ cacheClient, groups: visible, apply, signal }) : Promise.resolve([] as GroupCache[]);
+            const restLookup = rest.length
+                ? this.#lookupAndApply({ cacheClient, groups: rest, apply, signal }) : Promise.resolve([] as GroupCache[]);
+            const [visibleMissing, restMissing] = await Promise.all([visibleLookup, restLookup]);
+            throwIfAborted();
+            unresolved.push(...visibleMissing, ...restMissing);
             remaining = unresolved;
         }
 
@@ -175,7 +183,7 @@ export class CacheFirstTranslator extends Translator
                 });
                 if (remaining.length)
                 {
-                    pending = await this.#pollUntilServed(cacheClient, remaining, apply, throwIfAborted);
+                    pending = await this.#pollUntilServed({ cacheClient, groups: remaining, apply, throwIfAborted, signal });
                     remaining = [];
                 }
             }
@@ -199,18 +207,16 @@ export class CacheFirstTranslator extends Translator
         return { translatedById, failures };
     }
 
-    async #lookupAndApply(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        transport: 'edge' | 'origin' = 'edge',
-    ): Promise<GroupCache[]>
+    async #lookupAndApply({ cacheClient, groups, apply, transport = 'edge', signal }: CacheLookupTask): Promise<GroupCache[]>
     {
         try
         {
-            const lookup = transport === 'origin'
-                ? await cacheClient.lookupOrigin(groups)
-                : await cacheClient.lookup(groups);
+            const lookup = await runTranslationTask({
+                signal,
+                timeoutMs: TRANSLATION_IO_TIMEOUT_MS,
+                run: requestSignal => transport === 'origin'
+                    ? cacheClient.lookupOrigin(groups, requestSignal) : cacheClient.lookup(groups, requestSignal),
+            });
             if (lookup.status !== 'available') return groups;
 
             const stored = new Map<string, string>();
@@ -257,10 +263,10 @@ export class CacheFirstTranslator extends Translator
             return outcome;
         }
 
-        const post = (items: GroupCache[]): Promise<Response> => this.fetchImpl(`${this._translationProxyBaseUrl()}/miss`, {
+        const post = (items: GroupCache[], requestSignal?: AbortSignal): Promise<Response> => this.fetchImpl(`${this._translationProxyBaseUrl()}/miss`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal,
+            signal: requestSignal,
             body: JSON.stringify({ language: this.targetLang, url: pageUrl, pageTitle, items: toMissReportItems(items) }),
         });
 
@@ -271,7 +277,7 @@ export class CacheFirstTranslator extends Translator
             {
                 const items = groups.slice(offset, offset + MISS_REPORT_MAX_ITEMS);
                 const result = await postMissChunkWithBackoff({
-                    post: () => post(items),
+                    post: requestSignal => post(items, requestSignal),
                     signal,
                     throwIfAborted,
                     delay: this.delay,
@@ -341,12 +347,9 @@ export class CacheFirstTranslator extends Translator
         return [...remaining.values()];
     }
 
-    async #pollUntilServed(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        throwIfAborted: () => void,
-    ): Promise<GroupCache[]>
+    async #pollUntilServed({ cacheClient, groups, apply, throwIfAborted, signal }: CacheLookupTask & {
+        throwIfAborted: () => void;
+    }): Promise<GroupCache[]>
     {
         let remaining = groups;
         let delayMs = MISS_POLL_FIRST_DELAY_MS;
@@ -354,10 +357,10 @@ export class CacheFirstTranslator extends Translator
 
         while (remaining.length && waited < MISS_POLL_WINDOW_MS)
         {
-            await this.delay(delayMs);
+            await runTranslationTask({ run: () => this.delay(delayMs), signal, timeoutMs: TRANSLATION_IO_TIMEOUT_MS });
             waited += delayMs;
             throwIfAborted();
-            remaining = await this.#lookupAndApply(cacheClient, remaining, apply, 'origin');
+            remaining = await this.#lookupAndApply({ cacheClient, groups: remaining, apply, transport: 'origin', signal });
             delayMs = MISS_POLL_MAX_INTERVAL_MS;
         }
 
