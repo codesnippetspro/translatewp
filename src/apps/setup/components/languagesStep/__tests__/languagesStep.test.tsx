@@ -192,7 +192,7 @@ describe('LanguagesStep estimate before committing', () =>
 
         const estimate = container.querySelector('[data-setup-estimate]');
         expect(estimate?.textContent).toContain('Translating 25 pages into 2 languages.');
-        expect(estimate?.textContent).toContain('This counts 50 page translations towards your quota.');
+        expect(estimate?.textContent).toContain('This counts 50 page translations towards your usage.');
     });
 
     it('shows no estimate before the site was read', async () =>
@@ -211,6 +211,6 @@ describe('LanguagesStep estimate before committing', () =>
 
         const estimate = container.querySelector('[data-setup-estimate]');
         expect(estimate?.textContent).toContain('Translating 12 pages into 2 languages.');
-        expect(estimate?.textContent).toContain('This counts 24 page translations towards your quota.');
+        expect(estimate?.textContent).toContain('This counts 24 page translations towards your usage.');
     });
 });

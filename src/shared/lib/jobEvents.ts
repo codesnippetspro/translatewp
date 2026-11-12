@@ -38,7 +38,7 @@ const KNOWN_KINDS: JobEventKind[] = [
 ];
 
 const EVENT_LABELS: Record<JobEventKind | 'unknown', string> = {
-    quota_block: __('Quota limit reached', 'translate'),
+    quota_block: __('Usage limit reached', 'translate'),
     provider_error: __('Translation provider error', 'translate'),
     timeout: __('Translation timed out', 'translate'),
     cancelled: __('Translation cancelled', 'translate'),

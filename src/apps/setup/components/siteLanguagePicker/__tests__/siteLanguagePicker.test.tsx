@@ -29,7 +29,7 @@ describe('the site language on the connection line', () =>
     {
         useSetupStore.setState({ defaultLanguage: 'lv', languages: ['de'] });
         const container = await render();
-        const input = container.querySelector('input[aria-label="Filter languages"]') as HTMLInputElement;
+        const input = container.querySelector('input[aria-label="Default language"]') as HTMLInputElement;
         expect(input).not.toBeNull();
         expect(container.textContent).toContain('Latvian');
 

@@ -28,7 +28,7 @@ describe('eventKindLabel', () =>
 {
     it('maps known and unknown kinds to safe labels', () =>
     {
-        expect(eventKindLabel('quota_block')).toBe('Quota limit reached');
+        expect(eventKindLabel('quota_block')).toBe('Usage limit reached');
         expect(eventKindLabel('unknown')).toBe('Translation event');
     });
 });

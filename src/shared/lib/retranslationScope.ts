@@ -48,21 +48,21 @@ export const retranslatedAgainSentence = (estimate: RetranslationEstimate | null
         : __('Pages are translated again on their next visit.', 'translate');
 };
 
-/** What the run costs: the page translations it counts against the quota, and what is left. */
+/** What the run adds to usage, and the percentage still available. */
 export const quotaCostSentence = (estimate: RetranslationEstimate | null, quota: Quota | null): string =>
 {
     const translations = estimate ? estimate.pages * estimate.languages : 0;
     const cost = translations > 0
         ? sprintf(
             /* translators: %s: number of page translations. */
-            _n('This counts %s page translation towards your quota.', 'This counts %s page translations towards your quota.', translations, 'translate'),
+            _n('This counts %s page translation towards your usage.', 'This counts %s page translations towards your usage.', translations, 'translate'),
             translations.toLocaleString()
         )
-        : __('The pages translated again count towards your quota.', 'translate');
+        : __('The pages translated again count towards your usage.', 'translate');
     const left = quota && Number.isFinite(quota.percentAvailable)
         ? ' ' + sprintf(
-            /* translators: %s: percent of the quota still available. */
-            __('%s%% of it is available right now.', 'translate'),
+            /* translators: %s: percentage still available. */
+            __('%s%% is available right now.', 'translate'),
             String(quota.percentAvailable)
         )
         : '';
