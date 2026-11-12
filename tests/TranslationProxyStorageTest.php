@@ -141,8 +141,16 @@ update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, $observed );
 assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'The first-pass allowance expires after fourteen days' );
 TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' );
 assert_true( 2000 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'One language expiry does not affect a new language' );
+$grace = get_option( TranslationProxyRateLimit::FIRST_PASS_OPTION );
+$grace[ $site_id ]['es']['observed_at'] = time() - 21;
+update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, $grace );
 TranslationProxyRateLimit::complete_first_pass( $site_id, 'es' );
-assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Completion restores the normal item limit' );
+update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+assert_true( 2000 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'A spine completed after 21 seconds preserves the first 600 seconds for visitors' );
+$grace = get_option( TranslationProxyRateLimit::FIRST_PASS_OPTION );
+$grace[ $site_id ]['es']['observed_at'] = time() - 600;
+update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, $grace );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Completion restores 400 once the minimum 600 seconds have elapsed' );
 update_option( 'translatewp_index_reported_languages', [] );
 assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'es' ), 'Clearing reported languages for retranslation cannot renew the allowance' );
 assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( 'another-site', 'de' ), 'A different site starts without trusted first-pass state' );
@@ -162,6 +170,22 @@ assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de'
 assert_true( ! \TranslateWP\Components\TranslationFormatting::is_free( '⟪x⟫Paid text⟪x⟫100', 'en', 'de' ), 'Duplicate marker ids cannot hide paid text from the exemption check' );
 
 assert_true( '4302552a498eeb989ea7a6e524bc82efab596aaf63d27a557c34badcde3e986e' === hash_file( 'sha256', __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), 'The shared service eligibility fixture has the same pinned bytes in both repositories' );
+wp_test_reset( [] );
+TranslationProxyRateLimit::complete_first_pass( $site_id, 'fr' );
+assert_true( 2000 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'fr' ), 'A new language first observed at index completion still receives its visitor window' );
+TranslationProxyStorage::increment_rate_limit( 'partial', $site_id, '203.0.113.10', 400, 600, 398 );
+$partial_key = TranslationProxyStorage::rate_limit_key( 'partial', $site_id, '203.0.113.10', 600 );
+$end = get_transient( TranslationProxyStorage::rate_limit_reset_key( $partial_key ) );
+$admission = TranslationProxyStorage::increment_rate_limit( 'partial', $site_id, '203.0.113.10', 400, 600, 4, true );
+assert_true( is_array( $admission ) && 2 === $admission['accepted'] && 400 === get_transient( $partial_key ), 'One reservation admits only the remaining room and charges its count once' );
+assert_true( $end === get_transient( TranslationProxyStorage::rate_limit_reset_key( $partial_key ) ), 'A partial reservation preserves the fixed window end' );
+assert_wp_error_code( TranslationProxyStorage::increment_rate_limit( 'partial', $site_id, '203.0.113.10', 400, 600, 4, true ), 'rate_limited' );
+
+wp_test_reset( [] );
+update_option( 'translatewp_index_reported_languages', [ 'de' ] );
+update_option( TranslationProxyRateLimit::FIRST_PASS_OPTION, [ $site_id => [ 'de' => [ 'observed_at' => time(), 'completed' => 'invalid', 'grace_eligible' => true ] ] ] );
+assert_true( 400 === TranslationProxyRateLimit::miss_items_limit( $site_id, 'de' ), 'Seeding an old language cannot promote a corrupt completion record into a visitor grace window' );
+
 $format_vectors = json_decode( file_get_contents( __DIR__ . '/fixtures/numeric-formatting-eligibility.json' ), true );
 foreach ( $format_vectors as $vector ) {
     $expected = class_exists( '\NumberFormatter' ) ? $vector['free'] : $vector['withoutIntl'];

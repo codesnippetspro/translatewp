@@ -273,21 +273,45 @@ class TranslationJobs extends BaseApiEndpoints {
 		$retry_hashes = [];
 		$retry_after = 0;
 		if ( $items ) {
-			$admitted = [];
-			foreach ( $items as $item ) {
-				$budget = \TranslateWP\Components\TranslationFormatting::is_free( $item['markerPayload'], $source_lang, $language )
-					? true : TranslationProxyRateLimit::charge_miss_items( $site_id, TranslationProxyClientIp::resolve(), 1, $item_limit );
-				if ( is_wp_error( $budget ) ) {
-					if ( 'rate_limited' !== $budget->get_error_code() ) {
-						TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
-						return $budget;
+			$paid = array_values(
+                array_filter(
+                    $items,
+                    static function ( array $item ) use ( $source_lang, $language ): bool {
+						return ! \TranslateWP\Components\TranslationFormatting::is_free( $item['markerPayload'], $source_lang, $language );
 					}
-					$retry_hashes[] = $item['cache']['hash'];
-					$retry_after = (int) ( $budget->get_error_data()['retry_after'] ?? 1 );
-					continue;
-				}
-				$admitted[] = $item;
+                )
+            );
+			$budget = $paid ? TranslationProxyRateLimit::charge_miss_items(
+				$site_id,
+                TranslationProxyClientIp::resolve(),
+                count( $paid ),
+                $item_limit,
+                true
+			) : [
+				'accepted' => 0,
+				'retry_after' => 0,
+			];
+			if ( is_wp_error( $budget ) && 'rate_limited' !== $budget->get_error_code() ) {
+				TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
+				return $budget;
 			}
+			$admitted_count = is_wp_error( $budget ) ? 0 : $budget['accepted'];
+			$retry_after = is_wp_error( $budget )
+				? (int) ( $budget->get_error_data()['retry_after'] ?? 1 ) : $budget['retry_after'];
+			$retry_hashes = array_map(
+                static function ( array $item ): string {
+					return $item['cache']['hash'];
+				},
+                array_slice( $paid, $admitted_count )
+            );
+			$admitted = array_values(
+                array_filter(
+                    $items,
+                    static function ( array $item ) use ( $retry_hashes ): bool {
+						return ! in_array( $item['cache']['hash'], $retry_hashes, true );
+					}
+                )
+            );
 			TranslationProxyDedupe::release_segments( $site_id, $language, $retry_hashes );
 			$hashes = array_values( array_diff( $hashes, $retry_hashes ) );
 			$subscription_hashes = array_values( array_diff( $subscription_hashes, $retry_hashes ) );

@@ -154,6 +154,7 @@ class Indexer {
 		$queued = $this->fan_out_read_rows( $read_rows, $languages, $force );
 		\TranslateWP\Components\ActionLog::record( sprintf( '%s queued %d page translations for %s', $force ? 'Forced retranslation' : 'Translation run', $queued, implode( ', ', $languages ) ) );
 
+		\TranslateWP\Components\TranslationProxyRateLimit::seed_completed_languages( Sites::registered_id() );
 		$reported = get_option( self::REPORTED_OPTION, [] );
 		$reported = is_array( $reported ) ? $reported : [];
 		update_option( self::REPORTED_OPTION, array_values( array_diff( $reported, $languages ) ) );
@@ -502,6 +503,7 @@ class Indexer {
 			return 0;
 		}
 
+		\TranslateWP\Components\TranslationProxyRateLimit::seed_completed_languages( Sites::registered_id() );
 		$reported = get_option( self::REPORTED_OPTION, [] );
 		$reported = is_array( $reported ) ? $reported : [];
 		update_option( self::REPORTED_OPTION, array_values( array_diff( $reported, $languages ) ) );

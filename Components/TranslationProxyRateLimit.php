@@ -42,7 +42,7 @@ class TranslationProxyRateLimit {
 		);
 	}
 
-	public static function charge_miss_items( string $site_id, string $client_ip, int $items, int $limit = self::MISS_ITEMS_MAX ) {
+	public static function charge_miss_items( string $site_id, string $client_ip, int $items, int $limit = self::MISS_ITEMS_MAX, bool $allow_partial = false ) {
 		if ( '' === $client_ip ) {
 			return new \WP_Error(
 				'client_ip_unavailable',
@@ -57,7 +57,8 @@ class TranslationProxyRateLimit {
 			$client_ip,
 			$limit,
 			self::MISS_ITEMS_WINDOW_SECONDS,
-			max( 1, $items )
+			max( 1, $items ),
+			$allow_partial
 		);
 	}
 
@@ -69,39 +70,32 @@ class TranslationProxyRateLimit {
 		if ( isset( $records[ $site_id ] ) && ! is_array( $records[ $site_id ] ) ) {
 			return self::MISS_ITEMS_MAX;
 		}
-		$reported = get_option( 'translatewp_index_reported_languages', [] );
-		if ( ! is_array( $reported ) ) {
+		if ( ! self::seed_completed_languages( $site_id ) ) {
 			return self::MISS_ITEMS_MAX;
-		}
-		foreach ( $reported as $reported_language ) {
-			if ( ! is_string( $reported_language ) || '' === $reported_language ) {
-				return self::MISS_ITEMS_MAX;
-			}
-			self::complete_first_pass( $site_id, $reported_language );
 		}
 		$records = get_option( self::FIRST_PASS_OPTION, [] );
-		if ( in_array( $language, $reported, true ) ) {
-			return self::MISS_ITEMS_MAX;
-		}
 		if ( ! array_key_exists( $language, $records[ $site_id ] ?? [] ) ) {
 			$records[ $site_id ][ $language ] = [
 				'observed_at' => time(),
 				'completed' => false,
+				'grace_eligible' => true,
 			];
 			update_option( self::FIRST_PASS_OPTION, $records, false );
 			return self::MISS_ITEMS_MAX;
 		}
 		$record = $records[ $site_id ][ $language ];
-		if ( ! is_array( $record ) || ! isset( $record['observed_at'], $record['completed'] )
+		if ( ! is_array( $record ) || ! isset( $record['observed_at'], $record['completed'], $record['grace_eligible'] )
 			|| ! is_int( $record['observed_at'] ) || ! is_bool( $record['completed'] )
-			|| $record['completed'] || $record['observed_at'] <= 0 || $record['observed_at'] > time()
+			|| true !== $record['grace_eligible']
+			|| ( $record['completed'] && time() - $record['observed_at'] >= self::MISS_ITEMS_WINDOW_SECONDS )
+			|| $record['observed_at'] <= 0 || $record['observed_at'] > time()
 			|| time() - $record['observed_at'] >= self::FIRST_PASS_SECONDS ) {
 			return self::MISS_ITEMS_MAX;
 		}
 		return self::FIRST_PASS_ITEMS_MAX;
 	}
 
-	public static function complete_first_pass( string $site_id, string $language ): void {
+	public static function complete_first_pass( string $site_id, string $language, bool $seeded = false ): void {
 		$records = get_option( self::FIRST_PASS_OPTION, [] );
 		if ( ! is_array( $records ) || '' === $site_id || '' === $language
 			|| ( isset( $records[ $site_id ] ) && ! is_array( $records[ $site_id ] ) ) ) {
@@ -111,11 +105,28 @@ class TranslationProxyRateLimit {
 		if ( is_array( $record ) && true === ( $record['completed'] ?? null ) ) {
 			return;
 		}
+		$grace_eligible = null === $record ? ! $seeded : is_array( $record )
+			&& is_bool( $record['completed'] ?? null ) && true === ( $record['grace_eligible'] ?? null );
 		$records[ $site_id ][ $language ] = [
 			'observed_at' => is_array( $record ) && is_int( $record['observed_at'] ?? null ) ? $record['observed_at'] : time(),
 			'completed' => true,
+			'grace_eligible' => $grace_eligible,
 		];
 		update_option( self::FIRST_PASS_OPTION, $records, false );
+	}
+
+	public static function seed_completed_languages( string $site_id ): bool {
+		$reported = get_option( 'translatewp_index_reported_languages', [] );
+		if ( ! is_array( $reported ) ) {
+			return false;
+		}
+		foreach ( $reported as $language ) {
+			if ( ! is_string( $language ) || '' === $language ) {
+				return false;
+			}
+			self::complete_first_pass( $site_id, $language, true );
+		}
+		return true;
 	}
 
 	public static function limit_for_bucket( string $bucket ): int {
