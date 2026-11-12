@@ -8,7 +8,7 @@ const subscribe = (listener: VoidFunction): VoidFunction =>
 };
 const getMessage = (): string =>
 {
-    const message = window.TranslateWP?.['connectReturnError'];
+    const message = Reflect.get(window.TranslateWP ?? {}, 'connectReturnError');
     return typeof message === 'string' ? message : '';
 };
 
@@ -16,6 +16,6 @@ export const useConnectReturnError = (): string => useSyncExternalStore(subscrib
 
 export const clearConnectReturnError = (): void =>
 {
-    if (window.TranslateWP) window.TranslateWP['connectReturnError'] = '';
+    if (window.TranslateWP) Reflect.set(window.TranslateWP, 'connectReturnError', '');
     for (const listener of listeners) listener();
 };
