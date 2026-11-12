@@ -38,7 +38,7 @@ export const observePendingTextEntries = (entries: TranslatableEntry[], onChange
     {
         if (frame === undefined && !disconnected) frame = window.requestAnimationFrame(report);
     };
-    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(report);
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(scheduleReport);
     for (const element of new Set(entries.map(entry => entry.node.parentElement)))
         if (element) observer?.observe(element);
     window.addEventListener('scroll', scheduleReport, true);
@@ -47,7 +47,7 @@ export const observePendingTextEntries = (entries: TranslatableEntry[], onChange
     return {
         settle: (entry: TranslatableEntry) =>
         {
-            if (pending.delete(entry.id)) report();
+            if (pending.delete(entry.id)) scheduleReport();
         },
         disconnect: () =>
         {

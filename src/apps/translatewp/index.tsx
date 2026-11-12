@@ -91,6 +91,7 @@ export const TranslateWP = () =>
     const [isTranslating, setIsTranslating] = useState(false);
     const pendingNoticeTimerRef = useRef<number | null>(null);
     const switchTokenRef = useRef(0);
+    const dismissedNoticeSwitchRef = useRef<number | null>(null);
 
     function setActiveLocale(locale: string): void
     {
@@ -316,7 +317,8 @@ export const TranslateWP = () =>
             {
                 pendingNoticeTimerRef.current = null;
                 noticeDelayElapsed = true;
-                if (switchTokenRef.current === switchToken && viewportPending > 0)
+                if (switchTokenRef.current === switchToken && viewportPending > 0
+                    && dismissedNoticeSwitchRef.current !== switchToken)
                 {
                     setNotice(pendingNoticeMessage);
                 }
@@ -334,8 +336,8 @@ export const TranslateWP = () =>
             {
                 if (switchTokenRef.current !== switchToken) return;
                 viewportPending = pending;
-                if (pending === 0) setNotice(null);
-                else if (noticeDelayElapsed) setNotice(pendingNoticeMessage);
+                if (pending === 0) setNotice(current => current === pendingNoticeMessage ? null : current);
+                else if (noticeDelayElapsed && dismissedNoticeSwitchRef.current !== switchToken) setNotice(pendingNoticeMessage);
             },
         })
             .then((result) =>
@@ -599,7 +601,11 @@ export const TranslateWP = () =>
         languages, switcher: switcher ?? {}, selectedLocale, isOpen, notice, isTranslating,
         onOpenChange: setIsOpen,
         onLanguageSelect: language => translate(language),
-        onDismissNotice: hidePendingNotice,
+        onDismissNotice: () =>
+        {
+            dismissedNoticeSwitchRef.current = switchTokenRef.current;
+            hidePendingNotice();
+        },
     };
 
     return (
