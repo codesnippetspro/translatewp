@@ -43,7 +43,11 @@ export const QuotaCard = () =>
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={data.percentAvailable}
-                        aria-label={__('Translation usage available', 'translate')}
+                        aria-label={sprintf(
+                            /* translators: %d: percentage of translation usage still available. */
+                            __('Translation usage: %d%% available', 'translate'),
+                            data.percentAvailable
+                        )}
                         data-quota-level={quotaLevel(data.percentAvailable)}
                     >
                         <div

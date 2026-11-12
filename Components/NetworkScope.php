@@ -159,7 +159,7 @@ class NetworkScope {
 			],
 			'role_permissions'      => [
 				self::field( 'access.edit_translations', __( 'Edit translations', 'translate' ), 'role_map', [], self::delegable_roles(), __( 'Switcher edit mode, the editor and Add to Lexicon.', 'translate' ) ),
-				self::field( 'access.retranslate', __( 'Retranslate', 'translate' ), 'role_map', [], self::delegable_roles(), __( 'Retranslate a page or the site, which uses quota.', 'translate' ) ),
+				self::field( 'access.retranslate', __( 'Retranslate', 'translate' ), 'role_map', [], self::delegable_roles(), __( 'Retranslate a page or the site, which counts towards usage.', 'translate' ) ),
 				self::field( 'access.manage_settings', __( 'Manage settings', 'translate' ), 'role_map', [], self::delegable_roles(), __( 'The translation and switcher settings.', 'translate' ) ),
 				self::field( 'access.manage_lexicon', __( 'Manage the Lexicon', 'translate' ), 'role_map', [], self::delegable_roles(), __( 'The Lexicon and its suggestions.', 'translate' ) ),
 			],
