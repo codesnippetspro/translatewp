@@ -228,6 +228,7 @@ export class TranslationEngine
                 onGroupServeFailed: (entries) =>
                 {
                     for (const entry of entries) unmark(entry);
+                    options.onGroupServeFailed?.(entries);
                 },
                 onEntryTranslated: (entry, served = true) =>
                 {

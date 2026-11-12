@@ -164,14 +164,15 @@ export class CacheFirstTranslator extends Translator
             let pending: GroupCache[] = [];
             if (report.outcome === 'accepted')
             {
-                remaining = await this.#deliverSubscriptions(
+                remaining = await this.#deliverSubscriptions({
                     cacheClient,
-                    remaining,
-                    report.subscriptions,
+                    groups: remaining,
+                    subscriptions: report.subscriptions,
                     apply,
                     terminalFailures,
                     signal,
-                );
+                    onGroupServeFailed: emitOptions.onGroupServeFailed,
+                });
                 if (remaining.length)
                 {
                     pending = await this.#pollUntilServed(cacheClient, remaining, apply, throwIfAborted);
@@ -293,14 +294,15 @@ export class CacheFirstTranslator extends Translator
         }
     }
 
-    async #deliverSubscriptions(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        subscriptions: CoveredTranslationSubscription[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        terminalFailures: GroupCache[],
-        signal?: AbortSignal,
-    ): Promise<GroupCache[]>
+    async #deliverSubscriptions({ cacheClient, groups, subscriptions, apply, terminalFailures, signal, onGroupServeFailed }: {
+        cacheClient: TranslationCacheClient;
+        groups: GroupCache[];
+        subscriptions: CoveredTranslationSubscription[];
+        apply: (groupCache: GroupCache, payload: string) => void;
+        terminalFailures: GroupCache[];
+        signal?: AbortSignal;
+        onGroupServeFailed?: TranslateBatchOptions['onGroupServeFailed'];
+    }): Promise<GroupCache[]>
     {
         const remaining = new Map(groups.map(group => [group.hash, group]));
 
@@ -330,6 +332,7 @@ export class CacheFirstTranslator extends Translator
                     if (!group) return;
                     terminalFailures.push(group);
                     remaining.delete(hash);
+                    onGroupServeFailed?.(group.group.entries);
                 },
             });
             await this.store.putMany(stored, this.targetLang);

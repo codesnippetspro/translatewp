@@ -142,11 +142,6 @@ export const TranslateWP = () =>
                     if (pageUnloadingRef.current) return;
                     console.error('[TranslateWP] Dynamic translation failed:', error);
                 },
-                // A re-hydration flush clears the pending line
-                // only when nothing on the page is still pending. While the
-                // switch is polling its own groups, an unrelated flush finishing
-                // must leave the line in place; it is bound to the page, not to
-                // a single operation.
                 onRehydrated: () =>
                 {
                     if (translationSessionRef.current?.pendingTranslationCount() === 0)
@@ -321,14 +316,14 @@ export const TranslateWP = () =>
         beginLanguageSelection(newLocale, history);
         setIsTranslating(true);
 
-        // The pending line appears only after this
-        // initial window, and only while the switch still has groups unserved;
-        // a page that finishes translating within the window never shows it.
+        let viewportPending = 0;
+        let noticeDelayElapsed = false;
         pendingNoticeTimerRef.current = window.setTimeout(
             () =>
             {
                 pendingNoticeTimerRef.current = null;
-                if (switchTokenRef.current === switchToken)
+                noticeDelayElapsed = true;
+                if (switchTokenRef.current === switchToken && viewportPending > 0)
                 {
                     setNotice(pendingNoticeMessage);
                 }
@@ -341,7 +336,15 @@ export const TranslateWP = () =>
         // title still follows for crawlers through the warm-up back-fill.
         translatePageTitle(newLocale);
 
-        void getTranslationSession().switchTo(newLocale)
+        void getTranslationSession().switchTo(newLocale, {
+            onViewportPendingChange: pending =>
+            {
+                if (switchTokenRef.current !== switchToken) return;
+                viewportPending = pending;
+                if (pending === 0) hidePendingNotice();
+                else if (noticeDelayElapsed) setNotice(pendingNoticeMessage);
+            },
+        })
             .then((result) =>
             {
                 if (switchTokenRef.current === switchToken)
