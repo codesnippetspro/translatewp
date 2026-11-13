@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { SiteScanSuggestions } from '@/shared/components/siteScanSuggestions';
 import { LexiconCandidates, scanLine } from '@/apps/admin/components/Lexicon/Candidates';
 import type { LexiconCandidate, LexiconScan } from '@/shared/lib/lexiconCandidates';
 
@@ -44,7 +45,7 @@ const candidate = (overrides: Partial<LexiconCandidate> = {}): LexiconCandidate 
 
 const mounts: { root: Root; client: QueryClient }[] = [];
 
-const render = async (): Promise<HTMLElement> =>
+const render = async (withSettings = false): Promise<HTMLElement> =>
 {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -53,7 +54,7 @@ const render = async (): Promise<HTMLElement> =>
     mounts.push({ root, client: queryClient });
     await act(async () =>
     {
-        root.render(<QueryClientProvider client={queryClient}><LexiconCandidates /></QueryClientProvider>);
+        root.render(<QueryClientProvider client={queryClient}><LexiconCandidates />{withSettings && <div data-settings><SiteScanSuggestions /></div>}</QueryClientProvider>);
     });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
@@ -87,6 +88,85 @@ describe('lexicon candidates', () =>
     {
         await act(async () => { mounts.splice(0).forEach(({ root, client }) => { root.unmount(); client.clear(); }); });
         document.body.innerHTML = '';
+    });
+
+    it('adds only checked rows once when both sources propose the same term', async () =>
+    {
+        let site = ['beta', 'Tidewell'].map(term => ({ term, description: 'Site instruction', category: 'Brand' }));
+        let reviews = [candidate({ sourceText: 'Beta', reason: 'Rich instruction' }), candidate({ id: 'unselected', sourceText: 'Fernwick' })];
+        mockApi.getScanContextStatus.mockImplementation(async () => ({ status: 'done', lexiconSuggestions: site }));
+        mockApi.getLexiconCandidates.mockImplementation(async () => ({ candidates: reviews }));
+        mockApi.applyScanLexicon.mockImplementation(async (terms: string[], resolution: string) => {
+            site = site.filter(proposal => !terms.includes(proposal.term));
+            return { added: resolution === 'add' ? terms.length : 0 };
+        });
+        mockApi.actOnLexiconCandidate.mockImplementation(async (id: string) => {
+            reviews = reviews.filter(review => review.id !== id);
+            return { candidate: candidate() };
+        });
+        const container = await render();
+        expect(container.querySelectorAll('[data-candidate]')).toHaveLength(3);
+        expect(container.querySelectorAll('[data-candidate] label')[0].textContent).toBe('Beta');
+        await act(async () => { buttonNamed(container, 'Select none')!.click(); });
+        for (const row of Array.from(container.querySelectorAll('[data-candidate]')))
+        {
+            if (['Beta', 'Tidewell'].includes(row.querySelector('label')!.textContent!))
+            {
+                await act(async () => { row.querySelector<HTMLInputElement>('input')!.click(); });
+            }
+        }
+        await act(async () => { buttonNamed(container, 'Add selected (2)')!.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(mockApi.createWordPressLexiconTerm.mock.calls).toEqual([['Beta', 'Rich instruction', ['de'], [], []]]);
+        expect(mockApi.applyScanLexicon.mock.calls).toEqual([[['beta'], 'dismiss'], [['Tidewell'], 'add']]);
+        expect(mockApi.actOnLexiconCandidate.mock.calls).toEqual([[candidate().id, 'add']]);
+        expect(container.querySelectorAll('[data-candidate]')).toHaveLength(1);
+        expect(container.querySelector('[data-candidate] label')?.textContent).toBe('Fernwick');
+    });
+
+    it('dismisses only named site rows and shares the remaining list with unchanged Settings controls', async () =>
+    {
+        let site = ['beta', 'Tidewell', 'Fernwick'].map(term => ({ term, description: 'Saved instruction', category: 'Brand' }));
+        mockApi.getScanContextStatus.mockImplementation(async () => ({ status: 'done', lexiconSuggestions: site }));
+        mockApi.getLexiconCandidates.mockImplementation(async () => ({ candidates: [candidate({ sourceText: 'Beta' })] }));
+        mockApi.applyScanLexicon.mockImplementation(async (terms: string[], resolution?: string) => {
+            site = resolution ? site.filter(proposal => !terms.includes(proposal.term)) : [];
+            return { added: 0 };
+        });
+        const container = await render(true);
+        const inbox = container.querySelector('#suggested-terms-results')!.closest('section')!;
+        const settings = container.querySelector<HTMLElement>('[data-settings]')!;
+        await act(async () => { buttonNamed(inbox, 'Select none')!.click(); });
+        const tidewell = Array.from(inbox.querySelectorAll('[data-candidate]')).find(row => row.querySelector('label')!.textContent === 'Tidewell')!;
+        await act(async () => { tidewell.querySelector<HTMLInputElement>('input')!.click(); });
+        await act(async () => { buttonNamed(inbox, 'Dismiss selected')!.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        const dismiss = Array.from(document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')).find(item => item.textContent?.trim() === 'Dismiss')!;
+        await act(async () => { dismiss.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(mockApi.applyScanLexicon.mock.calls).toEqual([[['Tidewell'], 'dismiss']]);
+        expect(site.map(proposal => proposal.term)).toEqual(['beta', 'Fernwick']);
+        expect(settings.querySelectorAll('input[type=checkbox]')).toHaveLength(2);
+        expect(buttonNamed(settings, 'Add 2 selected terms')).toBeDefined();
+        const fernwick = Array.from(inbox.querySelectorAll('[data-candidate]')).find(row => row.querySelector('label')!.textContent === 'Fernwick')!;
+        const rowDismiss = buttonNamed(fernwick, 'Dismiss')!;
+        expect(rowDismiss.hasAttribute('aria-haspopup')).toBe(false);
+        await act(async () => { rowDismiss.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(mockApi.applyScanLexicon).toHaveBeenLastCalledWith(['Fernwick'], 'dismiss');
+        expect(buttonNamed(settings, 'Add 1 selected term')).toBeDefined();
+        await act(async () => { buttonNamed(settings, 'Dismiss all')!.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(mockApi.applyScanLexicon.mock.calls.at(-1)).toEqual([[]]);
+        expect(settings.querySelector('[data-lexicon-suggestions]')).toBeNull();
+        expect(inbox.querySelectorAll('[data-candidate]')).toHaveLength(1);
+        expect(inbox.querySelector('[data-candidate] label')?.textContent).toBe('Beta');
+        expect(mockApi.createWordPressLexiconTerm).not.toHaveBeenCalled();
+        expect(mockApi.actOnLexiconCandidate).not.toHaveBeenCalled();
     });
 
     it('a free site sees the panel locked and the scan cannot start', async () =>

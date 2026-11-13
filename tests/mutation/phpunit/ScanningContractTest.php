@@ -544,4 +544,37 @@ final class ScanningContractTest extends TestCase {
 		self::assertTrue( Options::get( 'translations.context.scan_result' )['lexicon_applied'] );
 	}
 
+	public function test_partial_dismiss_never_creates_terms_and_keeps_unnamed_saved_metadata(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$terms = [
+			[ 'term' => 'Quillforge', 'description' => 'First saved description', 'category' => 'Brand' ],
+			[ 'term' => 'Tidewell', 'description' => 'Second saved description', 'category' => 'Product' ],
+		];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'context' => 'Saved context', 'lexicon' => $terms ] );
+		$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [
+			'terms' => [ 'QUILLFORGE', 'Forged' ], 'action' => 'dismiss', 'preserve_unselected' => true,
+		] ) );
+		self::assertSame( [ 'added' => 0 ], $result );
+		self::assertSame( [], array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) ) );
+		self::assertSame( [ $terms[1] ], Options::get( 'translations.context.scan_result' )['lexicon'] );
+		self::assertSame( [ $terms[1] ], $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) )['lexiconSuggestions'] );
+		self::assertSame( 'Saved context', Options::get( 'translations.context.scan_result' )['context'] );
+	}
+
+	public function test_partial_unmatched_and_empty_names_leave_all_stored_proposals_available(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$terms = [ [ 'term' => 'Tidewell', 'description' => 'Saved instruction' ] ];
+		foreach ( [ 'add', 'dismiss' ] as $action ) {
+			foreach ( [ [], [ 'Forged' ] ] as $selection ) {
+				Options::update( 'translations.context.scan_result', [ 'lexicon' => $terms ] );
+				self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [
+					'terms' => $selection, 'action' => $action, 'preserve_unselected' => true,
+				] ) ) );
+				self::assertSame( $terms, Options::get( 'translations.context.scan_result' )['lexicon'] );
+				self::assertFalse( Options::get( 'translations.context.scan_result' )['lexicon_applied'] );
+			}
+		}
+	}
+
 }
