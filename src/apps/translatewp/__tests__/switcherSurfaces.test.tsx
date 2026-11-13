@@ -643,9 +643,11 @@ describe('TranslateWP switcher surfaces', () =>
             document.body.innerHTML = '<span data-twp-switcher></span>';
             await renderApp();
             await chooseLanguage('Español');
+            await act(async () => { await Promise.resolve(); await Promise.resolve(); });
             expect(seo).toHaveBeenCalledWith('Shop hours', 'seo:title', expect.objectContaining({ signal: expect.any(AbortSignal) }));
             expect(document.title).toBe('Horario de tienda');
             await chooseLanguage('English');
+            await act(async () => { await Promise.resolve(); await Promise.resolve(); });
             expect(document.title).toBe('Shop hours');
         }
         finally
