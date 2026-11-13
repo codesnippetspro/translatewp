@@ -601,4 +601,25 @@ describe('bounded loading state', () =>
         }
     });
 
+    it('does not restore stale source over a theme edit when the old run is cancelled', async () =>
+    {
+        const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+        jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+        {
+            options.onGroupServeStarted?.(entries);
+            return new Promise(() => {});
+        });
+        const controller = new AbortController();
+        const applied = jest.fn();
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = engine.run(document.body, undefined, { signal: controller.signal, onEntryApplied: applied });
+        void result.catch(() => {});
+        document.querySelector('p')!.firstChild!.nodeValue = 'Theme current content';
+        controller.abort();
+        await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+        expect(document.querySelector('p')?.textContent).toBe('Theme current content');
+        expect(applied).not.toHaveBeenCalled();
+        expect(loadingElements()).toHaveLength(0);
+    });
+
 });

@@ -1487,3 +1487,31 @@ it('uses the browser fetch and waits the first poll delay without injected trans
         jest.useRealTimers();
     }
 });
+
+it('reports only the uncached group after a mixed remote lookup', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const seed = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await seed.prepare(entries);
+    expect(plan.groupsForCache).toHaveLength(2);
+    const [first, second] = plan.groupsForCache;
+    const firstPayload = first.markerPayload.replace('Hello world', 'Hola mundo');
+    const secondPayload = second.markerPayload.replace('Second paragraph', 'Segundo párrafo');
+    const { impl, log } = createFetch([
+        new Map([[first.hash, firstPayload]]),
+        new Map([[first.hash, firstPayload], [second.hash, secondPayload]]),
+    ]);
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl: impl, delay: async () => {} });
+    translator._createCacheClient = () => new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, sampleOrigin: () => false, fetchImpl: impl });
+    const result = await translator.translateBatch(entries);
+    expect(result.translated.map(entry => entry.value)).toEqual(['Hola mundo', 'Segundo párrafo']);
+    const reports = log.filter(item => item.url.endsWith('/miss'));
+    expect(reports).toHaveLength(1);
+    expect(reports[0].body.items).toEqual([expect.objectContaining({ groupId: second.group.id, markerPayload: second.markerPayload })]);
+    const lookups = log.filter(item => isLookup(item.url));
+    expect(lookups[0].url).not.toContain('/lookup-batch');
+    expect(lookups[0].body).toEqual({});
+    expect(lookups[1].url).toContain('/lookup-batch');
+    expect(lookups[1].body.hashes).toEqual([second.hash]);
+
+});
