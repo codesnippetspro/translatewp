@@ -182,6 +182,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Show when another term scan is available and filter diagnostic text and ordinary interface labels from suggestions.
 * Stop translating printed PHP errors and remove completed job references so the Dashboard loads promptly.
 * Use consistent number controls with minus and plus buttons, keyboard steps and drag adjustment.
+* Keep Lexicon terms, language names and edit/delete actions readable on phones.
 
 ### 1.0.3
 
