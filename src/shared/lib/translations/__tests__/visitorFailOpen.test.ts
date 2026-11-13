@@ -392,8 +392,10 @@ describe('TranslationEngine loading counter balance', () =>
             return new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         };
         const first = make().run(document.head);
+        void first.catch(() => {});
         await new Promise(resolve => window.setTimeout(resolve, 0));
         const second = make().run(document.head);
+        void second.catch(() => {});
         await new Promise(resolve => window.setTimeout(resolve, 0));
         const title = document.querySelector('title') as HTMLElement;
         expect(title.getAttribute('data-translatewp-loading-count')).toBe('2');

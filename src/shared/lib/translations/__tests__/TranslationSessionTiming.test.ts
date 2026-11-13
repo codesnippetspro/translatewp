@@ -25,10 +25,11 @@ it('resets timing and ignores aborted writes across language switches and later 
 	try
 	{
 		const first = session.switchTo('fr');
-		await started;
-		random.mockRestore();
+		void first.catch(() => {});
+		await expect(Promise.race([started, first]).finally(() => random.mockRestore())).resolves.toBeUndefined();
 		await jest.advanceTimersByTimeAsync(10);
 		const second = session.switchTo('de');
+		void second.catch(() => {});
 		expect(events[0]).toMatchObject({ outcome: 'cancelled', firstAppliedMs: null });
 		release();
 		await expect(first).rejects.toMatchObject({ name: 'AbortError' });

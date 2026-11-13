@@ -63,8 +63,8 @@ it('aggregates first DOM and full view timing across overlapping mutation work',
 	try
 	{
 		const switching = session.switchTo('fr');
-		await started;
-		random.mockRestore();
+		void switching.catch(() => {});
+		await expect(Promise.race([started, switching]).finally(() => random.mockRestore())).resolves.toBeUndefined();
 		await jest.advanceTimersByTimeAsync(10);
 		document.body.insertAdjacentHTML('beforeend', '<footer>Contact us</footer>');
 		await jest.advanceTimersByTimeAsync(CHANGE_SETTLE_MS + 20);
@@ -106,8 +106,8 @@ it('starts a fresh mutation round after a timed out switch without cancelling it
 	try
 	{
 		const switching = session.switchTo('fr');
-		await started;
-		random.mockRestore();
+		void switching.catch(() => {});
+		await expect(Promise.race([started, switching]).finally(() => random.mockRestore())).resolves.toBeUndefined();
 		await jest.advanceTimersByTimeAsync(120001);
 		expect(events).toEqual([expect.objectContaining({ outcome: 'timeout', completedMs: null })]);
 		expect(signal?.aborted).toBe(false);

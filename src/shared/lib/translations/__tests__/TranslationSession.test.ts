@@ -89,7 +89,7 @@ describe('TranslationSession', () =>
         });
         const first = session.switchTo('de');
         const cancelled = first.catch(error => error);
-        await firstStarted;
+        await expect(Promise.race([firstStarted, first])).resolves.toBeUndefined();
         const second = session.switchTo(target);
         const settled = jest.fn();
         void second.then(settled, settled);
@@ -130,7 +130,7 @@ describe('TranslationSession', () =>
         const session = createSession({ root: document.body, sourceLang: 'en', extractionOptions: EXTRACTION_OPTIONS });
         const previous = jest.fn();
         const first = session.switchTo('de', { onViewportPendingChange: previous }).catch(error => error);
-        await pending;
+        await expect(Promise.race([pending, first])).resolves.toBeUndefined();
         expect(previous).toHaveBeenLastCalledWith(1);
         previous.mockClear();
         const current = jest.fn();
@@ -1054,7 +1054,7 @@ describe('TranslationSession', () =>
         const options = { root: document.body, sourceLang: 'en', extractionOptions: { includeAlt: true, includeAttributes: true } };
         const old = createSession(options);
         const first = old.switchTo('de').catch(error => error);
-        await pending;
+        await expect(Promise.race([pending, first])).resolves.toBeUndefined();
         old.dispose();
         const replacement = createSession(options);
         await replacement.switchTo('it');

@@ -450,6 +450,7 @@ describe('CacheFirstTranslator', () =>
 
         let finished = false;
         const run = translator.translateBatch(entries).then(() => { finished = true; });
+        void run.catch(() => {});
 
         // Let the translator reach both lookups.
         for (let tick = 0; tick < 10 && order.length < 2; tick++)
