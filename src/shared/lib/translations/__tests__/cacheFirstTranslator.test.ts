@@ -1659,3 +1659,73 @@ it('rejects a coalesced miss result returned after the page was aborted', async 
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(failed).not.toHaveBeenCalled();
 });
+
+it('retries only refused items in an actual cache miss chunk', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const [first, second] = plan.groupsForCache;
+    const served = new Map(plan.groupsForCache.map(group => [group.hash, group.markerPayload.replace('Hello world', 'Hola mundo').replace('Second paragraph', 'Segundo párrafo')]));
+    const { impl } = createFetch([new Map(), served]);
+    const post = jest.fn().mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ acceptedHashes: [first.hash], retryHashes: [second.hash], retryAfter: 1 }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl: post, delay: async () => {}, random: () => 0 });
+    translator._createCacheClient = () => new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, sampleOrigin: () => false, fetchImpl: impl });
+    const result = await translator.translateBatch(entries);
+    expect(result.failures).toEqual([]);
+    expect(result.translated.map(entry => entry.value)).toEqual(['Hola mundo', 'Segundo párrafo']);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(post.mock.calls[0][1].body)).items).toHaveLength(2);
+    expect(JSON.parse(String(post.mock.calls[1][1].body)).items).toEqual([expect.objectContaining({ groupId: second.group.id })]);
+});
+
+it('rejects an in-flight miss post immediately on page abort', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    let started!: () => void;
+    const pending = new Promise<void>(resolve => { started = resolve; });
+    const fetchImpl = jest.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    {
+        started();
+        return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true }));
+    });
+    const controller = new AbortController();
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl });
+    const result = translator._translateContextGroups(plan, cache, { signal: controller.signal });
+    void result.catch(() => {});
+    await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+    controller.abort();
+    await expect(result).rejects.toHaveProperty('name', 'AbortError');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the first accepted stream when a later miss chunk fails', async () =>
+{
+    document.body.innerHTML = Array.from({ length: 41 }, (_, index) => `<p>Paragraph ${index}</p>`).join('');
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    expect(plan.groupsForCache).toHaveLength(41);
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const fetchImpl = jest.fn().mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ subscription }) }).mockRejectedValue(new Error('Offline'));
+    const eventClient = { deliver: jest.fn(async ({ hashes, onReady }: Parameters<TranslationEventClient['deliver']>[0]) =>
+    {
+        for (const hash of hashes)
+        {
+            const group = plan.groupsForCache.find(entry => entry.hash === hash)!;
+            onReady(hash, group.markerPayload.replace('Paragraph', 'Párrafo'));
+        }
+        return 'complete' as const;
+    }) } as unknown as TranslationEventClient;
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, eventClient });
+    const result = await translator._translateContextGroups(plan, cache);
+    expect(result.translatedById.size).toBe(40);
+    expect(result.failures).toEqual([{ groupId: plan.groupsForCache[40].group.id, error: 'miss_report_rejected' }]);
+    expect(eventClient.deliver).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+});
