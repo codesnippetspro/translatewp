@@ -171,7 +171,7 @@ assert_same( 'https://example.com:443/it/shop/?v=geo-hash', apply_filters( 'wp_r
 
 $routing = request( '/it/shop/' );
 $routing->route( true );
-assert_same( false, apply_filters( 'wp_redirect', 'https://example.com/shop/', 301 ), 'Restoring the language never introduces a same-address redirect loop' );
+assert_same( 'https://example.com/shop/', apply_filters( 'wp_redirect', 'https://example.com/shop/', 301 ), 'An otherwise identical target keeps vanilla redirect behavior instead of returning an empty response' );
 $_SERVER['REQUEST_METHOD'] = 'HEAD';
 assert_same( 'https://example.com/it/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com/shop/?v=geo-hash', 307 ), 'HEAD redirects retain the requested language as GET does' );
 $_SERVER['REQUEST_METHOD'] = 'POST';

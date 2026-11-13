@@ -159,7 +159,7 @@ class LanguageRouting {
 		$separator = strcspn( $redirect_url, '?#' );
 		$localized = LanguageUrl::localize( substr( $redirect_url, 0, $separator ), $locale ) . substr( $redirect_url, $separator );
 
-		return $localized === $this->requested_url() ? false : $localized;
+		return $localized === $this->requested_url() ? $redirect_url : $localized;
 	}
 
 	/**
