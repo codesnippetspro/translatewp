@@ -1041,4 +1041,49 @@ describe('TranslationSession', () =>
         expect(() => session.dispose()).not.toThrow();
     });
 
+    it.each(['it', 'en'])('cancels held mutation work before switching to %s and does not cancel retired requests again', async target =>
+    {
+        document.body.innerHTML = '<main><p>Original content</p></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('de');
+        const abort = jest.spyOn(AbortController.prototype, 'abort');
+        let release!: () => void;
+        let started!: () => void;
+        let heldSignal!: AbortSignal;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            heldSignal = options.signal;
+            started();
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>New content</p>');
+        await flushMutations();
+        await pending;
+        const next = session.switchTo(target);
+        const settled = jest.fn();
+        void next.then(settled, settled);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(settled).toHaveBeenCalledTimes(1);
+        await next;
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('main')?.textContent).toBe(target === 'en'
+            ? 'Original contentNew content' : 'it:Original contentit:New content');
+        expect(heldSignal.aborted).toBe(true);
+        const retired = new Set(abort.mock.contexts);
+        const before = abort.mock.calls.length;
+        await session.switchTo('de');
+        expect(abort.mock.contexts.slice(before).every(controller => !retired.has(controller))).toBe(true);
+    });
+
 });

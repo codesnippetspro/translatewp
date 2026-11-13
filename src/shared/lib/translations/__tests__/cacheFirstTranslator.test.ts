@@ -1246,7 +1246,7 @@ describe('miss subscription validation', () =>
     });
 
     it.each([
-        null, false, [], Object.assign([], valid), 'subscription', {}, { ...valid, url: 1 }, { ...valid, expiresAt: 1 },
+        null, false, [], Object.assign([], valid), 'subscription', {}, { ...valid, url: 1 }, { ...valid, expiresAt: 1 }, { ...valid, url: [valid.url] }, { ...valid, expiresAt: [valid.expiresAt] },
         { ...valid, url: 'not a URL' },
         { ...valid, url: 'http://api.example.test/v1/translation/cache/events?token=signed' },
         { ...valid, url: 'https://foreign.example/v1/translation/cache/events?token=signed' },
@@ -1280,6 +1280,22 @@ describe('miss subscription validation', () =>
 
 describe('bounded miss report responses', () =>
 {
+    it('counts request time against the retry deadline instead of only counting waits', async () =>
+    {
+        let now = Date.UTC(2026, 0, 1);
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const post = jest.fn(async () => { now += 10_000; return response(429, {}, '1'); });
+        const waits: number[] = [];
+        try
+        {
+            const { result } = run(post, { delay: async ms => { waits.push(ms); now += ms; } });
+            await expect(result).resolves.toEqual({ outcome: 'rejected' });
+            expect(post).toHaveBeenCalledTimes(9);
+            expect(waits).toEqual(Array(8).fill(1000));
+        }
+        finally { clock.mockRestore(); }
+    });
+
     const response = (status: number, body: unknown = {}, retryAfter: string | null = null) => ({
         status, ok: status >= 200 && status < 300,
         headers: { get: (name: string) => name === 'Retry-After' ? retryAfter : null },
@@ -1359,13 +1375,16 @@ describe('bounded miss report responses', () =>
         { acceptedHashes: ['unknown'], retryHashes: ['second'], retryAfter: 1 },
         { acceptedHashes: [], retryHashes: 'second', retryAfter: 1 },
         { acceptedHashes: [], retryHashes: [''], retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: [null], retryAfter: 1 },
         { acceptedHashes: [], retryHashes: ['a'.repeat(129)], retryAfter: 1 },
         { acceptedHashes: [], retryHashes: Array.from({ length: 41 }, (_, i) => String(i)), retryAfter: 1 },
         { acceptedHashes: [], retryHashes: ['second'], retryAfter: '1' },
         { acceptedHashes: [], retryHashes: ['second'], retryAfter: 0 },
         { acceptedHashes: [], retryHashes: ['second'], retryAfter: -1 },
         { acceptedHashes: [], retryHashes: ['second'], retryAfter: Infinity },
+        { acceptedHashes: ['first'], retryHashes: ['second'], retryAfter: Infinity },
         { acceptedHashes: [], retryHashes: ['second'], retryAfter: NaN },
+        { acceptedHashes: ['first'], retryHashes: ['second'], retryAfter: NaN },
     ])('does not retry a malformed partial admission %#', async body =>
     {
         const post = jest.fn().mockResolvedValue(response(200, body));
