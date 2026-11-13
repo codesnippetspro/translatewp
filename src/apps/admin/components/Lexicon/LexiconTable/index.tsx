@@ -1,8 +1,9 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { Button } from '@wordpress/components';
 import { Pencil, Trash2 } from 'lucide-react';
 import { getCountryFlagFromLocale, getLanguageNameFromLocale } from '@/shared/lib/languages';
 import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
+import './style.css';
 
 export interface LexiconRow
 {
@@ -23,13 +24,12 @@ export interface LexiconTableProps
 export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProps) =>
 {
     return (
-        <Table>
-            <TableHeaderRow>
+        <Table className="twp-lexicon-table" header={<TableHeaderRow className="max-sm:sr-only">
                 <TableCell variant="header">{__('Term', 'translate')}</TableCell>
                 <TableCell variant="header">{__('Languages', 'translate')}</TableCell>
                 <TableCell variant="header">{__('Categories', 'translate')}</TableCell>
                 <TableCell variant="header" align="end">{__('Actions', 'translate')}</TableCell>
-            </TableHeaderRow>
+            </TableHeaderRow>}>
 
             {rows.length === 0 && (
                 <TableRow>
@@ -44,13 +44,13 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
 
             {rows.map((row) => (
                 <TableRow key={row.id}>
-                    <TableCell className="text-translatewp-neutral max-w-md [overflow-wrap:anywhere]!">
+                    <TableCell className="text-translatewp-neutral max-w-md sm:[overflow-wrap:anywhere]!">
                         {row.term}
                     </TableCell>
 
                     <TableCell as="div" className="flex flex-wrap items-center gap-1.5">
                         {row.languages.map((locale) => (
-                            <span key={`${row.id}-${locale}`} className="inline-flex items-center gap-1.5">
+                            <span key={`${row.id}-${locale}`} className="inline-flex items-center gap-1.5 max-sm:whitespace-nowrap">
                                 <span aria-hidden="true">{getCountryFlagFromLocale(locale)}</span>
                                 {getLanguageNameFromLocale(locale) || locale}
                             </span>
@@ -71,7 +71,8 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                     <TableCell as="div" align="end" className="flex justify-end gap-2">
                         <Button
                             variant='primary'
-                            label={__('Edit lexicon term', 'translate')}
+                            /* translators: %s: lexicon term. */
+                            label={sprintf(__('Edit %s', 'translate'), row.term)}
                             className='p-2! min-w-0! rounded-sm!'
                             onClick={() => onEdit(row.id)}
                         >
@@ -79,7 +80,8 @@ export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProp
                         </Button>
                         <Button
                             variant='secondary'
-                            label={__('Delete lexicon term', 'translate')}
+                            /* translators: %s: lexicon term. */
+                            label={sprintf(__('Delete %s', 'translate'), row.term)}
                             className='p-2! min-w-0! rounded-sm!'
                             onClick={() => onDelete(row.id)}
                         >

@@ -427,7 +427,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                 href={pageEntry.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-translatewp-primary break-all font-medium"
+                                                className="text-translatewp-primary font-medium"
                                             >
                                                 {pageLabel}
                                             </a>
