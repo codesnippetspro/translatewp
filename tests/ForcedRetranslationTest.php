@@ -598,7 +598,11 @@ $claim = $indexing->claim_extract( new WP_REST_Request( 'POST', '/translatewp/v1
 assert_true( (string) $large_id === $claim['objectId'] && is_string( $claim['id'] ), 'Extraction JSON must preserve both object and row identifiers as strings' );
 $submitted = $indexing->submit_extract( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/submit-extract', [ 'id' => $claim['id'], 'items' => [] ] ) );
 assert_true( is_array( $submitted ) && true === $submitted['stored'], 'A string row identifier must submit extraction successfully' );
-$queue->fail( (int) $claim['id'], 'page_fetch_403' );
+$queue->enqueue_retranslate( $queue->list_rows() );
+for ( $attempt = 0; $attempt < IndexQueue::MAX_ATTEMPTS; $attempt++ ) {
+	$dead_claim = $queue->claim_batch( IndexQueue::STAGE_EXTRACT, 1 );
+	$queue->fail( (int) $dead_claim[0]['id'], 'page_fetch_403' );
+}
 $failed_wire = $indexing->status( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/status' ) )['failed'][0];
 assert_true( (string) $large_id === $failed_wire['objectId'] && is_string( $failed_wire['id'] ), 'Failed page identifiers must stay strings for repair' );
 $repaired = $indexing->reextract_page( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/reextract-page', [ 'id' => $failed_wire['id'] ] ) );
