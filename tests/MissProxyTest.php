@@ -542,6 +542,29 @@ for ( $round = 0; $round < 20; $round++ ) {
 $fresh = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
 assert_true( is_array( $fresh ) && 1 === ( $fresh['accepted'] ?? 0 ), 'New text after repeated reports must still be accepted, got ' . wp_json_encode( $fresh ) );
 
+$enqueue_results = [];
+foreach ( [ 'report_misses', 'enqueue_misses' ] as $method ) {
+	wp_test_reset( $connected_options );
+	$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+	assert_wp_error_code( $jobs->$method( make_request( 'POST', [ 'language' => 'de', 'items' => [ $valid_item ] ] ) ), 'language_not_configured' );
+	assert_wp_error_code( $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [] ] ) ), 'invalid_parameter' );
+	wp_test_reset( $connected_options );
+	$result = $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ], 'subscribe' => false ] ) );
+	assert_true( 1 === ( $result['accepted'] ?? 0 ), $method . ' must accept the same valid item' );
+	$subscriptions = array_values( array_filter( $GLOBALS['wp_test_remote_posts'], static fn( $call ) => '/v1/translation/cache/subscriptions' === $call['path'] ) );
+	assert_true( ( 'report_misses' === $method ? 1 : 0 ) === count( $subscriptions ), $method . ' must mint only for public reports; a body flag cannot disable it' );
+	assert_true( ( 'report_misses' === $method ) === isset( $result['subscription'] ), $method . ' subscription response must match ticket minting' );
+	unset( $result['subscription'] );
+	$enqueue_results[ $method ] = [ $result, $GLOBALS['wp_test_inserted_posts'] ];
+	wp_test_reset( $connected_options );
+	update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+	TranslationProxyRateLimit::charge_miss_items( $connected_options['site']['id'], '203.0.113.10', 400 );
+	$refused = $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
+	assert_true( $refused instanceof WP_REST_Response && 429 === $refused->get_status(), $method . ' must enforce the same item throttle' );
+	assert_true( [] === $GLOBALS['wp_test_inserted_posts'], $method . ' must not queue refused work' );
+}
+assert_true( $enqueue_results['report_misses'] === $enqueue_results['enqueue_misses'], 'Both methods must queue identical work and return identical counts' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "MissProxyTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );
