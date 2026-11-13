@@ -575,14 +575,15 @@ $large_id = 347772355023158088;
 $large_url = 'https://example.com/pricing/';
 $queue = new IndexQueue();
 $indexing = new Indexing( 'translatewp', TRANSLATEWP_VERSION, make_indexer( $queue ) );
-$queue->enqueue( [ [
+$large_row = [
 	'object_type' => 'miss',
 	'object_id' => $large_id,
 	'url' => $large_url,
 	'page_title' => 'Pricing',
 	'language' => 'de',
 	'priority' => 100,
-] ] );
+];
+$queue->enqueue( [ $large_row ] );
 $wire = json_decode( wp_json_encode( $indexing->pages( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/pages' ) ) ), true );
 assert_true( (string) $large_id === $wire['pages'][0]['objectId'], 'Page JSON must preserve a large object identifier as a decimal string' );
 assert_true( is_string( $wire['pages'][0]['languages']['de']['id'] ), 'Page language row identifiers must be JSON strings' );
@@ -598,7 +599,7 @@ $claim = $indexing->claim_extract( new WP_REST_Request( 'POST', '/translatewp/v1
 assert_true( (string) $large_id === $claim['objectId'] && is_string( $claim['id'] ), 'Extraction JSON must preserve both object and row identifiers as strings' );
 $submitted = $indexing->submit_extract( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/submit-extract', [ 'id' => $claim['id'], 'items' => [] ] ) );
 assert_true( is_array( $submitted ) && true === $submitted['stored'], 'A string row identifier must submit extraction successfully' );
-$queue->enqueue_retranslate( $queue->list_rows() );
+$queue->enqueue_retranslate( [ $large_row ] );
 for ( $attempt = 0; $attempt < IndexQueue::MAX_ATTEMPTS; $attempt++ ) {
 	$dead_claim = $queue->claim_batch( IndexQueue::STAGE_EXTRACT, 1 );
 	$queue->fail( (int) $dead_claim[0]['id'], 'page_fetch_403' );
