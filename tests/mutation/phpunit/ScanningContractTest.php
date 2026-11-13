@@ -278,7 +278,7 @@ final class ScanningContractTest extends TestCase {
 
 	public function test_explicit_lexicon_application_preserves_metadata_categories_and_duplicates(): void {
 		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
-		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'de', 'fr', 'fr', [ 'locale' => '' ], '', null ] );
+		Options::update( 'languages.list', [ [ 'locale' => 'de' ], [ 'locale' => 'de' ], 'fr', 'fr', [ 'locale' => '' ], '', null ] );
 		Options::update( 'translations.context.scan_result', [ 'lexicon' => [
 			[ 'term' => 'First', 'description' => 'First description', 'category' => 'Brand' ],
 			[ 'term' => ' first ', 'description' => 'Duplicate', 'category' => 'Brand' ],
@@ -393,8 +393,8 @@ final class ScanningContractTest extends TestCase {
 	}
 
 	public function test_scan_numbers_are_integer_clamped_and_new_progress_has_a_real_start(): void {
-		foreach ( [ [ -3, 20, 0, 10 ], [ '2.9', '8.7', 2, 8 ], [ 3.3, 4.9, 3, 4 ] ] as [ $formality, $creativity, $expected_formality, $expected_creativity ] ) {
-			Options::update( 'translations.context.scan_progress', false );
+		foreach ( [ [ -3, 20, 0, 10 ], [ '2.9', '8.7', 2, 8 ], [ 3.3, 4.9, 3, 4 ] ] as $index => [ $formality, $creativity, $expected_formality, $expected_creativity ] ) {
+			Options::update( 'translations.context.scan_progress', 0 === $index ? false : [] );
 			$this->respond( array_replace( $this->scanResult(), [ 'formality' => $formality, 'creativity' => $creativity ] ) );
 			$this->scanner->run_scan();
 			self::assertSame( $expected_formality, Options::get( 'translations.style.formality' ) );

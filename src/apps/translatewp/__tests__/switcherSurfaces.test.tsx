@@ -623,6 +623,13 @@ describe('TranslateWP switcher surfaces', () =>
             window.dispatchEvent(new Event('scroll'));
             await tick(17);
             expect(notice()).not.toContain(message);
+            laterVisible = false;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
         }
         finally
         {
