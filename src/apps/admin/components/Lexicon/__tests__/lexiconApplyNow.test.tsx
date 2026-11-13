@@ -1,19 +1,33 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { jest } from '@jest/globals';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { deleteWordPressLexiconTerm } from '@/shared/api/wordpress';
 
 let mockLexiconResponse: unknown;
 let mockStaleResponse: unknown;
+let mockSiteScanResponse: unknown;
+const mockInvalidateQueries = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
 jest.mock('@tanstack/react-query', () => ({
+    ...jest.requireActual<typeof import('@tanstack/react-query')>('@tanstack/react-query'),
     queryOptions: (options: unknown) => options,
     useQuery: (options: { queryKey?: unknown[] }) => (
-        Array.isArray(options?.queryKey) && options.queryKey[0] === 'getStaleTranslations'
+        Array.isArray(options?.queryKey) && options.queryKey[0] === 'siteScanSuggestions'
+            ? { data: mockSiteScanResponse, isFetching: false }
+            : Array.isArray(options?.queryKey) && options.queryKey[0] === 'getStaleTranslations'
             ? { data: mockStaleResponse, isFetching: false }
             : { data: mockLexiconResponse, isFetching: false }
     ),
-    useMutation: () => ({ mutate: () => {}, isPending: false }),
-    useQueryClient: () => ({ invalidateQueries: () => {} }),
+    useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
+jest.mock('@/shared/api/wordpress', () => ({
+    ...jest.requireActual<typeof import('@/shared/api/wordpress')>('@/shared/api/wordpress'),
+    deleteWordPressLexiconTerm: jest.fn(),
+}));
+jest.mock('@/shared/components/confirmDialog/useConfirmDialog', () => ({
+    useConfirmDialog: () => ({ requestConfirmation: async () => true, confirmDialogProps: { isOpen: false } }),
 }));
 
 jest.mock('@/apps/admin/components/Lexicon/AddLexiconDrawer', () => ({
@@ -35,15 +49,17 @@ const pagination = (total: number) => ({
 const term = (id: number) => ({ id, term: `Term ${id}`, languages: [], categories: [] });
 
 let root: Root | null = null;
+let client: QueryClient;
 
 const renderLexicon = async (): Promise<string> =>
 {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     await act(async () =>
     {
-        root!.render(<Lexicon />);
+        root!.render(<QueryClientProvider client={client}><Lexicon /></QueryClientProvider>);
     });
     return container.textContent ?? '';
 };
@@ -53,6 +69,7 @@ const renderLexicon = async (): Promise<string> =>
 // only while some are waiting.
 describe('Lexicon retranslate action', () =>
 {
+    beforeEach(() => { mockSiteScanResponse = undefined; mockInvalidateQueries.mockClear(); });
     afterEach(async () =>
     {
         await act(async () =>
@@ -60,7 +77,38 @@ describe('Lexicon retranslate action', () =>
             root?.unmount();
         });
         root = null;
+        client.clear();
         document.body.innerHTML = '';
+    });
+
+    it('refreshes site-scan suppression after deleting a term from its row', async () =>
+    {
+        mockLexiconResponse = { items: [term(7)], pagination: pagination(1) };
+        mockStaleResponse = { lexicon: {}, localizer: {} };
+        jest.mocked(deleteWordPressLexiconTerm).mockResolvedValue({ id: 7, success: true });
+        await renderLexicon();
+        const remove = document.querySelector<HTMLButtonElement>('button[aria-label="Delete lexicon term"]')!;
+        expect(remove).not.toBeNull();
+        await act(async () => { remove.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(deleteWordPressLexiconTerm).toHaveBeenCalledWith(7);
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['siteScanSuggestions'] });
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['getWordPressLexiconTerms'] });
+    });
+
+    it('shows stored site-scan suggestions inside the Lexicon page', async () =>
+    {
+        mockLexiconResponse = { items: [term(1)], pagination: pagination(1) };
+        mockStaleResponse = { lexicon: {}, localizer: {} };
+        mockSiteScanResponse = { status: 'done', lexiconSuggestions: [
+            { term: 'Quillforge', description: 'Keep the brand as written', category: 'Brand' },
+        ] };
+        const text = await renderLexicon();
+        expect(text).toContain('Site scan suggestions');
+        expect(text).toContain('The scan suggests 1 term');
+        expect(text).toContain('Keep the brand as written');
+        expect(text).toContain('Add 1 selected term');
+        expect(document.querySelector<HTMLInputElement>('[data-lexicon-suggestions] input[type="checkbox"]')?.checked).toBe(true);
     });
 
     it('offers nothing while every translated page uses the current terms', async () =>

@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { TranslationsContext } from '@/apps/admin/components/Translations/Context';
-import { applyScanLexicon } from '@/shared/api/setup';
+import { applyScanLexicon, getScanContextStatus } from '@/shared/api/setup';
 import type { ScanPollState } from '@/shared/hooks/useContextScan';
 
 const mockScan: { state: ScanPollState } = { state: { phase: 'idle' } };
@@ -12,7 +12,7 @@ jest.mock('@/shared/hooks/useContextScan', () => ({
     scanDoneMessage: () => '',
     scanProgressMessage: () => '',
 }));
-jest.mock('@/shared/api/setup', () => ({ applyScanLexicon: jest.fn() }));
+jest.mock('@/shared/api/setup', () => ({ applyScanLexicon: jest.fn(), getScanContextStatus: jest.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const apply = jest.mocked(applyScanLexicon);
@@ -24,7 +24,9 @@ const suggestions = ['Quillforge Atelier', 'Fernwick Ledger', 'Tidewell Nib'].ma
 const mount = async (terms = suggestions) =>
 {
     mockScan.state = { phase: 'done', restored: true, context: '', result: { context: '' }, applied: true, pages: 3, lexiconSuggestions: terms };
+    jest.mocked(getScanContextStatus).mockResolvedValue({ status: 'done', lexiconSuggestions: terms });
     await act(async () => { root.render(<QueryClientProvider client={client}><TranslationsContext /></QueryClientProvider>); });
+    await flush();
 };
 const button = (label: string) => Array.from(container.querySelectorAll('button')).find(each => each.textContent === label)!;
 const click = async (element: HTMLElement) => { await act(async () => { element.click(); }); };
@@ -36,7 +38,10 @@ beforeEach(() =>
     document.body.appendChild(container);
     root = createRoot(container);
     client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
-    apply.mockReset().mockImplementation(async terms => ({ added: terms?.length ?? 0 }));
+    apply.mockReset().mockImplementation(async terms => {
+        jest.mocked(getScanContextStatus).mockResolvedValue({ status: 'done', lexiconSuggestions: [] });
+        return { added: terms?.length ?? 0 };
+    });
 });
 afterEach(async () =>
 {

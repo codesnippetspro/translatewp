@@ -19,6 +19,8 @@ import { AddLexiconDrawer, type LexiconDrawerPrefill } from '@/apps/admin/compon
 import { LexiconCandidates, type CandidatePrefill } from '@/apps/admin/components/Lexicon/Candidates';
 import { actOnLexiconCandidate } from '@/shared/api/admin';
 import { PAGE_INSET, PageBody, PageHeader } from '@/apps/admin/components/PageLayout';
+import { SiteScanSuggestions } from '@/shared/components/siteScanSuggestions';
+import { siteScanSuggestionsQueryOptions } from '@/shared/query-options/siteScanSuggestions';
 import { managerCan } from '@/shared/lib/access';
 
 export const Lexicon = () =>
@@ -113,6 +115,7 @@ export const Lexicon = () =>
     const { mutate: deleteLexiconTerm, isPending: isDeleting } = useMutation({
         mutationFn: (id: number) => deleteWordPressLexiconTerm(id),
         onSuccess: async (_data, deletedId) => {
+            void queryClient.invalidateQueries({ queryKey: siteScanSuggestionsQueryOptions.queryKey });
             if (selectedTerm?.id === deletedId) {
                 setSelectedTerm(null);
                 setIsDrawerOpen(false);
@@ -226,7 +229,8 @@ export const Lexicon = () =>
                 <p className={`-mt-2 text-sm text-translatewp-muted ${PAGE_INSET}`} role="status">{applyNotice}</p>
             )}
 
-            <PageBody>
+            <PageBody className="gap-8 pt-4">
+                <SiteScanSuggestions framed />
                 <LexiconCandidates onAdd={(proposal: CandidatePrefill) => {
                     setPrefill(proposal);
                     setDrawerContext('add');
@@ -314,6 +318,7 @@ export const Lexicon = () =>
                 setIsDrawerOpen={(open) => { setIsDrawerOpen(open); if (!open) setPrefill(null); }}
                 prefill={prefill}
                 onSaved={() => {
+                    void queryClient.invalidateQueries({ queryKey: siteScanSuggestionsQueryOptions.queryKey });
                     if (!prefill) return;
                     const candidateId = prefill.candidateId;
                     setPrefill(null);

@@ -21,8 +21,10 @@ jest.mock('@/apps/admin/stores/settingsStore', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
+    queryOptions: (options: unknown) => options,
+    useQuery: () => ({ data: { lexiconSuggestions: mockScan.state.phase === 'done' ? mockScan.state.lexiconSuggestions : [] } }),
     useMutation: () => ({ mutate: () => {}, isPending: false }),
-    useQueryClient: () => ({ invalidateQueries: () => {} }),
+    useQueryClient: () => ({ invalidateQueries: () => {}, setQueryData: () => {} }),
 }));
 
 const mockScan: { state: ScanPollState; startScan: () => void } = { state: { phase: 'idle' }, startScan: () => {} };
