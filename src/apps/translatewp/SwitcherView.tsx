@@ -140,9 +140,9 @@ export function SwitcherView({
     // native name by default; "Flag only" and "Icon only" are the others.
     const selectedLanguage = languages.find((lang) => lang.locale === selectedLocale)
         ?? { locale: selectedLocale };
-    const selectedLabel = switcherLabel(selectedLanguage, { nativeNames, regionalNames, flagShown: true });
+    const selectedLabel = switcherLabel(selectedLanguage, { nativeNames, regionalNames, flagShown: showFlag });
     const { insetPx, iconSizePx, triggerSizePx } = resolveSwitcherChrome(switcher ?? {});
-    const selectedFlag = getCountryFlagFromLocale(selectedLocale, { iconStyle, sizePx: iconSizePx });
+    const selectedFlag = showFlag ? getCountryFlagFromLocale(selectedLocale, { iconStyle, sizePx: iconSizePx }) : null;
     const requestedTrigger = switcher?.trigger === 'flag' || switcher?.trigger === 'icon' ? switcher.trigger : 'name_flag';
     // A locale with no flag falls back to the icon for Flag only.
     const trigger = requestedTrigger === 'flag' && !selectedFlag ? 'icon' : requestedTrigger;
