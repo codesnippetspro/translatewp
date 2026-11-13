@@ -26,6 +26,7 @@ export interface TranslateWPContext {
     site_id: string;
     nonce: string;
     remote_api_base: string;
+    support_url?: string;
     admin_base_url: string;
     translation_base_url: string;
     connected: boolean;

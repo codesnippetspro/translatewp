@@ -2,6 +2,7 @@ import { __ } from '@wordpress/i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 
+import { ProAccountHint } from '@/shared/components/connection/ProAccountHint';
 import { ProInstallAction } from '@/shared/components/pro/ProInstallAction';
 import { TWP_BUTTON_SECONDARY } from '@/shared/components/buttonStyles';
 import { pendingProAction } from '@/shared/lib/pro/proState';
@@ -18,7 +19,7 @@ export const ProInstallCard = () =>
     const step = pendingProAction(data);
 
     if (step === null) {
-        return null;
+        return <ProAccountHint status={data} />;
     }
 
     const actionLabel = step === 'install' ? __('Install Pro', 'translate') : __('Activate Pro', 'translate');

@@ -36,6 +36,7 @@ class Admin extends Script {
                     'site_id'              => Sites::registered_id(),
                     'nonce'                => wp_create_nonce( 'wp_rest' ),
                     'remote_api_base'      => RemoteApi::base_url(),
+                    'support_url'          => RemoteApi::SUPPORT_URL,
                     'translation_base_url' => rest_url( 'translatewp/v1/translation' ),
                     // False for a user who manages translations by grant: the app then shows only what the grant covers.
                     'can_administer'       => \TranslateWP\Components\Access::can_administer(),

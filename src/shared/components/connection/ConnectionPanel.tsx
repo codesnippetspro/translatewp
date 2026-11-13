@@ -11,6 +11,7 @@ import {
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 import { AddressChangedNotice } from '@/shared/components/connection/AddressChangedNotice';
 import { ConnectReturnError } from '@/shared/components/connection/ConnectReturnError';
+import { ProAccountHint } from '@/shared/components/connection/ProAccountHint';
 import { ConnectionStatusText } from '@/shared/components/connection/ConnectionStatusText';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
@@ -325,6 +326,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
             <div className="flex flex-col gap-4">
                 <ConnectReturnError connected={data?.connected} />
                 <ConnectionStatusText />
+                <ProAccountHint status={data} />
                 {data?.siteId && (
                     <p className="text-sm text-translatewp-muted! m-0">
                         {__('Site ID:', 'translate')}{' '}
@@ -346,6 +348,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
             <ConfirmDialog {...confirmDialogProps} />
             <ConnectReturnError connected={data?.connected} />
             <ConnectionStatusText />
+            <ProAccountHint status={data} />
             <AddressChangedNotice />
             {data?.connectionStatus !== 'invalidated' && (data?.connected ? (
                 <>
