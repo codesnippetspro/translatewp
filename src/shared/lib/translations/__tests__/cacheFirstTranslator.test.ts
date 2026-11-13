@@ -1495,10 +1495,13 @@ it('returns an empty cache plan without a lookup or miss report', async () =>
     const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
     const lookup = jest.spyOn(cache, 'lookup');
     const fetchImpl = jest.fn();
-    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl });
+    const store = new HydrationStore(new InMemoryBackend());
+    store.recordLanguageUse('de');
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store, fetchImpl });
     await expect(translator._translateContextGroups(await cache.prepare([]), cache)).resolves.toEqual({ translatedById: new Map(), failures: [] });
     expect(lookup).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
+    expect(store.activeLanguage()).toBe('de');
 });
 
 it('uses the browser fetch and waits the first poll delay without injected transport or clock helpers', async () =>
@@ -1626,4 +1629,33 @@ it('keeps stream answers identical to the source confirmed for the next visit', 
     expect(eventClient.deliver).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(String(fetchImpl.mock.calls[0][0])).toContain('/cache/hit-local');
+});
+
+it('rejects a coalesced miss result returned after the page was aborted', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const fetchImpl = jest.fn();
+    const coalescer = new MissReportCoalescer({ fetchImpl });
+    let started!: () => void;
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { started = resolve; });
+    jest.spyOn(coalescer, 'report').mockImplementation(() =>
+    {
+        started();
+        return new Promise(resolve => { release = () => resolve({ outcome: 'rejected' }); });
+    });
+    const controller = new AbortController();
+    const failed = jest.fn();
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, missCoalescer: coalescer });
+    const result = translator._translateContextGroups(plan, cache, { signal: controller.signal, onGroupServeFailed: failed });
+    void result.catch(() => {});
+    await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+    controller.abort();
+    release();
+    await expect(result).rejects.toHaveProperty('name', 'AbortError');
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(failed).not.toHaveBeenCalled();
 });
