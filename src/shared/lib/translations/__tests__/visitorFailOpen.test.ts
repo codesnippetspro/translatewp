@@ -567,4 +567,38 @@ describe('bounded loading state', () =>
         expect(loadingElements()).toHaveLength(0);
     });
 
+    it('marks the real cache lookup as pending and clears its text markers on cancellation', async () =>
+    {
+        let requested!: () => void;
+        let release!: () => void;
+        const lookupStarted = new Promise<void>(resolve => { requested = resolve; });
+        const fetchImpl = jest.fn(() => new Promise<Response>(resolve =>
+        {
+            requested();
+            release = () => resolve({ ok: true, status: 200, json: async () => ({ items: {} }) } as Response);
+        })) as jest.MockedFunction<typeof fetch>;
+        const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl });
+        translator._createCacheClient = () => new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: {}, sampleOrigin: () => false, fetchImpl });
+        const controller = new AbortController();
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = engine.run(document.body, undefined, { signal: controller.signal });
+        void result.catch(() => {});
+        try
+        {
+            await expect(Promise.race([lookupStarted, result])).resolves.toBeUndefined();
+            expect(loadingElements().map(element => element.textContent)).toEqual(['Hello world', 'Second paragraph']);
+            expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(2);
+            controller.abort();
+            await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+            expect(loadingElements()).toHaveLength(0);
+            expect(document.querySelector('[aria-busy],[data-translatewp-loading-count]')).toBeNull();
+        }
+        finally
+        {
+            controller.abort();
+            release?.();
+            await result.catch(() => {});
+        }
+    });
+
 });

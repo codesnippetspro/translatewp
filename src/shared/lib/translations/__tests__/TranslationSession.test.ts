@@ -1086,4 +1086,45 @@ describe('TranslationSession', () =>
         expect(abort.mock.contexts.slice(before).every(controller => !retired.has(controller))).toBe(true);
     });
 
+    it('rejects future selections after disposal without starting translation', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        session.dispose();
+        await expect(session.switchTo('it')).rejects.toMatchObject({ name: 'AbortError' });
+        expect(Translator.prototype.translateBatch).not.toHaveBeenCalled();
+        expect(document.body.textContent).toBe('Original content');
+    });
+
+    it('disposal cancels a held mutation so its late answer cannot change attached content', async () =>
+    {
+        document.body.innerHTML = '<main><p>Original content</p></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('de');
+        let release!: () => void;
+        let started!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>New content</p>');
+        await flushMutations();
+        await pending;
+        session.dispose();
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('main p:last-child')?.textContent).toBe('New content');
+    });
+
 });
