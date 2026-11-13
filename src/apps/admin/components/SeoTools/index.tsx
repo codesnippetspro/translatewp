@@ -32,7 +32,7 @@ const BasicSeo = () =>
                     <h3 id="twp-seo-basic" className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Basic', 'translate')}</h3>
                 </div>
                 <p className="text-sm text-translatewp-muted! m-0">
-                    {__('Included in TranslateWP Free. Every page names its own language version as the canonical address, so search engines index each language once.', 'translate')}
+                    {__('Included in TranslateWP Free. Each language version has its own preferred page address for search engines. This helps them avoid treating translations as duplicate pages.', 'translate')}
                 </p>
             </div>
 
@@ -40,7 +40,9 @@ const BasicSeo = () =>
                 <ToggleControl
                     label={<ToggleLabel
                         title={__('Output hreflang tags', 'translate')}
-                        description={__('Tell search engines which language version of each page to show to which searcher.', 'translate')}
+                        description={seo.output_hreflang
+                                ? __('On: tells search engines which pages are translations of the same content, so they can choose the right language.', 'translate')
+                                : __('Off: TranslateWP does not add language links to your pages.', 'translate')}
                     />}
                     checked={seo.output_hreflang}
                     onChange={(value) => setSetting('languages.seo', previous => ({ ...previous, output_hreflang: value }))}
@@ -50,7 +52,9 @@ const BasicSeo = () =>
                     <ToggleControl
                         label={<ToggleLabel
                             title={__('Include x-default pointing to the default language', 'translate')}
-                            description={__('Searchers whose language the site does not offer are sent to the default language.', 'translate')}
+                            description={seo.include_x_default
+                                ? __('On: suggests your default-language page when there is no page matching the searcher\'s language.', 'translate')
+                                : __('Off: TranslateWP adds no fallback language link.', 'translate')}
                         />}
                         checked={seo.include_x_default}
                         onChange={(value) => setSetting('languages.seo', previous => ({ ...previous, include_x_default: value }))}

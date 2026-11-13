@@ -115,6 +115,29 @@ it('honors a refreshed denial over the initial entitled state', async () =>
     await render();
 
     expect(container.textContent).not.toContain('SEO controls');
+    expect(container.querySelector('#twp-seo-basic')).not.toBeNull();
+    expect(toggle('Output hreflang tags')?.disabled).toBe(false);
+    expect(document.body.textContent).toContain('Upgrade now');
+});
+
+it('keeps Basic visible on a Free account with an active addon and registered SEO panel', async () =>
+{
+    Object.defineProperty(window, 'translatewpPro', {
+        value: { connected: true, entitled: false, installed: true, active: true },
+        writable: true,
+        configurable: true,
+    });
+    addFilter('translatewp.slot.seo', 'test', () => panel);
+    client.setQueryData(['connectStatus'], {
+        connected: true,
+        pro: { entitled: false, installed: true, active: false },
+    });
+
+    await render();
+
+    expect(container.querySelector('#twp-seo-basic')).not.toBeNull();
+    expect(toggle('Output hreflang tags')?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('SEO controls');
     expect(document.body.textContent).toContain('Upgrade now');
 });
 
@@ -124,6 +147,10 @@ it('shows the basic hreflang controls live on Free', async () =>
 
     await render();
 
+    expect(container.textContent).toContain('Included in TranslateWP Free. Each language version has its own preferred page address for search engines. This helps them avoid treating translations as duplicate pages.');
+    expect(container.textContent).toContain('On: tells search engines which pages are translations of the same content, so they can choose the right language.');
+    expect(container.textContent).toContain("On: suggests your default-language page when there is no page matching the searcher's language.");
+
     const hreflang = toggle('Output hreflang tags');
     const xDefault = toggle('Include x-default');
     expect(hreflang?.checked).toBe(true);
@@ -132,9 +159,11 @@ it('shows the basic hreflang controls live on Free', async () =>
 
     await act(async () => { xDefault?.click(); });
     expect(seoSettings().include_x_default).toBe(false);
+    expect(container.textContent).toContain('Off: TranslateWP adds no fallback language link.');
 
     await act(async () => { hreflang?.click(); });
     expect(seoSettings().output_hreflang).toBe(false);
+    expect(container.textContent).toContain('Off: TranslateWP does not add language links to your pages.');
     expect(toggle('Include x-default')).toBeNull();
 });
 
