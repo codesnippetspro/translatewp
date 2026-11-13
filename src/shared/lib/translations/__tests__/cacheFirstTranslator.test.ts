@@ -1580,3 +1580,32 @@ it('reports one exact forty-group refusal without an extra empty request', async
     expect(refused).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(refused.mock.calls[0][1].body)).items).toHaveLength(40);
 });
+
+it('keeps stream answers identical to the source confirmed for the next visit', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const lookup = jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const backend = new InMemoryBackend();
+    const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const fetchImpl = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ subscription }) });
+    const eventClient = { deliver: jest.fn(async ({ onReady }: Parameters<TranslationEventClient['deliver']>[0]) =>
+    {
+        for (const group of plan.groupsForCache) onReady(group.hash, group.markerPayload);
+        return 'complete' as const;
+    }) } as unknown as TranslationEventClient;
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(backend), fetchImpl, eventClient });
+    const first = await translator._translateContextGroups(plan, cache);
+    expect(first.failures).toEqual([]);
+    expect([...first.translatedById.values()]).toEqual(entries.map(entry => entry.value));
+    for (const group of plan.groupsForCache)
+        expect(backend.rows.get(group.hash)?.payload).toBe('⟪twp-confirmed-same⟫' + group.markerPayload);
+    fetchImpl.mockClear();
+    const second = await translator._translateContextGroups(plan, cache);
+    expect(second).toEqual(first);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(eventClient.deliver).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain('/cache/hit-local');
+});
