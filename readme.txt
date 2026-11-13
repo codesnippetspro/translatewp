@@ -190,7 +190,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Reuse saved term suggestions after activating Pro without repeating the original scan or overwriting edited site context. New scans can suggest terms from additional pages in the background.
 * Exclude Query Monitor and Debug Bar panels from translation requests and usage.
 * Improve first visits to shop, cart and checkout pages, retain accepted translations when some requests must wait, and retry the remaining work within the available time.
-* Keep supported formatting-only number and date changes out of translation usage.
+* Prices and numbers that only need reformatting no longer count toward the limit for new texts per visitor.
 
 = 1.0.3 =
 
