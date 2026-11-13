@@ -18,9 +18,13 @@ const mockSettingsState = {
             preserve_branded_terms: false,
             localized_date_time_formats: false,
             enable_units_conversion: false,
+            translate_comments: true,
+            translate_menus: true,
+            translate_widgets: true,
+            translate_protected_pages: false,
         },
     },
-    setSetting: () => {},
+    setSetting: jest.fn(),
 };
 
 jest.mock('@/apps/admin/stores/settingsStore', () => ({
@@ -182,4 +186,39 @@ describe('Content and behaviour toggles', () =>
     {
         expect(container.textContent).not.toContain('\u2014');
     });
+    test.each([
+        ['Translate comments', 'translate_comments'],
+        ['Translate menus', 'translate_menus'],
+        ['Translate widgets', 'translate_widgets'],
+        ['Translate password-protected and private pages', 'translate_protected_pages'],
+    ] as const)('keeps the On/Off description in step with %s', (title, key) =>
+    {
+        const settings = mockSettingsState.settings['translations.settings'];
+        const original = settings[key];
+        mockSettingsState.setSetting.mockImplementation((...args: unknown[]) =>
+        {
+            const updater = args[1] as (value: typeof settings) => typeof settings;
+            Object.assign(settings, updater(settings));
+        });
+        const input = () => Array.from(container.querySelectorAll('p'))
+            .find(element => element.textContent === `T:${title}`)!
+            .closest('.components-toggle-control')!.querySelector('input') as HTMLInputElement;
+        try
+        {
+            for (const value of [!original, original])
+            {
+                act(() => input().click());
+                act(() => root.render(<TranslationsSettings />));
+                expect(input().checked).toBe(value);
+                expect(settings[key]).toBe(value);
+                expect(toggleText(title)).toContain(value ? 'T:On:' : 'T:Off:');
+            }
+        }
+        finally
+        {
+            settings[key] = original;
+            mockSettingsState.setSetting.mockReset();
+        }
+    });
+
 });

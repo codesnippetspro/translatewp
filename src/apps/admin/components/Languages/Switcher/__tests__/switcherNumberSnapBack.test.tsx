@@ -67,3 +67,54 @@ describe('switcher size fields', () =>
         expect(after).not.toContain('');
     });
 });
+
+describe('switcher font size editing', () =>
+{
+    beforeEach(() =>
+    {
+        useAdminSettingsStore.getState().setSetting('languages.switcher', previous => ({ ...previous, font_size: 14 }));
+    });
+    afterEach(async () =>
+    {
+        await act(async () => { for (const root of mountedRoots.splice(0)) root.unmount(); });
+        document.body.innerHTML = '';
+    });
+
+    const blur = async (input: HTMLInputElement) =>
+    {
+        await act(async () => { input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
+    };
+    const stored = () => useAdminSettingsStore.getState().settings['languages.switcher'].font_size;
+
+    it('lets a visitor type 18 over 14 before saving, and applies stepper changes immediately', async () =>
+    {
+        const container = await render(<LanguagesSwitcher />);
+        const row = container.querySelector('[data-size-font]')!;
+        const input = row.querySelector('input')!;
+        await setInputValue(input, '');
+        await setInputValue(input, '1');
+        expect(input.value).toBe('1');
+        expect(stored()).toBe(14);
+        await setInputValue(input, '18');
+        expect(input.value).toBe('18');
+        expect(stored()).toBe(14);
+        await blur(input);
+        expect(stored()).toBe(18);
+        const increment = row.querySelector('button[aria-label="Increment"]') as HTMLButtonElement;
+        expect(increment).not.toBeNull();
+        await act(async () => { increment.click(); });
+        expect(stored()).toBe(19);
+        await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })); });
+        expect(stored()).toBe(20);
+    });
+
+    it.each<[string, number]>([['5', 10], ['99', 32], ['', 14]])('commits %s as %s on blur', async (value, expected) =>
+    {
+        const container = await render(<LanguagesSwitcher />);
+        const input = container.querySelector('[data-size-font] input') as HTMLInputElement;
+        await setInputValue(input, value);
+        await blur(input);
+        expect(stored()).toBe(expected);
+        expect(input.value).toBe(String(expected));
+    });
+});
