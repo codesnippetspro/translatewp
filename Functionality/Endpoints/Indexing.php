@@ -51,6 +51,7 @@ class Indexing extends BaseApiEndpoints {
 			new PostEndpoint( $this->namespace, 'clear-failed', [ $this, 'clear_failed' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'pins', [ $this, 'set_pins' ], [ $this, 'admin_write_permissions_check' ] ),
 			new GetEndpoint( $this->namespace, 'status', [ $this, 'status' ], [ $this, 'admin_permissions_check' ] ),
+			new GetEndpoint( $this->namespace, 'search', [ $this, 'search_content' ], [ $this, 'admin_permissions_check' ] ),
 			new GetEndpoint( $this->namespace, 'pages', [ $this, 'pages' ], [ $this, 'admin_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'readiness', [ $this, 'readiness' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'retranslate-page', [ $this, 'retranslate_page' ], [ $this, 'retranslate_write_permissions_check' ] ),
@@ -152,11 +153,11 @@ class Indexing extends BaseApiEndpoints {
 			'rows' => array_map(
 				static function ( array $row ): array {
 					return [
-						'id'         => $row['id'],
+						'id'         => (string) $row['id'],
 						'url'        => $row['url'],
 						'language'   => $row['language'],
 						'objectType' => $row['object_type'],
-						'objectId'   => $row['object_id'],
+						'objectId'   => (string) $row['object_id'],
 					];
 				},
 				$rows
@@ -217,11 +218,11 @@ class Indexing extends BaseApiEndpoints {
 
 		return [
 			'row' => [
-				'id'         => (int) $row['id'],
+				'id'         => (string) $row['id'],
 				'url'        => (string) $row['url'],
 				'language'   => (string) $row['language'],
 				'objectType' => (string) $row['object_type'],
-				'objectId'   => (int) $row['object_id'],
+				'objectId'   => (string) $row['object_id'],
 			],
 		];
 	}
@@ -281,6 +282,25 @@ class Indexing extends BaseApiEndpoints {
 		$language = sanitize_text_field( (string) $raw );
 
 		return '' !== $language ? $language : null;
+	}
+
+	public function search_content( $request ) {
+		$search = new \WP_REST_Request( 'GET', '/wp/v2/search' );
+		$search->set_param( 'search', sanitize_text_field( (string) $request->get_param( 'search' ) ) );
+		$search->set_param( 'per_page', 10 );
+		$search->set_param( '_fields', 'id,title,subtype' );
+		$response = rest_do_request( $search );
+		if ( $response->get_status() >= 400 ) {
+			return $response;
+		}
+
+		return array_map(
+			static function ( array $item ): array {
+				$item['id'] = (string) $item['id'];
+				return $item;
+			},
+			$response->get_data()
+		);
 	}
 
 	public function set_pins( $request ) {
@@ -368,7 +388,7 @@ class Indexing extends BaseApiEndpoints {
 				$order[]        = $url;
 				$pages[ $url ] = [
 					'objectType' => $object_type,
-					'objectId'   => $object_id,
+					'objectId'   => (string) $object_id,
 					'url'        => $url,
 					'title'      => $row_title,
 					'indexed'    => 'miss' !== $object_type,
@@ -378,7 +398,7 @@ class Indexing extends BaseApiEndpoints {
 			} elseif ( $id > $pages[ $url ]['newest_id'] ) {
 				// The newest row owns the page's object identity.
 				$pages[ $url ]['objectType'] = $object_type;
-				$pages[ $url ]['objectId']   = $object_id;
+				$pages[ $url ]['objectId']   = (string) $object_id;
 				$pages[ $url ]['newest_id']  = $id;
 				if ( '' !== $row_title ) {
 					$pages[ $url ]['title'] = $row_title;
@@ -404,7 +424,7 @@ class Indexing extends BaseApiEndpoints {
 				}
 
 				$pages[ $url ]['languages'][ $language ] = [
-					'id'          => $id,
+					'id'          => (string) $id,
 					'status'      => $this->page_status( $row ),
 					'queueStatus' => $queue_status,
 					'segments'    => $segments,
@@ -626,7 +646,7 @@ class Indexing extends BaseApiEndpoints {
 		return array_map(
 			static function ( int $post_id ): array {
 				return [
-					'id'    => $post_id,
+					'id'    => (string) $post_id,
 					'title' => PlainText::title( (int) $post_id ),
 					'type'  => (string) get_post_type( $post_id ),
 				];

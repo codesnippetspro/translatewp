@@ -340,7 +340,7 @@ editor_holds( [ 'retranslate' ] );
 $GLOBALS['wp_test_is_singular']         = true;
 $GLOBALS['wp_test_queried_object_id']   = 12;
 $GLOBALS['wp_test_permalinks']          = [ 12 => 'https://example.com/about/' ];
-assert_true( [ 'type' => 'page', 'id' => 12, 'url' => 'https://example.com/about/' ] === \TranslateWP\Entities\Scripts\TranslateWP::page_object(), 'a user who retranslates gets the single page on screen' );
+assert_true( [ 'type' => 'page', 'id' => '12', 'url' => 'https://example.com/about/' ] === \TranslateWP\Entities\Scripts\TranslateWP::page_object(), 'a user who retranslates gets the single page on screen' );
 $GLOBALS['wp_test_is_singular'] = false;
 assert_true( null === \TranslateWP\Entities\Scripts\TranslateWP::page_object(), 'no page object off a single post or page' );
 $GLOBALS['wp_test_is_singular'] = true;

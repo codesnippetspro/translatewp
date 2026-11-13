@@ -569,6 +569,52 @@ assert_true( 1 === count( $reextract_claim ), 'The re-queued row must be claimab
 assert_true( '' === (string) $reextract_claim[0]['payload'], 'The stored payload must be dropped so the tab re-extracts fresh neighbours and context' );
 assert_true( true === $reextract_claim[0]['retranslate'], 'The re-extracted row must carry the retranslate flag' );
 
+wp_test_reset( connected_options() );
+$GLOBALS['wp_test_caps'] = [ 'manage_options' ];
+$large_id = 347772355023158088;
+$large_url = 'https://example.com/pricing/';
+$queue = new IndexQueue();
+$indexing = new Indexing( 'translatewp', TRANSLATEWP_VERSION, make_indexer( $queue ) );
+$queue->enqueue( [ [
+	'object_type' => 'miss',
+	'object_id' => $large_id,
+	'url' => $large_url,
+	'page_title' => 'Pricing',
+	'language' => 'de',
+	'priority' => 100,
+] ] );
+$wire = json_decode( wp_json_encode( $indexing->pages( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/pages' ) ) ), true );
+assert_true( (string) $large_id === $wire['pages'][0]['objectId'], 'Page JSON must preserve a large object identifier as a decimal string' );
+assert_true( is_string( $wire['pages'][0]['languages']['de']['id'] ), 'Page language row identifiers must be JSON strings' );
+$rounded = $indexing->retranslate_page( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/retranslate-page', [
+	'objectType' => 'miss', 'objectId' => (int) (float) $large_id, 'url' => $large_url, 'language' => 'de',
+] ) );
+assert_true( $rounded instanceof WP_Error && 'unknown_page' === $rounded->get_error_code(), 'A rounded identifier must not select a different page' );
+$exact = $indexing->retranslate_page( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/retranslate-page', [
+	'objectType' => 'miss', 'objectId' => $wire['pages'][0]['objectId'], 'url' => $large_url, 'language' => 'de',
+] ) );
+assert_true( is_array( $exact ) && 1 === $exact['requeued'], 'The exact JSON string must queue the original miss page for retranslation' );
+$claim = $indexing->claim_extract( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/claim-extract' ) )['rows'][0];
+assert_true( (string) $large_id === $claim['objectId'] && is_string( $claim['id'] ), 'Extraction JSON must preserve both object and row identifiers as strings' );
+$submitted = $indexing->submit_extract( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/submit-extract', [ 'id' => $claim['id'], 'items' => [] ] ) );
+assert_true( is_array( $submitted ) && true === $submitted['stored'], 'A string row identifier must submit extraction successfully' );
+$queue->fail( (int) $claim['id'], 'page_fetch_403' );
+$failed_wire = $indexing->status( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/status' ) )['failed'][0];
+assert_true( (string) $large_id === $failed_wire['objectId'] && is_string( $failed_wire['id'] ), 'Failed page identifiers must stay strings for repair' );
+$repaired = $indexing->reextract_page( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/reextract-page', [ 'id' => $failed_wire['id'] ] ) );
+assert_true( is_array( $repaired ) && (string) $large_id === $repaired['row']['objectId'] && is_string( $repaired['row']['id'] ), 'Repair must return exact string identifiers' );
+update_option( 'translatewp_index_priority_pins', [ $large_id ] );
+$pins = $indexing->status( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/status' ) )['pins'];
+assert_true( (string) $large_id === $pins[0]['id'], 'Pinned page identifiers must be strings' );
+function rest_do_request( $request ) {
+	$GLOBALS['identifier_search_request'] = $request;
+	return new WP_REST_Response( [ [ 'id' => 347772355023158088, 'title' => 'Pricing', 'subtype' => 'page' ] ] );
+}
+$search = $indexing->search_content( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/search', [ 'search' => '<b>Pricing</b>' ] ) );
+assert_true( (string) $large_id === $search[0]['id'], 'Search must stringify page identifiers before JSON encoding' );
+assert_true( '/wp/v2/search' === $GLOBALS['identifier_search_request']->get_route(), 'Search must delegate to the existing WordPress search route' );
+assert_true( 'Pricing' === $GLOBALS['identifier_search_request']->get_param( 'search' ), 'The search adapter must sanitize its request' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "ForcedRetranslationTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

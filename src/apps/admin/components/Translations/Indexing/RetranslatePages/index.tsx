@@ -56,9 +56,10 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
     const [statusFilter, setStatusFilter] = useState<StatusFilter>(openedForPending ? 'pending' : ALL_STATUS_FILTER);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [isBusy, setIsBusy] = useState(false);
     const [actionFailed, setActionFailed] = useState(false);
+    const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
     const menuRef = useRef<HTMLDivElement | null>(null);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
 
@@ -66,7 +67,8 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     const mutation = useMutation({
         ...retranslatePageMutationOptions(),
-        onSuccess: async () =>
+        onError: (error, input) => setRowErrors(previous => ({ ...previous, [input.url]: retranslationError(error) })),
+        onSuccess: async (_result, input) =>
         {
             // The retranslate row is re-queued for extraction: drain the extract
             // stage from this tab so the page is re-extracted with fresh
@@ -78,9 +80,9 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
             {
                 await runExtractionLoop(() => true, () => {});
             }
-            catch
+            catch (error)
             {
-                // The next indexing run re-claims the row; surface nothing here.
+                setRowErrors(previous => ({ ...previous, [input.url]: retranslationError(error) }));
             }
             await queryClient.invalidateQueries({ queryKey: ['indexPages'] });
             await onStatusRefresh?.();
@@ -250,6 +252,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
             return;
         }
 
+        setRowErrors(previous => ({ ...previous, [pageEntry.url]: '' }));
         mutation.mutate({
             objectType: pageEntry.objectType,
             objectId: pageEntry.objectId,
@@ -277,7 +280,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
         }
     };
 
-    const handleExtractAgain = (id: number) =>
+    const handleExtractAgain = (id: string) =>
     {
         setOpenMenuId(null);
         void runBulkAction(() => extractFailedPageAgain(id));
@@ -432,6 +435,11 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                         </TableCell>
                                         <TableCell className="align-top">
                                             <StatusCell entry={entry} />
+                                            {rowErrors[pageEntry.url] && (
+                                                <p role="alert" className="text-sm text-translatewp-error m-0">
+                                                    {rowErrors[pageEntry.url]}
+                                                </p>
+                                            )}
                                         </TableCell>
                                         <TableCell className="align-top text-translatewp-neutral">{entry.segments}</TableCell>
                                         <TableCell align="end" className="align-top">
@@ -548,15 +556,18 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                 </p>
             )}
 
-            {mutation.isError && (
-                <p className="text-sm text-translatewp-error m-0" role="alert">
-                    {__('That page could not be queued for retranslation. Try again.', 'translate')}
-                </p>
-            )}
-
             <ConfirmDialog {...confirmDialogProps} />
         </section>
     );
+};
+
+const retranslationError = (error: unknown): string =>
+{
+    const message = error && typeof error === 'object' && 'message' in error
+        && typeof error.message === 'string' ? error.message.trim() : '';
+    return message
+        ? sprintf(__('Retranslation failed: %s', 'translate'), message)
+        : __('Retranslation failed. Try again.', 'translate');
 };
 
 const pagePath = (url: string): string =>

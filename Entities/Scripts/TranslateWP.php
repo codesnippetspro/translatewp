@@ -201,7 +201,7 @@ class TranslateWP extends Script {
      * The single post or page on screen, for a user who may retranslate it
      * from edit mode; null anywhere else.
      *
-     * @return array{type: string, id: int, url: string}|null
+     * @return array{type: string, id: string, url: string}|null
      */
     public static function page_object(): ?array {
         $access = \TranslateWP\Components\Access::class;
@@ -216,7 +216,7 @@ class TranslateWP extends Script {
 
         return [
             'type' => $type,
-            'id'   => $id,
+            'id'   => (string) $id,
             'url'  => (string) get_permalink( $id ),
         ];
     }

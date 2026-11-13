@@ -59,6 +59,10 @@ class WP_REST_Request {
 		return $this->body;
 	}
 
+	public function set_param( string $key, $value ): void {
+		$this->params[ $key ] = $value;
+	}
+
 	public function get_route(): string {
 		return $this->route;
 	}
