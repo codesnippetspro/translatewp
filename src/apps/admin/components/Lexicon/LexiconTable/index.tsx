@@ -24,7 +24,7 @@ export interface LexiconTableProps
 export const LexiconTable = ({ rows, onEdit, onDelete, onAdd }: LexiconTableProps) =>
 {
     return (
-        <Table className="twp-lexicon-table" header={<TableHeaderRow className="max-sm:sr-only">
+        <Table className="twp-lexicon-table" header={<TableHeaderRow className="max-sm:sr-only sm:[&>*]:border-b!">
                 <TableCell variant="header">{__('Term', 'translate')}</TableCell>
                 <TableCell variant="header">{__('Languages', 'translate')}</TableCell>
                 <TableCell variant="header">{__('Categories', 'translate')}</TableCell>
