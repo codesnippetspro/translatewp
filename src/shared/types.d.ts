@@ -54,7 +54,7 @@ export interface TranslateWPContext {
     requested_locale?: string;
     orbital?: boolean;
     /** The single post or page on screen, for a user who may retranslate it; null elsewhere. */
-    page_object?: { type: string; id: number; url: string } | null;
+    page_object?: { type: string; id: string; url: string } | null;
     // Present for a signed-in administrator only: whether the account unlocks
     // the Pro editor actions, where to unlock them, and, for an entitled
     // account, whether the addon is installed and active and where to install it.

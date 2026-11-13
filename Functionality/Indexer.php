@@ -1405,12 +1405,12 @@ class Indexer {
 		return array_map(
 			static function ( array $item ): array {
 				return [
-					'id'         => (int) $item['id'],
+					'id'         => (string) $item['id'],
 					'language'   => (string) $item['language'],
 					'url'        => (string) $item['url'],
 					'reason'     => (string) $item['reason'],
 					'objectType' => (string) $item['object_type'],
-					'objectId'   => (int) $item['object_id'],
+					'objectId'   => (string) $item['object_id'],
 					'attempts'   => (int) $item['attempts'],
 				];
 			},

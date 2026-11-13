@@ -142,8 +142,8 @@ export const LanguagesIndexing = () =>
 
     const handleAddPin = async (value: string | null | undefined) =>
     {
-        const objectId = Number(value);
-        if (!objectId || pins.some(pin => pin.id === objectId)) return;
+        const objectId = value?.trim();
+        if (!objectId || !/^[1-9]\d*$/.test(objectId) || pins.some(pin => pin.id === objectId)) return;
 
         try
         {
@@ -159,7 +159,7 @@ export const LanguagesIndexing = () =>
         }
     };
 
-    const handleRemovePin = async (objectId: number) =>
+    const handleRemovePin = async (objectId: string) =>
     {
         try
         {
