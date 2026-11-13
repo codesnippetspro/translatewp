@@ -14,8 +14,9 @@ for (const width of [390, 1350])
     test(`Lexicon terms and actions fit ${width}px without changing the desktop table`, async ({ page }) =>
     {
         await page.setViewportSize({ width, height: 1000 });
-        await page.setContent(`<html><body style="margin:0"><main id="translatewp-admin" style="padding:16px"><section style="padding:16px;max-width:860px">${fixture.markup}</section></main></body></html>`);
+        await page.setContent(`<!doctype html><html><body style="margin:0"><main id="translatewp-admin" style="padding:16px"><section style="padding:16px;max-width:860px">${fixture.markup}</section></main></body></html>`);
         await page.addStyleTag({ content: css });
+        expect(await page.evaluate(() => document.compatMode)).toBe('CSS1Compat');
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
         const table = page.locator('.twp-lexicon-table');
         const bounds = (await table.boundingBox())!;
@@ -51,8 +52,9 @@ for (const width of [390, 1350])
     test(`off-screen shared table headers stay inside the scroll box at ${width}px`, async ({ page }) =>
     {
         await page.setViewportSize({ width, height: 800 });
-        await page.setContent(`<html><body style="margin:0"><main id="translatewp-admin" style="padding:32px;max-width:860px">${fixture.scrollMarkup}</main></body></html>`);
+        await page.setContent(`<!doctype html><html><body style="margin:0"><main id="translatewp-admin" style="padding:32px;max-width:860px">${fixture.scrollMarkup}</main></body></html>`);
         await page.addStyleTag({ content: css });
+        expect(await page.evaluate(() => document.compatMode)).toBe('CSS1Compat');
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
         if (width === 390) {
             const scroll = page.locator('table').locator('..');
