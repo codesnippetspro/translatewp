@@ -76,6 +76,12 @@ jobs:
           yarn build
           composer test:php
 
+      - name: Install Chromium for layout checks
+        run: yarn playwright install --with-deps chromium
+
+      - name: Check isolated admin layouts
+        run: yarn e2e:layout
+
       - name: Bundle
         id: build
         run: |
