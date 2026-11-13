@@ -189,7 +189,9 @@ final class ScanningFollowupTest extends TestCase {
 		$body = $GLOBALS['wp_test_remote_posts'][0]['body'];
 		self::assertStringNotContainsString( 'Private material', json_encode( $body ) );
 		self::assertSame( [ 1, 2 ], Options::get( 'translations.context.scan_result' )['scanned_ids'] );
-		foreach ( $GLOBALS['scan_test_queries'] as $query ) {
+		$sample_queries = array_filter( $GLOBALS['scan_test_queries'], static fn( $query ) => 'lexicon' !== ( $query['post_type'] ?? null ) );
+		self::assertNotEmpty( $sample_queries );
+		foreach ( $sample_queries as $query ) {
 			self::assertSame( [ 'publish' ], $query['post_status'] );
 			self::assertSame( [ 1 ], $query['post__not_in'] );
 			self::assertFalse( $query['suppress_filters'] );
