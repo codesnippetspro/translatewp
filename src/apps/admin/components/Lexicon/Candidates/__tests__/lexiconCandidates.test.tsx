@@ -140,6 +140,15 @@ describe('lexicon candidates', () =>
         expect(container.querySelector('[role=alert]')?.textContent).toBe(expected);
     });
 
+    it('shows a plain correction reason instead of the service reason code', async () =>
+    {
+        mockApi.getLexiconCandidates.mockResolvedValue({ candidates: [candidate({ reason: 'wrong. sense: room' })] });
+        const container = await render();
+        const row = container.querySelector('[data-candidate]')!;
+        expect(row.textContent).toContain('A translation may need correcting. sense: room');
+        expect(row.textContent).not.toContain('wrong.');
+    });
+
     it('reports the current eligible count instead of the original scan total', async () =>
     {
         mockApi.getLexiconScan.mockResolvedValue({ scan: scan('done', { summary: { records: 120, proposed: 14 } }) });
