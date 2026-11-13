@@ -5,6 +5,7 @@ import {
     type ExtractionOptions,
     TRANSLATABLE_ATTRIBUTES,
 } from '@/shared/lib/translations/constants';
+import { createPrintedPhpDiagnosticFilter } from '@/shared/lib/translations/printedPhpDiagnostics';
 import { NodeFilter } from '@/shared/lib/translations/NodeFilter';
 import { pageAreaSelector } from '@/shared/lib/translations/pageAreas';
 import { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
@@ -17,6 +18,7 @@ import { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
 export class DOMExtractor
 {
     #idCounter = 0;
+    #isPrintedDiagnostic: (node: Node) => boolean = () => false;
 
     skipDuplicates: boolean;
     noTranslateClasses: string[];
@@ -65,6 +67,7 @@ export class DOMExtractor
     extract(root: Element, options: ExtractionOptions = DEFAULT_EXTRACTION_OPTIONS): TranslatableEntry[]
     {
         this.#idCounter = 0;
+        this.#isPrintedDiagnostic = createPrintedPhpDiagnosticFilter();
         this.#excludedAreaSelector = pageAreaSelector(options.excludedAreas ?? []);
 
         const entries: TranslatableEntry[] = [];
@@ -102,6 +105,7 @@ export class DOMExtractor
 
         while ((node = walker.nextNode()))
         {
+            if (this.#isPrintedDiagnostic(node)) continue;
             if (!NodeFilter.isTranslatableTextNode(node as Text, this.noTranslateClasses, this.noTranslateIds)) continue;
             if (this.#inExcludedArea((node as Text).parentElement)) continue;
 
@@ -133,6 +137,7 @@ export class DOMExtractor
 
         for (const img of images)
         {
+            if (this.#isPrintedDiagnostic(img)) continue;
             if (!NodeFilter.isTranslatableAlt(img, this.noTranslateClasses, this.noTranslateIds)) continue;
             if (this.#inExcludedArea(img)) continue;
 
@@ -167,6 +172,7 @@ export class DOMExtractor
             for (const attr of TRANSLATABLE_ATTRIBUTES)
             {
                 if (!element.hasAttribute(attr)) continue;
+                if (this.#isPrintedDiagnostic(element)) continue;
                 if (!NodeFilter.isTranslatableAttribute(element, attr, this.noTranslateClasses, this.noTranslateIds)) continue;
                 if (this.#inExcludedArea(element)) continue;
 
