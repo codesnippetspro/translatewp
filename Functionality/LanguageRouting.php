@@ -22,6 +22,7 @@ class LanguageRouting {
 		add_filter( 'do_parse_request', [ $this, 'route' ], 1 );
 		add_action( 'template_redirect', [ $this, 'redirect_lang_parameter' ], 0 );
 		add_filter( 'redirect_canonical', [ $this, 'keep_language_on_canonical_redirect' ] );
+		add_filter( 'wp_redirect', [ $this, 'keep_language_on_page_redirect' ] );
 	}
 
 	/**
@@ -120,6 +121,45 @@ class LanguageRouting {
 
 		wp_safe_redirect( $target, 301 );
 		exit;
+	}
+
+	public function keep_language_on_page_redirect( $redirect_url ) {
+		$locale = LanguageUrl::requested_locale();
+		if ( ! is_string( $redirect_url ) || '' === $redirect_url || '' === $locale || is_admin()
+			|| ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return $redirect_url;
+		}
+
+		$method = strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) );
+		if ( ! in_array( $method, [ 'GET', 'HEAD' ], true ) ) {
+			return $redirect_url;
+		}
+
+		$target    = wp_parse_url( $redirect_url );
+		$requested = wp_parse_url( $this->requested_url() );
+		if ( ! is_array( $target ) || ! is_array( $requested ) ) {
+			return $redirect_url;
+		}
+
+		$default_port = 'https' === strtolower( (string) ( $requested['scheme'] ?? '' ) ) ? 443 : 80;
+		if ( empty( $target['host'] ) || isset( $target['user'] ) || isset( $target['pass'] )
+			|| strtolower( (string) ( $target['host'] ?? '' ) ) !== strtolower( (string) ( $requested['host'] ?? '' ) )
+			|| strtolower( (string) ( $target['scheme'] ?? '' ) ) !== strtolower( (string) ( $requested['scheme'] ?? '' ) )
+			|| ( $target['port'] ?? $default_port ) !== ( $requested['port'] ?? $default_port ) ) {
+			return $redirect_url;
+		}
+
+		$path   = (string) ( $target['path'] ?? '/' );
+		$source = LanguageUrl::split_path( (string) ( $requested['path'] ?? '/' ) );
+		if ( '' !== LanguageUrl::split_path( $path )['locale']
+			|| untrailingslashit( $path ) !== untrailingslashit( $source['path'] ) ) {
+			return $redirect_url;
+		}
+
+		$separator = strcspn( $redirect_url, '?#' );
+		$localized = LanguageUrl::localize( substr( $redirect_url, 0, $separator ), $locale ) . substr( $redirect_url, $separator );
+
+		return $localized === $this->requested_url() ? false : $localized;
 	}
 
 	/**

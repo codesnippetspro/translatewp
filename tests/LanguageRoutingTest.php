@@ -29,11 +29,15 @@ function request( string $uri ): LanguageRouting {
 		'languages.list',
 		[
 			'en-us' => [ 'locale' => 'en-us', 'slug' => 'en', 'active' => true, 'default' => true ],
+			'it'    => [ 'locale' => 'it', 'slug' => 'it', 'active' => true, 'default' => false ],
+			'lv'    => [ 'locale' => 'lv', 'slug' => 'lv', 'active' => true, 'default' => false ],
+			'fr'    => [ 'locale' => 'fr', 'slug' => 'fr', 'active' => false, 'default' => false ],
 			'de'    => [ 'locale' => 'de', 'slug' => 'de', 'active' => true, 'default' => false ],
 		]
 	);
 	LanguageUrl::set_requested_locale( '' );
-	$_SERVER['REQUEST_URI'] = $uri;
+	$_SERVER['REQUEST_URI']    = $uri;
+	$_SERVER['REQUEST_METHOD'] = 'GET';
 	$_GET                   = [];
 	parse_str( (string) wp_parse_url( $uri, PHP_URL_QUERY ), $_GET );
 
@@ -119,6 +123,92 @@ $GLOBALS['wp_test_is_admin'] = true;
 $routing->route( true );
 assert_same( '/de/about/', $_SERVER['REQUEST_URI'], 'An admin request is left alone' );
 $GLOBALS['wp_test_is_admin'] = false;
+
+$routing = request( '/it/shop/?add-to-cart=123' );
+$early_target = 'https://example.com/shop/?added-to-cart=123';
+assert_same( $early_target, apply_filters( 'wp_redirect', $early_target, 302 ), 'WooCommerce add-to-cart redirects before request parsing stay unchanged' );
+assert_same( 'https://example.com/my-account/', apply_filters( 'wp_redirect', 'https://example.com/my-account/', 302 ), 'WooCommerce login redirects before request parsing stay unchanged' );
+
+foreach ( [ 'it', 'lv', 'de' ] as $locale ) {
+	foreach ( [ '/', '/shop/', '/product/walking-stick/' ] as $page ) {
+		foreach ( [ '', '?orderby=price&campaign=spring' ] as $query ) {
+			$routing = request( '/' . $locale . $page . $query );
+			$routing->route( true );
+			$wp = (object) [ 'request' => trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ) ];
+			$target = trailingslashit( home_url( $wp->request ) );
+			if ( '' !== $query ) {
+				$target .= $query;
+			}
+			$target = add_query_arg( 'v', 'geo-hash', $target );
+			$expected = add_query_arg( 'v', 'geo-hash', 'https://example.com/' . $locale . $page . $query );
+			assert_same( $expected, apply_filters( 'wp_redirect', $target, 307 ), 'The WooCommerce same-page address keeps ' . $locale . $page . $query );
+		}
+	}
+}
+
+$routing = request( '/it/shop/' );
+$routing->route( true );
+$raw_target = 'https://example.com/shop/?code=a%2fb&space=a%20b&tag=1&tag=2#reviews';
+assert_same( 'https://example.com/it/shop/?code=a%2fb&space=a%20b&tag=1&tag=2#reviews', apply_filters( 'wp_redirect', $raw_target, 307 ), 'The existing redirect query and fragment keep their exact bytes' );
+foreach ( [
+	'https://example.com/de/shop/?v=geo-hash',
+	'https://example.com/it/shop/?v=geo-hash',
+	'https://example.com/checkout/',
+	'https://example.com/wp-login.php?redirect_to=%2Fshop%2F',
+	'https://example.com/wp-admin/',
+	'https://example.com/wp-json/wc/store/v1/cart',
+	'https://other.example/shop/?v=geo-hash',
+	'https://example.com:8443/shop/?v=geo-hash',
+	'http://example.com/shop/?v=geo-hash',
+	'https://user@example.com/shop/',
+	'/shop/?v=geo-hash',
+	'',
+	false,
+] as $target ) {
+	assert_same( $target, apply_filters( 'wp_redirect', $target, 307 ), 'Explicit languages, other destinations and cancelled redirects stay as supplied: ' . wp_json_encode( $target ) );
+}
+assert_same( 'https://example.com:443/it/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com:443/shop/?v=geo-hash', 307 ), 'An explicit standard HTTPS port is still the same origin' );
+
+$routing = request( '/it/shop/' );
+$routing->route( true );
+assert_same( false, apply_filters( 'wp_redirect', 'https://example.com/shop/', 301 ), 'Restoring the language never introduces a same-address redirect loop' );
+$_SERVER['REQUEST_METHOD'] = 'HEAD';
+assert_same( 'https://example.com/it/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com/shop/?v=geo-hash', 307 ), 'HEAD redirects retain the requested language as GET does' );
+$_SERVER['REQUEST_METHOD'] = 'POST';
+assert_same( 'https://example.com/shop/', apply_filters( 'wp_redirect', 'https://example.com/shop/', 302 ), 'Form submission redirect handling is unchanged' );
+
+foreach ( [ false, true ] as $remember ) {
+	$routing = request( '/it/shop/' );
+	Options::update( 'languages.seo', [ 'remember_last_choice' => $remember ] );
+	$_COOKIE['translatewp_last_choice'] = 'de';
+	$routing->route( true );
+	assert_same( 'https://example.com/it/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com/shop/?v=geo-hash', 307 ), 'The explicit address wins over another remembered language' );
+}
+unset( $_COOKIE['translatewp_last_choice'] );
+
+foreach ( [ '/shop/', '/fr/shop/' ] as $uri ) {
+	$routing = request( $uri );
+	$routing->route( true );
+	$target = 'https://example.com' . $uri . '?v=geo-hash';
+	assert_same( $target, apply_filters( 'wp_redirect', $target, 307 ), 'Default and inactive-language requests do not acquire a language folder' );
+}
+
+$routing = request( '/site/it/shop/' );
+$GLOBALS['wp_test_home_url'] = 'https://example.com/site';
+$routing->route( true );
+assert_same( 'https://example.com/site/it/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com/site/shop/?v=geo-hash', 307 ), 'A subdirectory site retains its site and language folders' );
+
+$routing = request( '/it/shop/' );
+$GLOBALS['wp_test_is_admin'] = true;
+$routing->route( true );
+assert_same( 'https://example.com/shop/?v=geo-hash', apply_filters( 'wp_redirect', 'https://example.com/shop/?v=geo-hash', 307 ), 'Admin redirects stay unchanged' );
+$GLOBALS['wp_test_is_admin'] = false;
+
+$routing = request( '/it/wp-json/wc/store/v1/cart' );
+$routing->route( true );
+define( 'REST_REQUEST', true );
+$rest_target = 'https://example.com/wp-json/wc/store/v1/cart?context=view';
+assert_same( $rest_target, apply_filters( 'wp_redirect', $rest_target, 307 ), 'REST redirects stay unchanged even when request parsing recorded a language' );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "LanguageRoutingTest: {$failures} assertion(s) failed\n" );
