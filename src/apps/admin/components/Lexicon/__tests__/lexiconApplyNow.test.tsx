@@ -13,7 +13,9 @@ jest.mock('@tanstack/react-query', () => ({
     ...jest.requireActual<typeof import('@tanstack/react-query')>('@tanstack/react-query'),
     queryOptions: (options: unknown) => options,
     useQuery: (options: { queryKey?: unknown[] }) => (
-        Array.isArray(options?.queryKey) && options.queryKey[0] === 'siteScanSuggestions'
+        Array.isArray(options?.queryKey) && options.queryKey[0] === 'connectStatus'
+            ? { data: { connected: true, pro: { entitled: true } } }
+            : Array.isArray(options?.queryKey) && options.queryKey[0] === 'siteScanSuggestions'
             ? { data: mockSiteScanResponse, isFetching: false }
             : Array.isArray(options?.queryKey) && options.queryKey[0] === 'getStaleTranslations'
             ? { data: mockStaleResponse, isFetching: false }
@@ -104,11 +106,12 @@ describe('Lexicon retranslate action', () =>
             { term: 'Quillforge', description: 'Keep the brand as written', category: 'Brand' },
         ] };
         const text = await renderLexicon();
-        expect(text).toContain('Site scan suggestions');
-        expect(text).toContain('The scan suggests 1 term');
+        expect(text).toContain('Suggested terms');
+        expect(text).not.toContain('Site scan suggestions');
+        expect(text).toContain('1 suggestion to review.');
         expect(text).toContain('Keep the brand as written');
-        expect(text).toContain('Add 1 selected term');
-        expect(document.querySelector<HTMLInputElement>('[data-lexicon-suggestions] input[type="checkbox"]')?.checked).toBe(true);
+        expect(text).toContain('Add selected (1)');
+        expect(document.querySelector<HTMLInputElement>('[data-candidate] input[type="checkbox"]')?.checked).toBe(true);
     });
 
     it('offers nothing while every translated page uses the current terms', async () =>

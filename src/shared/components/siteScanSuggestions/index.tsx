@@ -7,6 +7,7 @@ import { applyScanLexicon } from '@/shared/api/setup';
 import type { ScanPollState } from '@/shared/hooks/useContextScan';
 import { siteScanSuggestionsQueryOptions } from '@/shared/query-options/siteScanSuggestions';
 import { canAdminister } from '@/shared/lib/access';
+import { SuggestionCheckbox } from './checkbox';
 import { Card } from '@/shared/components/adminSurface';
 import { suggestionListClass, suggestionRowClass, suggestionTermClass, suggestionReasonClass } from './style';
 
@@ -23,7 +24,7 @@ export const SiteScanSuggestions = ({ scanState, framed = false }: { scanState?:
     useEffect(() => { setOmittedTerms([]); setShowAllSuggestions(false); }, [suggestionKey]);
     const selectedTerms = suggestions.filter(suggestion => !omittedTerms.includes(suggestion.term)).map(suggestion => suggestion.term);
     const applyLexicon = useMutation({
-        mutationFn: applyScanLexicon,
+        mutationFn: (terms?: string[]) => applyScanLexicon(terms),
         onSuccess: async (result, terms) =>
         {
             setLexiconNotice(terms?.length === 0 ? __('Suggested terms were dismissed.', 'translate') : sprintf(
@@ -94,21 +95,15 @@ export const SiteScanSuggestions = ({ scanState, framed = false }: { scanState?:
                 >
                     {suggestions.map((suggestion, index) => (
                         <li key={suggestion.term} className={`${suggestionRowClass} grid grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 min-[783px]:grid-cols-[20px_minmax(8rem,2fr)_minmax(0,3fr)]`}>
-                            <input
+                            <SuggestionCheckbox
                                 id={`${suggestionId}-term-${index}`}
-                                type="checkbox"
-                                aria-labelledby={`${suggestionId}-label-${index}`}
-                                aria-describedby={`${suggestionId}-reason-${index}`}
-                                className="m-0! mt-0.5! cursor-pointer"
+                                labelId={`${suggestionId}-label-${index}`}
+                                reasonId={`${suggestionId}-reason-${index}`}
                                 checked={!omittedTerms.includes(suggestion.term)}
                                 disabled={applyLexicon.isPending}
-                                onChange={event =>
-                                {
-                                    const checked = event.target.checked;
-                                    setOmittedTerms(previous => checked
-                                        ? previous.filter(term => term !== suggestion.term)
-                                        : [...previous, suggestion.term]);
-                                }}
+                                onChange={checked => setOmittedTerms(previous => checked
+                                    ? previous.filter(term => term !== suggestion.term)
+                                    : [...previous, suggestion.term])}
                             />
                             <label id={`${suggestionId}-label-${index}`} htmlFor={`${suggestionId}-term-${index}`} className={`${suggestionTermClass} cursor-pointer`}>
                                 {suggestion.term}

@@ -516,4 +516,32 @@ final class ScanningContractTest extends TestCase {
 		}
 	}
 
+
+	public function test_partial_review_resolves_only_named_stored_proposals_and_legacy_review_is_unchanged(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$terms = [
+			[ 'term' => 'Quillforge', 'description' => 'Saved instruction' ],
+			[ 'term' => 'Tidewell', 'description' => 'Other saved instruction' ],
+		];
+		foreach ( [ 'add', 'dismiss' ] as $action ) {
+			Options::update( 'translations.context.scan_result', [ 'context' => 'Owner context', 'lexicon' => $terms ] );
+			$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [
+				'terms' => [ ' quillforge ', 'Forged' ], 'action' => $action, 'preserve_unselected' => true,
+			] ) );
+			self::assertSame( 'add' === $action ? 1 : 0, $result['added'] );
+			$stored = Options::get( 'translations.context.scan_result' );
+			self::assertSame( [ $terms[1] ], $stored['lexicon'] );
+			self::assertFalse( $stored['lexicon_applied'] );
+			self::assertSame( 'Owner context', $stored['context'] );
+		}
+		$posts = array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) );
+		self::assertCount( 1, $posts );
+		self::assertSame( 'Quillforge', $posts[0]['post_title'] );
+		self::assertSame( 'Saved instruction', $posts[0]['post_content'] );
+		Options::update( 'translations.context.scan_result', [ 'lexicon' => $terms ] );
+		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => [] ] ) ) );
+		self::assertSame( [], Options::get( 'translations.context.scan_result' )['lexicon'] );
+		self::assertTrue( Options::get( 'translations.context.scan_result' )['lexicon_applied'] );
+	}
+
 }
