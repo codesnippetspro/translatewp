@@ -41,12 +41,12 @@ export const scanContext = async (): Promise<{ status: string }> =>
     });
 }
 
-export const applyScanLexicon = async (terms?: string[]): Promise<{ added: number }> =>
+export const applyScanLexicon = async (terms?: string[], resolution?: 'add' | 'dismiss'): Promise<{ added: number }> =>
 {
     return await apiFetch<{ added: number }>({
         path: 'translatewp/v1/scanning/context/apply-lexicon',
         method: 'POST',
-        data: terms === undefined ? {} : { terms },
+        data: resolution ? { terms, action: resolution, preserve_unselected: true } : terms === undefined ? {} : { terms },
     });
 }
 

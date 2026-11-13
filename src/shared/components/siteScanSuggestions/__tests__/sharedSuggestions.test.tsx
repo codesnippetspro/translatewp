@@ -65,7 +65,7 @@ it.each(['context', 'lexicon'])('consuming terms in the %s view clears both cons
     const scope = container.querySelector(`[data-view="${view}"]`)!;
     await click(button(scope, 'Add 2 selected terms'));
     await flush();
-    expect(apply.mock.calls[0][0]).toEqual(['Quillforge', 'Tidewell']);
+    expect(apply.mock.calls[0]).toEqual([['Quillforge', 'Tidewell']]);
     expect(container.querySelectorAll('[data-lexicon-suggestions]')).toHaveLength(0);
     expect(client.getQueryData(siteScanSuggestionsQueryOptions.queryKey)).toMatchObject({ lexiconSuggestions: [] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getWordPressLexiconTerms'] });
@@ -83,7 +83,7 @@ it('dismissal consumes both lists without adding any term', async () =>
     const scope = container.querySelector('[data-view="lexicon"]')!;
     await click(button(scope, 'Dismiss all'));
     await flush();
-    expect(apply.mock.calls[0][0]).toEqual([]);
+    expect(apply.mock.calls[0]).toEqual([[]]);
     expect(container.querySelectorAll('[data-lexicon-suggestions]')).toHaveLength(0);
     expect(scope.textContent).toContain('Suggested terms were dismissed.');
 });

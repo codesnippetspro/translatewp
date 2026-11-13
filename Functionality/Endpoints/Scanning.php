@@ -113,6 +113,13 @@ class Scanning extends BaseApiEndpoints {
 
         $result = Options::get( self::SCAN_RESULT_OPTION, null );
         $terms  = is_array( $result ) && is_array( $result['lexicon'] ?? null ) ? $result['lexicon'] : [];
+        $stored_terms = $terms;
+        $partial = rest_sanitize_boolean( $request->get_param( 'preserve_unselected' ) );
+        $action_param = $request->get_param( 'action' );
+        $action = is_string( $action_param ) ? sanitize_key( $action_param ) : '';
+        if ( $partial && ( ! in_array( $action, [ 'add', 'dismiss' ], true ) || ! is_array( $request->get_param( 'terms' ) ) ) ) {
+            return new WP_Error( 'invalid_terms', 'Choose stored suggestions and an action.', [ 'status' => 400 ] );
+        }
 
         $selected = $request->get_param( 'terms' );
         if ( null !== $selected ) {
@@ -130,11 +137,21 @@ class Scanning extends BaseApiEndpoints {
             );
         }
 
-        $added = $this->populate_lexicon( $terms );
+        $added = $partial && 'dismiss' === $action ? 0 : $this->populate_lexicon( $terms );
 
         $result = is_array( $result ) ? $result : [];
+        if ( $partial ) {
+            $terms = array_values(
+                array_filter(
+                    $stored_terms,
+                    static function ( $entry ) use ( $keys ) {
+                        return ! is_array( $entry ) || ! isset( $keys[ self::term_key( (string) ( $entry['term'] ?? '' ) ) ] );
+                    }
+                )
+            );
+        }
         $result['lexicon'] = $terms;
-        $result['lexicon_applied'] = true;
+        $result['lexicon_applied'] = ! $partial || [] === $terms;
         Options::update( self::SCAN_RESULT_OPTION, $result );
 
         return [

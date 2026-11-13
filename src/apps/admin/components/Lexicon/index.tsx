@@ -15,11 +15,9 @@ import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
 
 import { LexiconTable, type LexiconRow } from '@/apps/admin/components/Lexicon/LexiconTable';
-import { AddLexiconDrawer, type LexiconDrawerPrefill } from '@/apps/admin/components/Lexicon/AddLexiconDrawer';
-import { LexiconCandidates, type CandidatePrefill } from '@/apps/admin/components/Lexicon/Candidates';
-import { actOnLexiconCandidate } from '@/shared/api/admin';
+import { AddLexiconDrawer } from '@/apps/admin/components/Lexicon/AddLexiconDrawer';
+import { LexiconCandidates } from '@/apps/admin/components/Lexicon/Candidates';
 import { PAGE_INSET, PageBody, PageHeader } from '@/apps/admin/components/PageLayout';
-import { SiteScanSuggestions } from '@/shared/components/siteScanSuggestions';
 import { siteScanSuggestionsQueryOptions } from '@/shared/query-options/siteScanSuggestions';
 import { managerCan } from '@/shared/lib/access';
 
@@ -27,7 +25,6 @@ export const Lexicon = () =>
 {
     const queryClient = useQueryClient();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [prefill, setPrefill] = useState<(LexiconDrawerPrefill & { candidateId: string }) | null>(null);
     const [drawerContext, setDrawerContext] = useState<'add' | 'edit'>('add');
     const [selectedTerm, setSelectedTerm] = useState<LexiconTerm | null>(null);
 
@@ -230,13 +227,7 @@ export const Lexicon = () =>
             )}
 
             <PageBody className="gap-8 pt-4">
-                <SiteScanSuggestions framed />
-                <LexiconCandidates onAdd={(proposal: CandidatePrefill) => {
-                    setPrefill(proposal);
-                    setDrawerContext('add');
-                    setSelectedTerm(null);
-                    setIsDrawerOpen(true);
-                }} />
+                <LexiconCandidates />
 
                 <section
                     id="lexicon-terms-results"
@@ -315,14 +306,9 @@ export const Lexicon = () =>
 
             <AddLexiconDrawer
                 isDrawerOpen={isDrawerOpen}
-                setIsDrawerOpen={(open) => { setIsDrawerOpen(open); if (!open) setPrefill(null); }}
-                prefill={prefill}
+                setIsDrawerOpen={setIsDrawerOpen}
                 onSaved={() => {
                     void queryClient.invalidateQueries({ queryKey: siteScanSuggestionsQueryOptions.queryKey });
-                    if (!prefill) return;
-                    const candidateId = prefill.candidateId;
-                    setPrefill(null);
-                    void actOnLexiconCandidate(candidateId, 'add').then(() => queryClient.invalidateQueries({ queryKey: ['lexiconCandidates'] }));
                 }}
                 drawerContext={drawerContext}
                 editingTerm={selectedTerm}
