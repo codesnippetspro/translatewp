@@ -91,7 +91,7 @@ describe('Context scan row', () =>
         expect(container.querySelector('textarea')?.value).toBe('Owner edited context');
         expect(mockSettingsState.setSetting).not.toHaveBeenCalled();
         expect(container.textContent).toContain('Orbital');
-        expect(container.textContent).toContain('Nothing is added until you say so.');
+        expect(container.textContent).toContain('Nothing is added until you choose. Unchecked terms are dismissed.');
         expect(container.querySelector('[role="status"]')).toBeNull();
     });
 

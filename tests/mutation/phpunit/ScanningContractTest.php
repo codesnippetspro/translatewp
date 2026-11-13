@@ -463,4 +463,57 @@ final class ScanningContractTest extends TestCase {
 		self::assertSame( 'Fresh term', end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
 	}
 
+	public function test_selected_scan_terms_use_saved_metadata_ignore_forged_names_and_drop_unticked_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$terms = [
+			[ 'term' => 'Quillforge Atelier', 'description' => 'Saved brand instruction', 'category' => 'Brand' ],
+			[ 'term' => 'Fernwick Ledger', 'description' => 'Saved product instruction', 'category' => 'Product' ],
+		];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'context' => 'Existing context', 'lexicon' => $terms ] );
+		$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => [ ' quillforge atelier ', 'Forged Name' ] ] ) );
+		self::assertSame( [ 'added' => 1 ], $result );
+		$post = end( $GLOBALS['wp_test_inserted_posts'] );
+		self::assertSame( 'Quillforge Atelier', $post['post_title'] );
+		self::assertSame( 'Saved brand instruction', $post['post_content'] );
+		$stored = Options::get( 'translations.context.scan_result' );
+		self::assertSame( [ $terms[0] ], $stored['lexicon'] );
+		self::assertTrue( $stored['lexicon_applied'] );
+		self::assertSame( 'Existing context', $stored['context'] );
+		self::assertSame( [], $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) )['lexiconSuggestions'] );
+	}
+
+	public function test_existing_scan_terms_are_hidden_case_insensitively_before_review(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		wp_insert_post( [ 'post_type' => 'lexicon', 'post_title' => ' wordpress ', 'post_status' => 'publish' ] );
+		$fresh = [ 'term' => 'Fernwick Ledger', 'description' => 'Keep this name', 'category' => 'Brand' ];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'WordPress' ], $fresh ] ] );
+		$result = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		self::assertSame( [ $fresh ], $result['lexiconSuggestions'] );
+	}
+
+	public function test_empty_and_unmatched_scan_selections_dismiss_without_creating_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ [], [ 'Forged Name' ] ] as $selection ) {
+			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Tidewell Nib', 'description' => 'Saved description' ] ] ] );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => $selection ] ) ) );
+			self::assertSame( [], Options::get( 'translations.context.scan_result' )['lexicon'] );
+			self::assertTrue( Options::get( 'translations.context.scan_result' )['lexicon_applied'] );
+		}
+		self::assertSame( [], array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) ) );
+	}
+
+	public function test_invalid_scan_selections_do_not_mutate_the_saved_review(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$stored = [ 'lexicon' => [ [ 'term' => 'Tidewell Nib' ] ] ];
+		Options::update( 'translations.context.scan_result', $stored );
+		foreach ( [ 'Tidewell Nib', [ [ 'term' => 'Tidewell Nib', 'description' => 'Forged description' ] ], [ 42 ] ] as $invalid ) {
+			$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => $invalid ] ) );
+			self::assertInstanceOf( WP_Error::class, $result );
+			self::assertSame( 400, $result->get_error_data()['status'] );
+			self::assertSame( $stored, Options::get( 'translations.context.scan_result' ) );
+		}
+	}
+
 }
