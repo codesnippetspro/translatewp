@@ -632,6 +632,29 @@ describe('TranslateWP switcher surfaces', () =>
         }
     });
 
+    it('translates the browser tab title on a choice and restores it for the default language', async () =>
+    {
+        const originalTitle = document.title;
+        document.title = 'Shop hours';
+        const seo = jest.spyOn(CacheFirstTranslator.prototype, 'translateSeoString').mockResolvedValue('Horario de tienda');
+        try
+        {
+            installContext(true, 'dropdown', {}, false, false);
+            document.body.innerHTML = '<span data-twp-switcher></span>';
+            await renderApp();
+            await chooseLanguage('Español');
+            expect(seo).toHaveBeenCalledWith('Shop hours', 'seo:title', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+            expect(document.title).toBe('Horario de tienda');
+            await chooseLanguage('English');
+            expect(document.title).toBe('Shop hours');
+        }
+        finally
+        {
+            seo.mockRestore();
+            document.title = originalTitle;
+        }
+    });
+
     it('keeps the pending notice through the first translation and dismisses it on the last', async () =>
     {
         installContext(true);
