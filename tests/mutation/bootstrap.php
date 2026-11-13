@@ -7,6 +7,10 @@ namespace TranslateWP\Functionality\Endpoints {
 		}
 		return \wp_schedule_single_event( $timestamp, $hook, $args );
 	}
+	function wp_remote_get( string $url, array $args = [] ) {
+		$GLOBALS['scan_test_self_checks'][] = [ 'url' => $url, 'args' => $args ];
+		return \wp_remote_get( $url, $args );
+	}
 	function get_posts( array $args = [] ) {
 		$GLOBALS['scan_test_queries'][] = $args;
 		if ( 'lexicon' === ( $args['post_type'] ?? '' ) && 'ids' === ( $args['fields'] ?? '' ) ) {
@@ -24,6 +28,10 @@ namespace TranslateWP\Functionality\Endpoints {
 namespace TranslateWP\Components {
 	function wp_remote_post( string $url, array $args = [] ) {
 		$GLOBALS['scan_test_http_requests'][] = [ 'url' => $url, 'args' => $args ];
+		$before_response = $GLOBALS['scan_test_before_response'] ?? null;
+		if ( is_callable( $before_response ) ) {
+			$before_response();
+		}
 		return \wp_remote_post( $url, $args );
 	}
 }

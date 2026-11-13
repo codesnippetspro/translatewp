@@ -14,6 +14,8 @@ final class ScanningFollowupTest extends TestCase {
 		wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture-token' ] ] );
 		$GLOBALS['scan_test_schedule_false'] = false;
 		$GLOBALS['scan_test_queries'] = [];
+		$GLOBALS['scan_test_before_response'] = null;
+		$GLOBALS['scan_test_self_checks'] = [];
 		$GLOBALS['wp_test_inserted_posts'] = [
 			[ 'ID' => 1, 'post_type' => 'page', 'post_title' => 'Old page', 'post_excerpt' => '', 'post_content' => 'Existing published page content.', 'post_status' => 'publish' ],
 		];
@@ -176,6 +178,8 @@ final class ScanningFollowupTest extends TestCase {
 			'post_content' => 'Private material', 'post_status' => 'private' ];
 		$GLOBALS['wp_test_posts']['page'][] = 3;
 		$GLOBALS['scan_test_queries'] = [];
+		$GLOBALS['scan_test_before_response'] = null;
+		$GLOBALS['scan_test_self_checks'] = [];
 		$this->scanner->schedule_pro_followup();
 		$this->scanner->run_pro_followup();
 		$body = $GLOBALS['wp_test_remote_posts'][0]['body'];
@@ -262,6 +266,35 @@ final class ScanningFollowupTest extends TestCase {
 		$GLOBALS['wp_test_caps'] = [ 'manage_options' ];
 		self::assertInstanceOf( WP_Error::class, $permission( new WP_REST_Request( 'POST', '/context/followup' ) ) );
 		self::assertTrue( $permission( new WP_REST_Request( 'POST', '/context/followup', [], [ 'X-WP-Nonce' => 'test-nonce' ] ) ) );
+	}
+
+	public function test_activation_schedules_then_the_persisted_cron_hook_runs_one_lexicon_call(): void {
+		do_action( 'translatewp_pro_ready' );
+		self::assertSame( 'pending', $this->state() );
+		self::assertNotFalse( wp_next_scheduled( 'translatewp_pro_lexicon_followup' ) );
+		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
+		do_action( 'translatewp_pro_lexicon_followup' );
+		self::assertSame( 'done', $this->state() );
+		self::assertCount( 1, $GLOBALS['wp_test_remote_posts'] );
+		self::assertSame( 'lexicon', $GLOBALS['wp_test_remote_posts'][0]['body']['mode'] );
+	}
+
+	public function test_an_old_followup_cannot_replace_a_new_scan_result_or_pending_scan(): void {
+		foreach ( [ 'ids', 'pending', 'missing' ] as $change ) {
+			Options::update( 'translations.context.scan_status', 'done' );
+			Options::update( 'translations.context.scan_result', $this->stored );
+			Options::update( 'translations.context.pro_followup', null );
+			$this->scanner->schedule_pro_followup();
+			$replacement = 'missing' === $change ? null : array_replace( $this->stored, [ 'context' => 'Newer scan', 'scanned_ids' => 'ids' === $change ? [ 99 ] : $this->stored['scanned_ids'] ] );
+			$GLOBALS['scan_test_before_response'] = static function () use ( $replacement, $change ) {
+				Options::update( 'translations.context.scan_result', $replacement );
+				Options::update( 'translations.context.scan_status', 'pending' === $change ? 'pending' : 'done' );
+			};
+			$this->scanner->run_pro_followup();
+			self::assertSame( $replacement, Options::get( 'translations.context.scan_result' ) );
+			self::assertSame( 'pending', $this->state() );
+			self::assertFalse( get_transient( 'translatewp_context_scan_lock' ) );
+		}
 	}
 
 }

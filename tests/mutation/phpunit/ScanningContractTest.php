@@ -13,6 +13,8 @@ final class ScanningContractTest extends TestCase {
 		wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture-token' ] ] );
 		$GLOBALS['scan_test_schedule_false'] = false;
 		$GLOBALS['scan_test_queries'] = [];
+		$GLOBALS['scan_test_before_response'] = null;
+		$GLOBALS['scan_test_self_checks'] = [];
 		$GLOBALS['scan_test_http_requests'] = [];
 		$GLOBALS['wp_test_inserted_posts'] = [ [ 'ID' => 1, 'post_type' => 'page', 'post_title' => 'Title', 'post_excerpt' => 'Excerpt', 'post_content' => '<p>Page content</p>', 'post_status' => 'publish' ] ];
 		$GLOBALS['wp_test_posts']['page'] = [ 1 ];
@@ -177,6 +179,36 @@ final class ScanningContractTest extends TestCase {
 		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 		self::assertSame( [], $response['lexiconSuggestions'] );
+	}
+
+	public function test_the_persisted_full_scan_hook_runs_the_scheduled_work(): void {
+		$this->respond( $this->scanResult() );
+		$this->scanner->scan_context( null );
+		self::assertNotFalse( wp_next_scheduled( 'translatewp_context_scan_run' ) );
+		do_action( 'translatewp_context_scan_run' );
+		self::assertCount( 1, $GLOBALS['wp_test_remote_posts'] );
+		self::assertSame( 'done', Options::get( 'translations.context.scan_status' ) );
+	}
+
+	public function test_a_manual_scan_on_a_translated_site_only_proposes_context_and_style(): void {
+		update_option( \TranslateWP\Components\TranslationStore::URL_OPTION, [ 'existing' => [ 'url' => home_url( '/' ), 'post_id' => 1 ] ] );
+		Options::update( 'translations.context.text_context', 'Owner context' );
+		Options::update( 'translations.style.tone', 'friendly' );
+		$this->respond( $this->scanResult() );
+		$this->scanner->run_scan();
+		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		self::assertFalse( $response['applied'] );
+		self::assertSame( 'Bakery', $response['context'] );
+		self::assertSame( 'Owner context', Options::get( 'translations.context.text_context' ) );
+		self::assertSame( 'friendly', Options::get( 'translations.style.tone' ) );
+	}
+
+	public function test_unreachable_self_check_uses_local_samples_with_a_bounded_loopback_request(): void {
+		$GLOBALS['wp_test_remote_get_response'] = new WP_Error( 'transport', 'Unreachable' );
+		$this->respond( $this->scanResult() );
+		$this->scanner->run_scan();
+		self::assertTrue( $GLOBALS['wp_test_remote_posts'][0]['body']['site_private'] );
+		self::assertSame( [ [ 'url' => home_url( '/' ), 'args' => [ 'blocking' => true, 'timeout' => 5, 'redirection' => 0 ] ] ], $GLOBALS['scan_test_self_checks'] );
 	}
 
 }
