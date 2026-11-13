@@ -1,6 +1,7 @@
 import { Translator } from '@/shared/lib/translations/Translator';
 import { TranslationEngine } from '@/shared/lib/translations/TranslationEngine';
 import { CHANGE_SETTLE_MS, TranslationSession } from '@/shared/lib/translations/TranslationSession';
+import * as viewportText from '@/shared/lib/translations/viewportText';
 import { VolatilityTracker } from '@/shared/lib/translations/VolatilityTracker';
 
 const EXTRACTION_OPTIONS = {
@@ -59,6 +60,89 @@ describe('TranslationSession', () =>
         jest.restoreAllMocks();
         jest.useRealTimers();
         document.body.innerHTML = '';
+    });
+
+    it.each(['it', 'en'])('supersedes a held run with %s and rejects late writes', async target =>
+    {
+        document.body.innerHTML = '<h1>Original heading</h1><img alt="Original image">';
+        let release!: () => void;
+        let started!: () => void;
+        const firstStarted = new Promise<void>(resolve => { started = resolve; });
+        const mock = Translator.prototype.translateBatch as jest.Mock;
+        mock.mockImplementationOnce(function (entries, options)
+        {
+            started();
+            options.onGroupServeStarted?.(entries);
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        const session = createSession({
+            root: document.body, sourceLang: 'en',
+            extractionOptions: { includeAlt: true, includeAttributes: true },
+        });
+        const first = session.switchTo('de');
+        const cancelled = first.catch(error => error);
+        await expect(Promise.race([firstStarted, first])).resolves.toBeUndefined();
+        const second = session.switchTo(target);
+        const settled = jest.fn();
+        void second.then(settled, settled);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(settled).toHaveBeenCalledTimes(1);
+        await second;
+        const heading = target === 'en' ? 'Original heading' : 'it:Original heading';
+        const alt = target === 'en' ? 'Original image' : 'it:Original image';
+        expect(document.querySelector('h1')?.textContent).toBe(heading);
+        expect(document.querySelector('img')?.alt).toBe(alt);
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('h1')?.textContent).toBe(heading);
+        expect(document.querySelector('img')?.alt).toBe(alt);
+        expect(document.querySelectorAll('[aria-busy="true"],.translatewp-translating')).toHaveLength(0);
+        await cancelled;
+    });
+
+    it.each(['it', 'en', 'dispose'])('rejects late viewport callbacks after %s supersedes a held run', async target =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const reports: Array<(pending: number) => void> = [];
+        jest.spyOn(viewportText, 'observePendingTextEntries').mockImplementation((_entries, onChange) =>
+        {
+            reports.push(onChange);
+            onChange(1);
+            return { settle: jest.fn(), disconnect: jest.fn() };
+        });
+        let started!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce(() =>
+        {
+            started();
+            return new Promise(resolve => { release = () => resolve({ translated: [], failures: [], totalGroups: 0 }); });
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en', extractionOptions: EXTRACTION_OPTIONS });
+        const previous = jest.fn();
+        const first = session.switchTo('de', { onViewportPendingChange: previous }).catch(error => error);
+        await expect(Promise.race([pending, first])).resolves.toBeUndefined();
+        expect(previous).toHaveBeenLastCalledWith(1);
+        previous.mockClear();
+        const current = jest.fn();
+        if (target === 'dispose') session.dispose();
+        else await session.switchTo(target, { onViewportPendingChange: current });
+        if (target === 'it') expect(current).toHaveBeenLastCalledWith(0);
+        await first;
+        reports[0](9);
+        expect(previous).not.toHaveBeenCalled();
+        release();
+        await Promise.resolve();
+        expect(previous).not.toHaveBeenCalled();
     });
 
     it('restores originals after a translated subtree is replaced', async () =>
@@ -753,6 +837,7 @@ describe('TranslationSession', () =>
         const sentBatches = (): string[][] => batches.map(batch => batch.values).filter(values => values.length > 0);
 
         const switching = session.switchTo('it');
+        void switching.catch(() => {});
         await Promise.resolve();
         await Promise.resolve();
         expect(sentBatches()).toEqual([['Original content', '20:46:03']]);
@@ -809,6 +894,7 @@ describe('TranslationSession', () =>
         const sentBatches = (): string[][] => batches.map(batch => batch.values).filter(values => values.length > 0);
 
         const switching = session.switchTo('de');
+        void switching.catch(() => {});
         await Promise.resolve();
         await Promise.resolve();
         batches[0].resolve();
@@ -947,4 +1033,228 @@ describe('TranslationSession', () =>
         expect(sentValues().filter(value => words.includes(value)).length).toBe(VolatilityTracker.DEFAULT_THRESHOLD - 1);
         session.dispose();
     });
+    it('never lets a disposed session write late answers over a replacement session', async () =>
+    {
+        document.body.innerHTML = '<h1>Original heading</h1><img alt="Original image">';
+        let release!: () => void;
+        let started!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            options.onGroupServeStarted?.(entries);
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        const options = { root: document.body, sourceLang: 'en', extractionOptions: { includeAlt: true, includeAttributes: true } };
+        const old = createSession(options);
+        const first = old.switchTo('de').catch(error => error);
+        await expect(Promise.race([pending, first])).resolves.toBeUndefined();
+        old.dispose();
+        const replacement = createSession(options);
+        await replacement.switchTo('it');
+        expect(document.querySelector('h1')?.textContent).toBe('it:Original heading');
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('h1')?.textContent).toBe('it:Original heading');
+        expect(document.querySelector('img')?.alt).toBe('it:Original image');
+        await first;
+    });
+
+    it('can switch from an idle session and dispose it repeatedly without an active controller', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        let switched!: Promise<unknown>;
+        expect(() => { switched = session.switchTo('it'); }).not.toThrow();
+        await switched;
+        expect(() => session.dispose()).not.toThrow();
+        expect(() => session.dispose()).not.toThrow();
+    });
+
+    it.each(['it', 'en'])('cancels held mutation work before switching to %s and does not cancel retired requests again', async target =>
+    {
+        document.body.innerHTML = '<main><p>Original content</p></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('de');
+        const abort = jest.spyOn(AbortController.prototype, 'abort');
+        let release!: () => void;
+        let started!: () => void;
+        let heldSignal!: AbortSignal;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            heldSignal = options.signal;
+            started();
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>New content</p>');
+        await flushMutations();
+        await pending;
+        const next = session.switchTo(target);
+        const settled = jest.fn();
+        void next.then(settled, settled);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(settled).toHaveBeenCalledTimes(1);
+        await next;
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('main')?.textContent).toBe(target === 'en'
+            ? 'Original contentNew content' : 'it:Original contentit:New content');
+        expect(heldSignal.aborted).toBe(true);
+        const retired = new Set(abort.mock.contexts);
+        const before = abort.mock.calls.length;
+        await session.switchTo('de');
+        expect(abort.mock.contexts.slice(before).every(controller => !retired.has(controller))).toBe(true);
+    });
+
+    it('rejects future selections after disposal without starting translation', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        session.dispose();
+        await expect(session.switchTo('it')).rejects.toMatchObject({ name: 'AbortError' });
+        expect(Translator.prototype.translateBatch).not.toHaveBeenCalled();
+        expect(document.body.textContent).toBe('Original content');
+    });
+
+    it('disposal cancels a held mutation so its late answer cannot change attached content', async () =>
+    {
+        document.body.innerHTML = '<main><p>Original content</p></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('de');
+        let release!: () => void;
+        let started!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>New content</p>');
+        await flushMutations();
+        await pending;
+        session.dispose();
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('main p:last-child')?.textContent).toBe('New content');
+    });
+
+    it('keeps an empty translated view active for content added later', async () =>
+    {
+        document.body.innerHTML = '<main></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('it');
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>Later content</p>');
+        await flushMutations();
+        expect(document.querySelector('main')?.textContent).toBe('it:Later content');
+    });
+
+    it('restores partial writes and stops new translation when every group is refused', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p><p>Other content</p>';
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce(async (entries, options) =>
+        {
+            const written = entries[0].withTranslation('Partial write');
+            options.onEntryTranslated?.(written);
+            return { translated: [written], failures: [{ groupId: 'refused', error: 'miss_report_rejected' }], totalGroups: 1 };
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('it');
+        expect(document.body.textContent).toBe('Original contentOther content');
+        document.body.insertAdjacentHTML('beforeend', '<footer>Later content</footer>');
+        await flushMutations();
+        expect(document.querySelector('footer')?.textContent).toBe('Later content');
+        expect(Translator.prototype.translateBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('retires a failed visible entry before the rest of the switch settles', async () =>
+    {
+        document.body.innerHTML = '<p>First content</p><p>Second content</p>';
+        jest.spyOn(viewportText, 'observePendingTextEntries').mockImplementation((entries, onChange) =>
+        {
+            const pending = new Set(entries.map(entry => entry.id));
+            onChange(pending.size);
+            return { disconnect: jest.fn(), settle: entry => { pending.delete(entry.id); onChange(pending.size); } };
+        });
+        let started!: () => void;
+        let fail!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            fail = () => options.onGroupServeFailed?.([entries[0]]);
+            return new Promise(resolve => { release = () => resolve({ translated: [], failures: [{ groupId: 'first', error: 'translation_failed' }], totalGroups: 2 }); });
+        });
+        const progress = jest.fn();
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        const result = session.switchTo('it', { onViewportPendingChange: progress });
+        void result.catch(() => {});
+        await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+        expect(progress).toHaveBeenLastCalledWith(2);
+        fail();
+        expect(progress).toHaveBeenLastCalledWith(1);
+        release();
+        await result;
+        expect(progress).toHaveBeenLastCalledWith(0);
+    });
+
+    it('does not restore old source over an attached theme edit when a held main switch is disposed', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        let started!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            options.onEntryTranslated?.(entries[0].withTranslation('Partial translation'));
+            started();
+            return new Promise(resolve => { release = () =>
+            {
+                const translated = entries.map(entry => entry.withTranslation('Late translation'));
+                translated.forEach(entry => options.onEntryTranslated?.(entry));
+                resolve({ translated, failures: [], totalGroups: 1 });
+            }; });
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        const result = session.switchTo('it');
+        void result.catch(() => {});
+        await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+        document.querySelector('p')!.firstChild!.nodeValue = 'Theme current content';
+        session.dispose();
+        await expect(result).rejects.toHaveProperty('name', 'AbortError');
+        expect(document.body.textContent).toBe('Theme current content');
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.body.textContent).toBe('Theme current content');
+    });
+
 });

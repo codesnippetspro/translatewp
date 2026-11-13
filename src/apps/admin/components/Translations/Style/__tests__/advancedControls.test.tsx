@@ -57,6 +57,16 @@ describe('advanced style controls', () =>
             expect(advanced.textContent).toContain(title);
         }
         expect(advanced.querySelectorAll('button[aria-label^="Unlock"]').length).toBe(3);
+        const group = advanced.closest('section[aria-label="Pro style controls"]')!;
+        expect(group.querySelectorAll('button[aria-label="Upgrade to PRO"]')).toHaveLength(1);
+        expect(group.querySelector('button[aria-label="Upgrade to PRO"]')?.closest('[data-advanced-style]')).toBeNull();
+        expect(group.querySelectorAll('button.is-primary')).toHaveLength(0);
+        for (const card of Array.from(advanced.children)) {
+            const lock = card.querySelector('button[aria-label^="Unlock"]')!;
+            expect(lock.textContent).toBe('');
+            expect(card.querySelectorAll('[data-pro-lock-badge]')).toHaveLength(0);
+        }
+
     });
 
     it('with Pro the controls are live and store their values', async () =>
