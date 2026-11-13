@@ -124,3 +124,56 @@ it.each([
         document.body.innerHTML = '';
     }
 });
+
+it('finishes sampled timing as cancelled when a held session is disposed', async () =>
+{
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    let Session!: typeof TranslationSession;
+    jest.isolateModules(() => { ({ TranslationSession: Session } = require('../TranslationSession')); });
+    let started!: () => void;
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>(resolve => { started = resolve; });
+    const events: ServedTimingEvent[] = [];
+    document.body.innerHTML = '<p>Original content</p>';
+    const session = new Session({ root: document.body, sourceLang: 'en', onTiming: event => events.push(event),
+        createTranslator: (sourceLang, targetLang) =>
+        {
+            const translator = new Translator({ sourceLang, targetLang });
+            jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options) =>
+            {
+                started();
+                return new Promise(resolve => { release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('Late translation'));
+                    translated.forEach(entry => options?.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                }; });
+            });
+            return translator;
+        },
+    });
+    const result = session.switchTo('it');
+    void result.catch(() => {});
+    try
+    {
+        await expect(Promise.race([pending, result]).finally(() => random.mockRestore())).resolves.toBeUndefined();
+        session.dispose();
+        await expect(result).rejects.toHaveProperty('name', 'AbortError');
+        expect(events).toEqual([expect.objectContaining({ outcome: 'cancelled', firstAppliedMs: null, completedMs: null })]);
+        release?.();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.body.textContent).toBe('Original content');
+        expect(events).toHaveLength(1);
+    }
+    finally
+    {
+        session.dispose();
+        release?.();
+        await result.catch(() => {});
+        jest.restoreAllMocks();
+        jest.useRealTimers();
+        document.body.innerHTML = '';
+    }
+});

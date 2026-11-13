@@ -133,8 +133,10 @@ describe('TranslationSession', () =>
         await pending;
         expect(previous).toHaveBeenLastCalledWith(1);
         previous.mockClear();
+        const current = jest.fn();
         if (target === 'dispose') session.dispose();
-        else await session.switchTo(target, { onViewportPendingChange: jest.fn() });
+        else await session.switchTo(target, { onViewportPendingChange: current });
+        if (target === 'it') expect(current).toHaveBeenLastCalledWith(0);
         await first;
         reports[0](9);
         expect(previous).not.toHaveBeenCalled();
