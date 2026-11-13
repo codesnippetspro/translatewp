@@ -98,13 +98,13 @@ describe('lexicon candidates', () =>
 
     it('a refused start explains the hourly limit', async () =>
     {
-        mockApi.startLexiconScan.mockRejectedValue({ code: 'rate_limited', message: 'A scan ran for this site within the hour' });
+        mockApi.startLexiconScan.mockRejectedValue({ code: 'remote_error', data: { status: 429, payload: { code: 'rate_limited', retryAfterSeconds: 1287 } } });
         const container = await render();
 
         await act(async () => { buttonNamed(container, 'Find candidates')?.click(); });
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
-        expect(container.querySelector('[role=alert]')?.textContent).toContain('within the hour');
+        expect(container.querySelector('[role=alert]')?.textContent).toBe('You can scan again in about 22 minutes.');
     });
 
     it('a proposal shows its term, reason, confidence, renderings and evidence, and every action reaches the service', async () =>
