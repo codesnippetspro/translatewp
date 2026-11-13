@@ -190,7 +190,7 @@ final class ScanningContractTest extends TestCase {
 		$this->scanner->run_scan();
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 		self::assertSame( [], $response['lexiconSuggestions'] );
-		$denied = $this->scanner->apply_scan_lexicon( null );
+		$denied = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) );
 		self::assertInstanceOf( WP_Error::class, $denied );
 		self::assertSame( 'pro_required', $denied->get_error_code() );
 		self::assertSame( [ 'status' => 403 ], $denied->get_error_data() );
@@ -198,8 +198,8 @@ final class ScanningContractTest extends TestCase {
 		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'fr', 'fr', [ 'locale' => '' ], '' ] );
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 		self::assertCount( 2, $response['lexiconSuggestions'] );
-		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
-		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
+		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 		self::assertSame( [], $response['lexiconSuggestions'] );
 	}
@@ -293,7 +293,7 @@ final class ScanningContractTest extends TestCase {
 			[ 'term' => 'Second', 'description' => 'Second description', 'category' => 'Technical' ],
 		] ] );
 		$GLOBALS['scan_test_term_insert_result'] = [ 'term_id' => 42 ];
-		self::assertSame( [ 'added' => 2 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( [ 'added' => 2 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		$posts = array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) );
 		self::assertSame( [ 'First', 'Second' ], array_column( $posts, 'post_title' ) );
 		self::assertSame( [ 'First description', 'Second description' ], array_column( $posts, 'post_content' ) );
@@ -301,7 +301,7 @@ final class ScanningContractTest extends TestCase {
 			self::assertSame( [ 'de', 'fr' ], $post['meta_input'][ \TranslateWP\Entities\CPTs\Lexicon::LANGUAGES_META_KEY ] );
 		}
 		self::assertSame( [ [ $posts[0]['ID'], [ 42 ], 'lexicon_category', false ], [ $posts[1]['ID'], [ 42 ], 'lexicon_category', false ] ], $GLOBALS['scan_test_term_assignments'] );
-		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 	}
 
 	public function test_only_normal_pending_status_reads_kick_an_overdue_full_scan(): void {
@@ -363,7 +363,7 @@ final class ScanningContractTest extends TestCase {
 			$GLOBALS['scan_test_term_assignments'] = [];
 			$GLOBALS['scan_test_term_inserts'] = [];
 			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Term' . $index, 'description' => 'Meaning', 'category' => 'Brand' ] ] ] );
-			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 			self::assertCount( $expected ? 1 : 0, $GLOBALS['scan_test_term_assignments'] );
 			if ( $expected ) self::assertSame( [ $expected ], $GLOBALS['scan_test_term_assignments'][0][1] );
 			self::assertCount( is_object( $existing ) && ! is_wp_error( $existing ) ? 0 : 1, $GLOBALS['scan_test_term_inserts'] );
@@ -375,7 +375,7 @@ final class ScanningContractTest extends TestCase {
 		foreach ( [ false, new WP_Error( 'insert_error', 'Fixture error' ) ] as $error ) {
 			$GLOBALS['scan_test_insert_result'] = $error;
 			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Not inserted', 'category' => 'Brand' ] ] ] );
-			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		}
 		self::assertSame( [], $GLOBALS['scan_test_term_assignments'] );
 	}
@@ -427,7 +427,7 @@ final class ScanningContractTest extends TestCase {
 		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
 		foreach ( [ null, [], [ 'lexicon' => null ], [ 'lexicon' => 'invalid' ] ] as $stored ) {
 			Options::update( 'translations.context.scan_result', $stored );
-			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		}
 		foreach ( $GLOBALS['scan_test_queries'] as $query ) self::assertSame( -1, $query['posts_per_page'] );
 	}
@@ -437,7 +437,7 @@ final class ScanningContractTest extends TestCase {
 		foreach ( [ false, new WP_Error( 'insert_error', 'Fixture error' ) ] as $index => $error ) {
 			$GLOBALS['scan_test_insert_results'] = [ $error, null ];
 			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Failed' . $index ], [ 'term' => 'Kept' . $index ] ] ] );
-			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 			self::assertSame( 'Kept' . $index, end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
 		}
 	}
@@ -450,7 +450,7 @@ final class ScanningContractTest extends TestCase {
 		Options::update( 'translations.context.scan_result', $result );
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 		self::assertSame( [ [ 'term' => 'Valid term', 'description' => 'Definition', 'category' => 'Brand' ] ], $response['lexiconSuggestions'] );
-		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		self::assertSame( 'Valid term', end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
 		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
 	}
@@ -459,8 +459,61 @@ final class ScanningContractTest extends TestCase {
 		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
 		wp_insert_post( [ 'post_type' => 'lexicon', 'post_title' => ' Legacy term ', 'post_status' => 'publish' ] );
 		Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Legacy term' ], [ 'term' => 'Fresh term' ] ] ] );
-		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon' ) ) );
 		self::assertSame( 'Fresh term', end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
+	}
+
+	public function test_selected_scan_terms_use_saved_metadata_ignore_forged_names_and_drop_unticked_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$terms = [
+			[ 'term' => 'Quillforge Atelier', 'description' => 'Saved brand instruction', 'category' => 'Brand' ],
+			[ 'term' => 'Fernwick Ledger', 'description' => 'Saved product instruction', 'category' => 'Product' ],
+		];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'context' => 'Existing context', 'lexicon' => $terms ] );
+		$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => [ ' quillforge atelier ', 'Forged Name' ] ] ) );
+		self::assertSame( [ 'added' => 1 ], $result );
+		$post = end( $GLOBALS['wp_test_inserted_posts'] );
+		self::assertSame( 'Quillforge Atelier', $post['post_title'] );
+		self::assertSame( 'Saved brand instruction', $post['post_content'] );
+		$stored = Options::get( 'translations.context.scan_result' );
+		self::assertSame( [ $terms[0] ], $stored['lexicon'] );
+		self::assertTrue( $stored['lexicon_applied'] );
+		self::assertSame( 'Existing context', $stored['context'] );
+		self::assertSame( [], $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) )['lexiconSuggestions'] );
+	}
+
+	public function test_existing_scan_terms_are_hidden_case_insensitively_before_review(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		wp_insert_post( [ 'post_type' => 'lexicon', 'post_title' => ' wordpress ', 'post_status' => 'publish' ] );
+		$fresh = [ 'term' => 'Fernwick Ledger', 'description' => 'Keep this name', 'category' => 'Brand' ];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'WordPress' ], $fresh ] ] );
+		$result = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		self::assertSame( [ $fresh ], $result['lexiconSuggestions'] );
+	}
+
+	public function test_empty_and_unmatched_scan_selections_dismiss_without_creating_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ [], [ 'Forged Name' ] ] as $selection ) {
+			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Tidewell Nib', 'description' => 'Saved description' ] ] ] );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => $selection ] ) ) );
+			self::assertSame( [], Options::get( 'translations.context.scan_result' )['lexicon'] );
+			self::assertTrue( Options::get( 'translations.context.scan_result' )['lexicon_applied'] );
+		}
+		self::assertSame( [], array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) ) );
+	}
+
+	public function test_invalid_scan_selections_do_not_mutate_the_saved_review(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$stored = [ 'lexicon' => [ [ 'term' => 'Tidewell Nib' ] ] ];
+		Options::update( 'translations.context.scan_result', $stored );
+		foreach ( [ 'Tidewell Nib', [ [ 'term' => 'Tidewell Nib', 'description' => 'Forged description' ] ], [ 42 ] ] as $invalid ) {
+			$result = $this->scanner->apply_scan_lexicon( new WP_REST_Request( 'POST', '/context/apply-lexicon', [ 'terms' => $invalid ] ) );
+			self::assertInstanceOf( WP_Error::class, $result );
+			self::assertSame( 400, $result->get_error_data()['status'] );
+			self::assertSame( $stored, Options::get( 'translations.context.scan_result' ) );
+		}
 	}
 
 }

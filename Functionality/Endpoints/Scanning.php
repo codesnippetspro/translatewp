@@ -103,8 +103,6 @@ class Scanning extends BaseApiEndpoints {
      * asks; a Free site cannot apply them.
      */
     public function apply_scan_lexicon( $request ) {
-        unset( $request );
-
         if ( ! self::lexicon_proposals_allowed() ) {
             return new WP_Error(
                 'pro_required',
@@ -116,8 +114,26 @@ class Scanning extends BaseApiEndpoints {
         $result = Options::get( self::SCAN_RESULT_OPTION, null );
         $terms  = is_array( $result ) && is_array( $result['lexicon'] ?? null ) ? $result['lexicon'] : [];
 
+        $selected = $request->get_param( 'terms' );
+        if ( null !== $selected ) {
+            if ( ! is_array( $selected ) || count( array_filter( $selected, 'is_string' ) ) !== count( $selected ) ) {
+                return new WP_Error( 'invalid_terms', 'Choose terms from the stored suggestions.', [ 'status' => 400 ] );
+            }
+            $keys = array_fill_keys( array_map( [ self::class, 'term_key' ], $selected ), true );
+            $terms = array_values(
+                array_filter(
+                    $terms,
+                    static function ( $entry ) use ( $keys ) {
+                        return is_array( $entry ) && isset( $keys[ self::term_key( (string) ( $entry['term'] ?? '' ) ) ] );
+                    }
+                )
+            );
+        }
+
         $added = $this->populate_lexicon( $terms );
 
+        $result = is_array( $result ) ? $result : [];
+        $result['lexicon'] = $terms;
         $result['lexicon_applied'] = true;
         Options::update( self::SCAN_RESULT_OPTION, $result );
 
@@ -173,12 +189,13 @@ class Scanning extends BaseApiEndpoints {
     /** The scan's lexicon candidates reduced to what the review shows. */
     private function suggested_terms( $lexicon ): array {
         $terms = [];
+        $existing_titles = $this->existing_lexicon_titles();
         foreach ( is_array( $lexicon ) ? $lexicon : [] as $entry ) {
             if ( ! is_array( $entry ) ) {
                 continue;
             }
             $term = sanitize_text_field( (string) ( $entry['term'] ?? '' ) );
-            if ( '' === $term ) {
+            if ( '' === $term || isset( $existing_titles[ self::term_key( $term ) ] ) ) {
                 continue;
             }
             $terms[] = [
@@ -728,6 +745,22 @@ class Scanning extends BaseApiEndpoints {
             && ( ! isset( $scan_result['lexicon'] ) || is_array( $scan_result['lexicon'] ) );
     }
 
+    private function existing_lexicon_titles(): array {
+        $existing_titles = [];
+        foreach ( get_posts(
+            [
+				'post_type'      => Lexicon::POST_TYPE,
+				'post_status'    => 'any',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			]
+        ) as $existing_id ) {
+            $existing_titles[ self::term_key( \TranslateWP\Components\PlainText::title( $existing_id ) ) ] = true;
+        }
+
+        return $existing_titles;
+    }
+
     /**
      * Create lexicon terms (with their category) from the scan result.
      *
@@ -741,17 +774,7 @@ class Scanning extends BaseApiEndpoints {
         $added = 0;
         $locales = $this->configured_locales();
 
-        $existing_titles = [];
-        foreach ( get_posts(
-            [
-				'post_type'      => Lexicon::POST_TYPE,
-				'post_status'    => 'any',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-			]
-        ) as $existing_id ) {
-            $existing_titles[ self::term_key( \TranslateWP\Components\PlainText::title( (int) $existing_id ) ) ] = true;
-        }
+        $existing_titles = $this->existing_lexicon_titles();
 
         foreach ( $lexicon as $entry ) {
             if ( ! is_array( $entry ) ) {
