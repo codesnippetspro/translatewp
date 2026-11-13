@@ -117,11 +117,19 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                         </>
                     ) : (
                         <>
-                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
+                            <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy}
+                                aria-label={sprintf(
+                                    /* translators: %s: suggested term. */
+                                    __('Add %s to Lexicon', 'translate'), candidate.sourceText
+                                )} onClick={onAdd}>{__('Add to Lexicon', 'translate')}</Button>
                             <Dropdown
                                 popoverProps={{ placement: 'bottom-end' }}
                                 renderToggle={({ isOpen, onToggle }) => (
                                     <Button variant="tertiary" className="h-8! rounded-sm! px-2! text-sm!" disabled={busy}
+                                        aria-label={sprintf(
+                                            /* translators: %s: suggested term. */
+                                            __('Dismiss %s', 'translate'), candidate.sourceText
+                                        )}
                                         aria-haspopup="menu" aria-expanded={isOpen} onClick={onToggle}>
                                         {__('Dismiss', 'translate')}<ChevronDown className="ms-1 h-3 w-3" aria-hidden="true" />
                                     </Button>
