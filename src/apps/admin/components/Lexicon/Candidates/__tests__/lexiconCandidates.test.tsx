@@ -48,6 +48,15 @@ const render = async (onAdd: (prefill: CandidatePrefill) => void = () => undefin
 
 const buttonNamed = (container: HTMLElement, text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.trim() === text) as HTMLButtonElement | undefined;
 
+const dismissCandidate = async (container: HTMLElement, action: string) =>
+{
+    await act(async () => { buttonNamed(container, 'Dismiss')?.click(); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    const item = buttonNamed(document.body, action);
+    expect(item).toBeDefined();
+    await act(async () => { item!.click(); });
+};
+
 describe('lexicon candidates', () =>
 {
     beforeEach(() =>
@@ -75,8 +84,8 @@ describe('lexicon candidates', () =>
     {
         expect(scanLine(null)).toBe('No scan has run yet.');
         expect(scanLine(scan('running', { progress: { stage: 'judging', records: 120, candidates: 7 } }))).toBe('Reviewing 7 terms found in 120 translations.');
-        expect(scanLine(scan('done', { summary: { records: 120, proposed: 3 } }))).toBe('The scan read 120 translations.');
-        expect(scanLine(scan('done', { summary: { records: 5, proposed: 0 } }))).toBe('The scan read 5 translations.');
+        expect(scanLine(scan('done', { summary: { records: 120, proposed: 3 } }))).toBe('The scan read 120 translations and proposed 3 terms.');
+        expect(scanLine(scan('done', { summary: { records: 5, proposed: 0 } }))).toBe('The scan read 5 translations and proposed 0 terms.');
         expect(scanLine(scan('failed'))).toMatch(/could not finish/);
     });
 
@@ -128,11 +137,11 @@ describe('lexicon candidates', () =>
         await act(async () => { buttonNamed(row, 'Add to Lexicon')?.click(); });
         expect(added).toEqual([{ candidateId: candidate().id, term: 'Hall', description: 'inconsistent. sense: room', languages: ['de'] }]);
 
-        await act(async () => { buttonNamed(row, 'Skip this scan')?.click(); });
+        await dismissCandidate(row, 'Skip this scan');
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
         expect(mockApi.actOnLexiconCandidate).toHaveBeenLastCalledWith(candidate().id, 'skip');
 
-        await act(async () => { buttonNamed(container, 'Never suggest on this site')?.click(); });
+        await dismissCandidate(container, 'Never suggest on this site');
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
         expect(mockApi.actOnLexiconCandidate).toHaveBeenLastCalledWith(candidate().id, 'never');
     });
@@ -143,19 +152,20 @@ describe('lexicon candidates', () =>
         const added: CandidatePrefill[] = [];
         const container = await render(prefill => added.push(prefill));
         const row = container.querySelector('[data-candidate]') as HTMLElement;
-        const details = row.querySelector('details') as HTMLDetailsElement;
+        const details = row.querySelector('[data-candidate-details]') as HTMLElement;
 
         expect(details).not.toBeNull();
-        expect(details.open).toBe(false);
-        expect(details.querySelector('summary')?.textContent).toBe('Details');
+        expect(details.hidden).toBe(true);
+        expect(buttonNamed(row, 'Details')?.getAttribute('aria-expanded')).toBe('false');
         expect(details.textContent).toContain('Translations use different terms. sense: room');
         expect(details.textContent).toContain('proposed Saal');
         expect(details.textContent).toContain('The hall seats forty.');
         expect(buttonNamed(row, 'Add to Lexicon')?.closest('details')).toBeNull();
-        expect(buttonNamed(row, 'Skip this scan')?.closest('details')).toBeNull();
-        expect(buttonNamed(row, 'Never suggest on this site')?.closest('details')).toBeNull();
+        expect(buttonNamed(row, 'Dismiss')?.closest('[data-candidate-details]')).toBeNull();
+        expect(buttonNamed(row, 'Never suggest on this site')).toBeUndefined();
 
-        details.open = true;
+        await act(async () => { buttonNamed(row, 'Details')?.click(); });
+        expect(details.hidden).toBe(false);
         expect(details.querySelector('a')?.getAttribute('href')).toBe('https://example.test/rooms');
         await act(async () => { buttonNamed(row, 'Add to Lexicon')?.click(); });
         expect(added[0].term).toBe('Hall');
@@ -186,7 +196,7 @@ describe('lexicon candidates', () =>
         expect(container.querySelector('[data-candidate]')?.textContent).toContain('Term 11');
         expect(buttonNamed(container, 'Next')?.disabled).toBe(true);
 
-        await act(async () => { buttonNamed(container, 'Skip this scan')?.click(); });
+        await dismissCandidate(container, 'Skip this scan');
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
         expect(container.querySelectorAll('[data-candidate]')).toHaveLength(10);
