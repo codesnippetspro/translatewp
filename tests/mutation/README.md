@@ -50,3 +50,14 @@ When comparing repeated runs, list every changed mutant status by source
 location, operator and replacement. Keep the prior reports and distinguish
 new assertions, runner errors and timeout evidence; do not silently replace
 a prior result with the newer status.
+
+For supplementary task-timeout evidence, run the six fast task cases alone:
+
+```sh
+CI=true node_modules/.bin/stryker run stryker.task-control.config.cjs
+```
+
+This control is separate from the full viewport profile. Match its mutations
+by file, location, operator and replacement; retain the original full-profile
+statuses and counts, and list the control result separately for each timeout.
+A control assertion kill does not turn a main-profile Timeout into Killed.

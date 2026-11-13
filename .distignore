@@ -39,6 +39,7 @@ CONTEXT.md
 /stryker.cookie.config.cjs
 /stryker.viewport.config.cjs
 /stryker.viewport.full.config.cjs
+/stryker.task-control.config.cjs
 /infection.json
 /.stryker-tmp
 /.infection
