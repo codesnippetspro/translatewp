@@ -1,10 +1,13 @@
 import { SKIP_TAGS, TRANSLATABLE_VALUE_INPUT_TYPES } from '@/shared/lib/translations/constants';
 
+const PRINTED_PHP_DIAGNOSTIC = /^\s*(?:PHP\s+)?(?:Deprecated|Warning|Notice|Fatal error|Parse error|Strict Standards|Recoverable fatal error):[^\r\n]*\s+in\s+(?:\/|[A-Z]:[\\/])[^\r\n]+\s+on line\s+\d+[.!]?\s*$/i;
+
 /**
  * Stateless utility class that encapsulates all "is this translatable?" decisions. Keeping these rules isolated makes them easy to test and extend
  * 
  * Every public method accepts configurable class/id opt-out lists without making NodeFilter stateful
  */
+
 export class NodeFilter
 {
     /**
@@ -23,6 +26,7 @@ export class NodeFilter
     static isTranslatableTextNode(textNode: Text, noTranslateClasses: string[], noTranslateIds: string[]): boolean
     {
         if (!textNode.nodeValue?.trim()) return false;
+        if (PRINTED_PHP_DIAGNOSTIC.test(textNode.nodeValue)) return false;
 
         const parent = textNode.parentElement;
         if (!parent) return false;
