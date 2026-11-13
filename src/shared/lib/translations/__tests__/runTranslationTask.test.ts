@@ -32,6 +32,7 @@ describe('bounded cancellable translation tasks', () =>
         await Promise.resolve();
         expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
         await expect(task).rejects.toMatchObject({ name: 'AbortError' });
+        expect(child).toBeInstanceOf(AbortSignal);
         expect(child.aborted).toBe(true);
         expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
         expect(jest.getTimerCount()).toBe(0);
@@ -53,9 +54,10 @@ describe('bounded cancellable translation tasks', () =>
         void task.catch(rejected);
         await jest.advanceTimersByTimeAsync(19);
         expect(child.aborted).toBe(false);
-        await jest.advanceTimersByTimeAsync(1);
+        await expect(jest.advanceTimersByTimeAsync(1)).resolves.toBeUndefined();
         expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'TimeoutError' }));
         await expect(task).rejects.toMatchObject({ name: 'TimeoutError' });
+        expect(child).toBeInstanceOf(AbortSignal);
         expect(child.aborted).toBe(true);
         fail(new Error('Late failure'));
         await Promise.resolve();
@@ -79,6 +81,7 @@ describe('bounded cancellable translation tasks', () =>
         expect(settled).toHaveBeenCalledTimes(1);
         if (mode === 'resolve') await expect(task).resolves.toBe('Translated');
         else await expect(task).rejects.toThrow('Provider');
+        expect(child).toBeInstanceOf(AbortSignal);
         expect(child.aborted).toBe(true);
         expect(jest.getTimerCount()).toBe(0);
         controller.abort();
