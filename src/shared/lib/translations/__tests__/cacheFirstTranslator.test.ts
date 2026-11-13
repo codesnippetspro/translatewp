@@ -1396,6 +1396,24 @@ describe('bounded miss report responses', () =>
     });
 
     it.each([
+        [true, new Error('Delay failed')], [true, null], [true, new DOMException('Cancelled', 'AbortError')],
+        [false, new Error('Delay failed')], [false, null], [false, new DOMException('Cancelled', 'AbortError')],
+    ])('handles a failed retry wait with prior acceptance=%s and error=%s', async (accepted, error) =>
+    {
+        const admitted = accepted ? ['first'] : [];
+        const post = jest.fn().mockResolvedValue(response(200, {
+            acceptedHashes: admitted, retryHashes: accepted ? ['second'] : ['first', 'second'], retryAfter: 2,
+        }));
+        const delay = jest.fn().mockRejectedValue(error);
+        const { result } = run(post, { delay });
+        if (accepted && !(error instanceof DOMException))
+            await expect(result).resolves.toEqual({ outcome: 'accepted', acceptedHashes: ['first'], subscriptions: [] });
+        else await expect(result).rejects.toBe(error);
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
         { acceptedHashes: ['first'], retryHashes: ['first'], retryAfter: 1 },
         { acceptedHashes: ['unknown'], retryHashes: ['second'], retryAfter: 1 },
         { acceptedHashes: [], retryHashes: 'second', retryAfter: 1 },
