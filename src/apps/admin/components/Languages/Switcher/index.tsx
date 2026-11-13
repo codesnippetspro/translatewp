@@ -1,8 +1,8 @@
-import { MIN_SWITCHER_FONT_SIZE, MAX_SWITCHER_FONT_SIZE, resolveSwitcherFontSize } from '@/shared/lib/switcherFontSize';
 import { __ } from '@wordpress/i18n';
-import { FormToggle, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
+import { FormToggle, TextControl, ToggleControl } from '@wordpress/components';
 
 import { useId, useState } from '@wordpress/element';
+import { NumberField, numberFieldBounds } from '@/shared/components/form/numberField';
 import { ColorPicker } from '@/shared/components/form/colorPicker';
 import { SwitcherTypeControl } from '@/apps/admin/components/Languages/Switcher/SwitcherTypeControl';
 import { ShowSelectedLanguageControl } from '@/apps/admin/components/Languages/Switcher/ShowSelectedLanguageControl';
@@ -19,8 +19,6 @@ import { getProState } from '@/shared/lib/pro/proState';
 import { renderedSwitcherType } from '@/apps/admin/components/Languages/Switcher/renderedType';
 
 const PENDING_MESSAGE_MAX_LENGTH = 200;
-
-type MetricKey = 'offset' | 'icon_size' | 'padding';
 
 const BACKGROUND_OPTIONS: OptionCard<'solid' | 'transparent' | 'glass'>[] = [
     { value: 'solid', label: __('Solid', 'translate'), description: __('Painted in the background colour.', 'translate') },
@@ -87,44 +85,9 @@ export const LanguagesSwitcher = () =>
         });
     };
 
-    // A size field the browser has emptied keeps its own blank draft while the
-    // stored value stands; leaving the field remounts it on the stored value.
-    const [metricKeys, setMetricKeys] = useState<Record<MetricKey, number>>({ offset: 0, icon_size: 0, padding: 0 });
-    const [fontSizeDraft, setFontSizeDraft] = useState<string | undefined>();
-
-    const commitFontSize = () =>
-    {
-        if (fontSizeDraft !== undefined && fontSizeDraft !== '' && Number.isFinite(Number(fontSizeDraft))) {
-            updateSetting('font_size', resolveSwitcherFontSize(Number(fontSizeDraft)));
-        }
-        setFontSizeDraft(undefined);
-    };
-
     // While the loading-border picker is open the preview shows the loading ring,
     // presentationally only: no translation starts and no loading flag is saved.
     const [loadingPreview, setLoadingPreview] = useState(false);
-
-    const snapBack = (key: MetricKey) => (event: { target: { value: string } }) =>
-    {
-        if (event.target.value === '' || !Number.isFinite(Number(event.target.value))) {
-            setMetricKeys(previous => ({ ...previous, [key]: previous[key] + 1 }));
-        }
-    };
-
-    const updateMetric = (key: MetricKey, value: string | undefined) =>
-    {
-        if (value === undefined || value === '') {
-            return;
-        }
-
-        const parsed = Number(value);
-
-        if (!Number.isFinite(parsed)) {
-            return;
-        }
-
-        updateSetting(key, Math.max(0, Math.trunc(parsed)));
-    };
 
     const translatingMessage = (
         <section data-switcher-section="pending-message" className={SECTION_CLASS} data-pending-message aria-labelledby="twp-switcher-pending-message">
@@ -287,72 +250,51 @@ export const LanguagesSwitcher = () =>
             {sideTab && <p className='m-0 text-sm text-translatewp-muted! italic' data-unavailable-reason>{__('The side tab sits on the screen edge, so the offset does not apply.', 'translate')}</p>}
             <div className="grid grid-cols-1 gap-4 @min-[380px]:grid-cols-2 @min-[500px]:grid-cols-3">
                 <div data-size-font>
-                <NumberControl
-                    onBlur={commitFontSize}
-                    __next40pxDefaultSize
+                <NumberField
                     label={__('Font size', 'translate')}
                     help={__('Size of the language names in the switcher.', 'translate')}
-                    value={fontSizeDraft ?? settings.font_size}
-                    onChange={(value, { event }) =>
-                    {
-                        if (value !== undefined && value !== '' && Number.isFinite(Number(value))
-                            && (event.type === 'click' || (('key' in event) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')))) {
-                            updateSetting('font_size', resolveSwitcherFontSize(Number(value)));
-                            setFontSizeDraft(undefined);
-                        } else {
-                            setFontSizeDraft(value);
-                        }
-                    }}
-                    spinControls="custom"
-                    min={MIN_SWITCHER_FONT_SIZE}
-                    max={MAX_SWITCHER_FONT_SIZE}
-                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
-                    className='max-w-40'
+                    value={settings.font_size}
+                    onChange={value => updateSetting('font_size', value)}
+                    {...numberFieldBounds.fontSize}
+                    unit="px"
+                    disabled={false}
+                    className="max-w-40"
                 />
                 </div>
                 <div className={native ? 'pointer-events-none opacity-50' : ''} aria-disabled={native || undefined} data-size-icon>
-                <NumberControl
-                    key={`icon_size-${metricKeys.icon_size}`}
-                    onBlur={snapBack('icon_size')}
-                    __next40pxDefaultSize
+                <NumberField
                     label={__('Switcher icon size', 'translate')}
                     help={__('Width of the flag or size of the icon on the closed switcher.', 'translate')}
                     value={settings.icon_size}
-                    onChange={(value) => updateMetric('icon_size', value)}
-                    min={0}
-                    max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
-                    className='max-w-40'
+                    onChange={value => updateSetting('icon_size', value)}
+                    {...numberFieldBounds.switcherMetric}
+                    unit="px"
+                    disabled={native}
+                    className="max-w-40"
                 />
                 </div>
                 <div className={native ? 'pointer-events-none opacity-50' : ''} aria-disabled={native || undefined} data-size-padding>
-                <NumberControl
-                    key={`padding-${metricKeys.padding}`}
-                    onBlur={snapBack('padding')}
-                    __next40pxDefaultSize
+                <NumberField
                     label={__('Switcher padding', 'translate')}
                     help={__('Space inside the switcher, around the flag and the name.', 'translate')}
                     value={settings.padding}
-                    onChange={(value) => updateMetric('padding', value)}
-                    min={0}
-                    max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
-                    className='max-w-40'
+                    onChange={value => updateSetting('padding', value)}
+                    {...numberFieldBounds.switcherMetric}
+                    unit="px"
+                    disabled={native}
+                    className="max-w-40"
                 />
                 </div>
                 <div className={sideTab ? 'pointer-events-none opacity-50' : ''} aria-disabled={sideTab || undefined} data-size-offset>
-                <NumberControl
-                    key={`offset-${metricKeys.offset}`}
-                    onBlur={snapBack('offset')}
-                    __next40pxDefaultSize
+                <NumberField
                     label={__('Switcher offset', 'translate')}
                     help={__('Distance from the browser edge before dragging, and on narrow screens.', 'translate')}
                     value={settings.offset}
-                    onChange={(value) => updateMetric('offset', value)}
-                    min={0}
-                    max={500}
-                    suffix={<span className='text-sm text-translatewp-muted! pe-2'>px</span>}
-                    className='max-w-40'
+                    onChange={value => updateSetting('offset', value)}
+                    {...numberFieldBounds.switcherMetric}
+                    unit="px"
+                    disabled={sideTab}
+                    className="max-w-40"
                 />
                 </div>
             </div>

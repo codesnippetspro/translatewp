@@ -22,6 +22,8 @@ const EXPECTED_KEYS = [
     'ProBadge',
     'LanguageScopeSwitcher',
     'PresetChoice',
+    'NumberField',
+    'numberFieldBounds',
     'registerSlot',
     'confirmLanguageRetranslation',
 ];
