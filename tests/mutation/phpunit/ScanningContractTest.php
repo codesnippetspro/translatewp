@@ -447,4 +447,12 @@ final class ScanningContractTest extends TestCase {
 		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
 	}
 
+	public function test_existing_lexicon_titles_are_deduplicated_after_whitespace_normalization(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		wp_insert_post( [ 'post_type' => 'lexicon', 'post_title' => ' Legacy term ', 'post_status' => 'publish' ] );
+		Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Legacy term' ], [ 'term' => 'Fresh term' ] ] ] );
+		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( 'Fresh term', end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
+	}
+
 }
