@@ -100,7 +100,7 @@ describe('switcher font size editing', () =>
         expect(stored()).toBe(14);
         await blur(input);
         expect(stored()).toBe(18);
-        const increment = row.querySelector('button[aria-label="Increment"]') as HTMLButtonElement;
+        const increment = row.querySelector('button[aria-label="Increase Font size"]') as HTMLButtonElement;
         expect(increment).not.toBeNull();
         await act(async () => { increment.click(); });
         expect(stored()).toBe(19);

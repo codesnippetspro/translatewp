@@ -1,4 +1,5 @@
-import { Button, RadioControl, SelectControl, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
+import { NumberField, numberFieldBounds } from '@/shared/components/form/numberField';
+import { Button, RadioControl, SelectControl, TextControl, ToggleControl } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { useRef, useState } from '@wordpress/element';
 
@@ -137,13 +138,13 @@ const FieldControl = ({ field, value, onChange, proActive = false }: { field: Ne
             );
         case 'number':
             return (
-                <NumberControl
-                    __next40pxDefaultSize
+                <NumberField
                     label={field.label}
                     value={Number(value)}
-                    min={0}
-                    max={500}
-                    onChange={(next) => onChange(next === undefined || next === '' ? value : Math.max(0, Math.trunc(Number(next))))}
+                    {...(field.key === 'languages.switcher.font_size' ? numberFieldBounds.fontSize
+                        : field.key === 'languages.seo.cookie_ttl' ? numberFieldBounds.cookieDays : numberFieldBounds.switcherMetric)}
+                    unit={field.key === 'languages.seo.cookie_ttl' ? __('days', 'translate') : 'px'}
+                    onChange={next => onChange(next)}
                     className="max-w-40"
                 />
             );
