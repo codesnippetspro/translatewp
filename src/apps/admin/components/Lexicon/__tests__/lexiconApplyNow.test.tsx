@@ -4,11 +4,14 @@ import { jest } from '@jest/globals';
 
 let mockLexiconResponse: unknown;
 let mockStaleResponse: unknown;
+let mockSiteScanResponse: unknown;
 
 jest.mock('@tanstack/react-query', () => ({
     queryOptions: (options: unknown) => options,
     useQuery: (options: { queryKey?: unknown[] }) => (
-        Array.isArray(options?.queryKey) && options.queryKey[0] === 'getStaleTranslations'
+        Array.isArray(options?.queryKey) && options.queryKey[0] === 'siteScanSuggestions'
+            ? { data: mockSiteScanResponse, isFetching: false }
+            : Array.isArray(options?.queryKey) && options.queryKey[0] === 'getStaleTranslations'
             ? { data: mockStaleResponse, isFetching: false }
             : { data: mockLexiconResponse, isFetching: false }
     ),
@@ -53,6 +56,7 @@ const renderLexicon = async (): Promise<string> =>
 // only while some are waiting.
 describe('Lexicon retranslate action', () =>
 {
+    beforeEach(() => { mockSiteScanResponse = undefined; });
     afterEach(async () =>
     {
         await act(async () =>
@@ -61,6 +65,21 @@ describe('Lexicon retranslate action', () =>
         });
         root = null;
         document.body.innerHTML = '';
+    });
+
+    it('shows stored site-scan suggestions inside the Lexicon page', async () =>
+    {
+        mockLexiconResponse = { items: [term(1)], pagination: pagination(1) };
+        mockStaleResponse = { lexicon: {}, localizer: {} };
+        mockSiteScanResponse = { status: 'done', lexiconSuggestions: [
+            { term: 'Quillforge', description: 'Keep the brand as written', category: 'Brand' },
+        ] };
+        const text = await renderLexicon();
+        expect(text).toContain('Site scan suggestions');
+        expect(text).toContain('The scan suggests 1 term');
+        expect(text).toContain('Keep the brand as written');
+        expect(text).toContain('Add 1 selected term');
+        expect(document.querySelector<HTMLInputElement>('[data-lexicon-suggestions] input[type="checkbox"]')?.checked).toBe(true);
     });
 
     it('offers nothing while every translated page uses the current terms', async () =>

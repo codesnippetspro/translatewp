@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { LexiconCandidates, scanLine, type CandidatePrefill } from '@/apps/admin/components/Lexicon/Candidates';
@@ -32,14 +32,18 @@ const candidate = (overrides: Partial<LexiconCandidate> = {}): LexiconCandidate 
     evidence: [{ url: 'https://example.test/rooms', sentence: 'The hall seats forty.' }], reason: 'inconsistent. sense: room', status: 'new', scanId: 's1', updatedAt: '2026-09-14T12:00:00Z', ...overrides,
 });
 
+const mounts: { root: Root; client: QueryClient }[] = [];
+
 const render = async (onAdd: (prefill: CandidatePrefill) => void = () => undefined): Promise<HTMLElement> =>
 {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const root = createRoot(container);
+    mounts.push({ root, client: queryClient });
     await act(async () =>
     {
-        createRoot(container).render(<QueryClientProvider client={queryClient}><LexiconCandidates onAdd={onAdd} /></QueryClientProvider>);
+        root.render(<QueryClientProvider client={queryClient}><LexiconCandidates onAdd={onAdd} /></QueryClientProvider>);
     });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
@@ -66,7 +70,11 @@ describe('lexicon candidates', () =>
         mockApi.getLexiconScan.mockResolvedValue({ scan: null });
         mockApi.getLexiconCandidates.mockResolvedValue({ candidates: [] });
     });
-    afterEach(() => { document.body.innerHTML = ''; });
+    afterEach(async () =>
+    {
+        await act(async () => { mounts.splice(0).forEach(({ root, client }) => { root.unmount(); client.clear(); }); });
+        document.body.innerHTML = '';
+    });
 
     it('a free site sees the panel locked and the scan cannot start', async () =>
     {
@@ -114,6 +122,80 @@ describe('lexicon candidates', () =>
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
         expect(container.querySelector('[role=alert]')?.textContent).toBe('You can scan again in about 22 minutes.');
+    });
+
+    it.each([
+        [undefined, 'A scan ran for this site within the hour. Try again later.'],
+        [0, 'You can scan again in about 1 minute.'],
+        [1, 'You can scan again in about 1 minute.'],
+        [61, 'You can scan again in about 2 minutes.'],
+    ])('explains the retry window for %s seconds', async (retryAfterSeconds, expected) =>
+    {
+        mockApi.startLexiconScan.mockRejectedValue({ code: 'remote_error', data: {
+            status: 429, payload: { code: 'rate_limited', retryAfterSeconds },
+        } });
+        const container = await render();
+        await act(async () => { buttonNamed(container, 'Find candidates')!.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(container.querySelector('[role=alert]')?.textContent).toBe(expected);
+    });
+
+    it('reports the current eligible count instead of the original scan total', async () =>
+    {
+        mockApi.getLexiconScan.mockResolvedValue({ scan: scan('done', { summary: { records: 120, proposed: 14 } }) });
+        mockApi.getLexiconCandidates.mockImplementation(async (status?: string) => ({
+            candidates: status === 'new' ? [candidate(), candidate({ id: 'second', sourceText: 'Quillforge' })] : [],
+        }));
+        const container = await render();
+        expect(container.textContent).toContain('The scan read 120 translations and proposed 2 terms.');
+        expect(container.textContent).not.toContain('proposed 14 terms');
+    });
+
+    it('names each decision for its term and associates the Details control with its own panel', async () =>
+    {
+        mockApi.getLexiconCandidates.mockResolvedValue({ candidates: [
+            candidate(), candidate({ id: 'second', sourceText: 'Quillforge' }),
+        ] });
+        const container = await render();
+        const panels = new Set<string>();
+        for (const row of Array.from(container.querySelectorAll<HTMLElement>('[data-candidate]')))
+        {
+            const term = row.dataset.candidate === 'second' ? 'Quillforge' : 'Hall';
+            expect(buttonNamed(row, 'Add to Lexicon')?.getAttribute('aria-label')).toBe(`Add ${term} to Lexicon`);
+            expect(buttonNamed(row, 'Dismiss')?.getAttribute('aria-label')).toBe(`Dismiss ${term}`);
+            const toggle = buttonNamed(row, 'Details')!;
+            expect(toggle.getAttribute('aria-label')).toBe(`Details for ${term}`);
+            const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+            expect(row.contains(panel)).toBe(true);
+            expect(panel.hidden).toBe(true);
+            panels.add(panel.id);
+            await act(async () => { toggle.click(); });
+            expect(panel.hidden).toBe(false);
+            expect(toggle.getAttribute('aria-expanded')).toBe('true');
+            await act(async () => { toggle.click(); });
+            expect(panel.hidden).toBe(true);
+        }
+        expect(panels.size).toBe(2);
+        expect(mockApi.actOnLexiconCandidate).not.toHaveBeenCalled();
+    });
+
+    it('closes the Dismiss menu on Escape and returns focus without taking an action', async () =>
+    {
+        mockApi.getLexiconCandidates.mockResolvedValue({ candidates: [candidate()] });
+        const container = await render();
+        const toggle = buttonNamed(container, 'Dismiss')!;
+        await act(async () => { toggle.focus(); });
+        await act(async () => { toggle.click(); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        const skip = buttonNamed(document.body, 'Skip this scan')!;
+        expect(skip).toBeDefined();
+        await act(async () => { skip.focus(); });
+        await act(async () => { skip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true })); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(buttonNamed(document.body, 'Skip this scan')).toBeUndefined();
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(toggle);
+        expect(mockApi.actOnLexiconCandidate).not.toHaveBeenCalled();
     });
 
     it('a proposal shows its term, reason, confidence, renderings and evidence, and every action reaches the service', async () =>
