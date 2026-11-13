@@ -525,6 +525,7 @@ function wp_parse_url( $url, $component = -1 ) {
 }
 
 function home_url( $path = '' ): string {
+	$path = '' !== $path ? '/' . ltrim( $path, '/' ) : '';
 	if ( isset( $GLOBALS['wp_test_home_url'] ) ) {
 		return (string) $GLOBALS['wp_test_home_url'] . $path;
 	}
@@ -533,6 +534,10 @@ function home_url( $path = '' ): string {
 	$host    = $GLOBALS['wp_test_site_hosts'][ $blog_id ] ?? ( 1 === $blog_id ? 'example.com' : 'site' . $blog_id . '.example.com' );
 
 	return 'https://' . $host . $path;
+}
+
+function trailingslashit( string $value ): string {
+	return rtrim( $value, '/' ) . '/';
 }
 
 function untrailingslashit( string $value ): string {
