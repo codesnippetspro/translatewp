@@ -21,9 +21,9 @@ const CONTROL_CLASS = 'flex! items-center gap-[9px]! box-border w-full min-h-10 
 	+ 'rounded-md! text-[13px]! leading-5! no-underline!';
 const LINK_CLASS = `${CONTROL_CLASS} hover:bg-translatewp-selection! `
 	+ 'hover:text-translatewp-primary! focus-visible:bg-translatewp-selection! '
-	+ 'focus-visible:text-translatewp-primary! focus-visible:outline-2 '
-	+ 'focus-visible:outline-translatewp-primary focus-visible:-outline-offset-2 '
-	+ 'focus-visible:shadow-none! aria-[current=page]:text-translatewp-primary! '
+	+ 'focus-visible:text-translatewp-primary! focus:outline-2! '
+	+ 'focus:outline-translatewp-primary! focus:-outline-offset-2! '
+	+ 'focus:shadow-none! aria-[current=page]:text-translatewp-primary! '
 	+ 'aria-[current=location]:bg-[#edf2ff]! aria-[current=location]:text-translatewp-primary! '
 	+ 'aria-[current=page]:only:bg-[#edf2ff]!';
 const PAGE_ICONS = {
