@@ -101,8 +101,9 @@ export const TranslationsContext = () =>
     const suggestions = scanState.phase === 'done' ? scanState.lexiconSuggestions : [];
     const [omittedTerms, setOmittedTerms] = useState<string[]>([]);
     const suggestionId = useId();
+    const [showAllSuggestions, setShowAllSuggestions] = useState(false);
     const suggestionKey = JSON.stringify(suggestions.map(suggestion => suggestion.term));
-    useEffect(() => { setOmittedTerms([]); }, [suggestionKey]);
+    useEffect(() => { setOmittedTerms([]); setShowAllSuggestions(false); }, [suggestionKey]);
     const selectedTerms = suggestions.filter(suggestion => !omittedTerms.includes(suggestion.term)).map(suggestion => suggestion.term);
     const applyLexicon = useMutation({
         mutationFn: applyScanLexicon,
@@ -222,17 +223,18 @@ export const TranslationsContext = () =>
                             {__('Nothing is added until you choose. Unchecked terms are dismissed.', 'translate')}
                         </p>
                         <ul
-                            className={`m-0! list-none border-y border-translatewp-border p-0! ${suggestions.length > 8 ? 'max-h-80 overflow-y-auto overscroll-contain' : ''}`}
+                            id={`${suggestionId}-list`}
+                            className={`m-0! list-none border-y border-translatewp-border p-0! ${suggestions.length > 8 && !showAllSuggestions ? 'max-h-80 overflow-y-auto overscroll-contain' : ''}`}
                             aria-label={__('Suggested Lexicon terms', 'translate')}
                         >
                             {suggestions.map((suggestion, index) => (
-                                <li key={suggestion.term} className="m-0! grid grid-cols-[20px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 border-b border-translatewp-border px-1 py-3 last:border-b-0 md:grid-cols-[20px_minmax(8rem,2fr)_minmax(0,3fr)]">
+                                <li key={suggestion.term} className="m-0! grid grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 border-b border-translatewp-border px-1 py-3 last:border-b-0 min-[783px]:grid-cols-[20px_minmax(8rem,2fr)_minmax(0,3fr)]">
                                     <input
                                         id={`${suggestionId}-term-${index}`}
                                         type="checkbox"
                                         aria-labelledby={`${suggestionId}-label-${index}`}
                                         aria-describedby={`${suggestionId}-reason-${index}`}
-                                        className="m-0! mt-0.5! h-4! w-4! cursor-pointer"
+                                        className="m-0! mt-0.5! cursor-pointer"
                                         checked={!omittedTerms.includes(suggestion.term)}
                                         disabled={applyLexicon.isPending}
                                         onChange={event =>
@@ -246,12 +248,26 @@ export const TranslationsContext = () =>
                                     <label id={`${suggestionId}-label-${index}`} htmlFor={`${suggestionId}-term-${index}`} className="m-0 text-sm font-medium text-translatewp-neutral! cursor-pointer break-words">
                                         {suggestion.term}
                                     </label>
-                                    <p id={`${suggestionId}-reason-${index}`} className="col-start-2 m-0 text-sm text-translatewp-muted! break-words md:col-start-auto">
+                                    <p id={`${suggestionId}-reason-${index}`} className="col-start-2 m-0 text-sm text-translatewp-muted! break-words min-[783px]:col-start-auto">
                                         {suggestion.description}
                                     </p>
                                 </li>
                             ))}
                         </ul>
+                        {suggestions.length > 8 && (
+                            <button
+                                type="button"
+                                className="min-h-9 w-fit border-0 bg-transparent p-0 text-sm text-translatewp-primary! underline cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2"
+                                aria-controls={`${suggestionId}-list`}
+                                aria-expanded={showAllSuggestions}
+                                onClick={() => setShowAllSuggestions(previous => !previous)}
+                            >
+                                {showAllSuggestions ? __('Show fewer terms', 'translate') : sprintf(
+                                    /* translators: %d: total number of suggested terms. */
+                                    __('Show all %d terms', 'translate'), suggestions.length
+                                )}
+                            </button>
+                        )}
                         <div className="flex flex-wrap items-center gap-3">
                             <Button
                                 variant="primary"
