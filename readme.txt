@@ -5,7 +5,7 @@ Tags: translation, multilingual, language switcher, localization, ai translation
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.0.3
+Stable tag: 1.1.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -149,6 +149,10 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 == Upgrade Notice ==
 
+= 1.1.0 =
+
+Refreshed settings, adjustable switcher text size and smoother language changes. Includes clearer connection errors, progress notices that follow visible text, and improved first visits to translated shop and checkout pages.
+
 = 1.0.3 =
 
 Lexicon entries are no longer reachable from public pages or WordPress's public routes. Clear any external CDN or edge page cache after updating; TranslateWP clears recognized WordPress page caches once.
@@ -166,6 +170,27 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 == Changelog ==
+
+= 1.1.0 =
+
+* Refresh settings navigation with a sidebar, clearer page headings and improved screen reader labels.
+* Make more admin text available for translation and add Settings, Docs and Support links on the Plugins page.
+* Add a switcher text size setting from 10 to 32 px, with the existing 14 px default.
+* Keep original text readable with a subtle fade while translations load, including over images.
+* Make translation progress notices follow pending text in view and clear when that text finishes.
+* Keep a selected language across pages during the same visit, including when Remember language is off.
+* Start the newest language choice while earlier translations are still loading, and clear loading states after cancelled, refused or timed-out requests.
+* Fix language selection on pages with multiple switchers and prevent an empty Fancybox lightbox when opening a language list.
+* Scale flags with the switcher icon size setting and correct the South Ndebele language name.
+* Hide the floating switcher in supported page-builder editing canvases while keeping it available in normal page previews and the Customizer.
+* Show connection errors inside setup and the connection settings, with links to resolve account conflicts, contact support or try again.
+* Clarify setup labels, singular and plural language counts, usage wording and content option descriptions.
+* Use consistent, quieter Pro tags and group related writing settings without overlapping their descriptions.
+* Explain access for AI answer services such as ChatGPT and Perplexity in plain language.
+* Reuse saved term suggestions after activating Pro without repeating the original scan or overwriting edited site context. New scans can suggest terms from additional pages in the background.
+* Exclude Query Monitor and Debug Bar panels from translation requests and usage.
+* Improve first visits to shop, cart and checkout pages, retain accepted translations when some requests must wait, and retry the remaining work within the available time.
+* Keep supported formatting-only number and date changes out of translation usage.
 
 = 1.0.3 =
 
