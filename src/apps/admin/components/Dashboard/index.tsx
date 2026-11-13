@@ -1,5 +1,5 @@
+import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import { useQuery } from "@tanstack/react-query";
-import { Spinner } from "@wordpress/components";
 import { __, sprintf } from "@wordpress/i18n";
 
 import { type DashboardMetrics } from "@/shared/api/admin";
@@ -41,6 +41,7 @@ export const Dashboard = () =>
     const { data, isLoading, isError } = useQuery(getDashboardMetricsQueryOptions());
     const { data: connectStatus, isPending: connectStatusPending } = useQuery(getConnectStatusQueryOptions());
     const connected = connectStatus?.connected === true;
+    const liveStatus = useTranslationReadiness(!isLoading);
     // The install card owns the install and activate states; the
     // plain Pro status stays for the update and payment timeline states.
     const proCardShown = pendingProAction(connectStatus) !== null;
@@ -50,7 +51,7 @@ export const Dashboard = () =>
             <PageHeader
                 title={__('Dashboard', 'translate')}
                 description={connected && <ConnectionStatusText />}
-                actions={connected && <OverviewNextAction />}
+                actions={connected && <OverviewNextAction liveStatus={liveStatus} />}
             />
 
             <PageBody>
@@ -76,9 +77,9 @@ export const Dashboard = () =>
                 )}
 
                 {isLoading && (
-                    <div className="flex items-center justify-center p-16">
-                        <Spinner />
-                    </div>
+                    <p className="m-0 text-sm text-translatewp-muted" role="status">
+                        {__('Loading translation figures…', 'translate')}
+                    </p>
                 )}
 
                 {(isError || (!isLoading && !data)) && (
@@ -106,7 +107,7 @@ export const Dashboard = () =>
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                         <LanguagesCard />
                         <TranslationCard />
-                        <IndexingSummary />
+                        <IndexingSummary liveStatus={liveStatus} />
                     </div>
                 </Section>
             </PageBody>

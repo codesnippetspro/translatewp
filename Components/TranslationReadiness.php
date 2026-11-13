@@ -102,7 +102,7 @@ class TranslationReadiness {
 		return false;
 	}
 
-	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null ): array {
+	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null, ?ReadinessBudget $work_budget = null ): array {
 		$by_language = [];
 		$hash_rows = [];
 		$legacy_rows = [];
@@ -191,10 +191,17 @@ class TranslationReadiness {
 			$index = ( $index + ( $pass > 0 ? 1 : 0 ) ) % count( $batches );
 			$batch = $batches[ $index ];
 			$language = $batch['language'];
+			$timeout = null === $work_budget ? SiteRequests::DEFAULT_TIMEOUT_SECONDS : $work_budget->remaining_seconds();
+			if ( $timeout <= 0 ) {
+				return $paused;
+			}
 			$items = null === $lookup
-			? TranslationStore::remote_lookup_result( $language, array_keys( $batch['groups'] ) )
+			? TranslationStore::remote_lookup_result( $language, array_keys( $batch['groups'] ), $timeout )
 			: $lookup( $language, array_keys( $batch['groups'] ) );
 			if ( is_wp_error( $items ) ) {
+				if ( null !== $work_budget && $work_budget->remaining_seconds() <= 0 ) {
+					return $paused;
+				}
 				$data = (array) $items->get_error_data();
 				if ( 429 === (int) ( $data['status'] ?? 0 ) ) {
 					// A refused look-up says nothing about the cache: keep what is

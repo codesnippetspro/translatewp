@@ -51,6 +51,16 @@ describe('shared live readiness', () => {
         await act(async () => { root.render(<QueryClientProvider client={client}><Probe /></QueryClientProvider>); });
     };
 
+    it('starts no request while disabled and one request when enabled even if it remains pending', async () => {
+        (apiFetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
+        const Probe = ({ enabled }: { enabled: boolean }) => { useTranslationReadiness(enabled); return null; };
+        root = createRoot(document.createElement('div'));
+        await act(async () => { root.render(<QueryClientProvider client={client}><Probe enabled={false} /></QueryClientProvider>); });
+        expect(apiFetch).not.toHaveBeenCalled();
+        await act(async () => { root.render(<QueryClientProvider client={client}><Probe enabled /></QueryClientProvider>); });
+        expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
     it('reconciles SSE readiness immediately into all three projections', async () => {
         await mount();
         expect(FakeSource.instances).toHaveLength(1);

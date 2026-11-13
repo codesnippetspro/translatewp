@@ -27,6 +27,9 @@ use TranslateWP\Components\TranslationUrl;
  * never parses DOM.
  */
 class Indexer {
+	public const JOB_POLL_CURSOR_OPTION = 'translatewp_job_poll_cursor';
+	private const TERMINAL_JOB_OUTCOMES = [ 'done', 'cancelled', 'failed', 'expired', 'unknown' ];
+
 
 	public const DRAIN_HOOK = 'translatewp_index_queue_drain';
 
@@ -723,8 +726,8 @@ class Indexer {
 	 * @param int   $row_id Queue row whose job is checked.
 	 * @param array $known  Job states already read during one reconcile pass.
 	 */
-	public function job_finished_for_row( int $row_id, array &$known ): bool {
-		return in_array( $this->job_outcome_for_row( $row_id, $known ), [ 'done', 'cancelled', 'unknown' ], true );
+	public function job_finished_for_row( int $row_id, array &$known, bool $poll = true ): bool {
+		return in_array( $this->job_outcome_for_row( $row_id, $known, $poll ), self::TERMINAL_JOB_OUTCOMES, true );
 	}
 
 	/**
@@ -732,22 +735,62 @@ class Indexer {
 	 * 'unknown' (the service no longer has it, or none was recorded) or
 	 * 'open'. One status call per job per pass through $known.
 	 */
-	public function job_outcome_for_row( int $row_id, array &$known ): string {
+	public function job_outcome_for_row( int $row_id, array &$known, bool $poll = true ): string {
 		$job_id = $this->queue->job_id( $row_id );
 		if ( '' === $job_id ) {
-			return 'unknown';
+			return $this->queue->job_outcome( $row_id );
 		}
-		if ( ! isset( $known[ $job_id ] ) ) {
-			$status = SiteRequests::get( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/status' );
-			if ( is_wp_error( $status ) ) {
-				$data             = (array) $status->get_error_data();
-				$known[ $job_id ] = 404 === (int) ( $data['status'] ?? 0 ) ? 'unknown' : 'open';
-			} else {
-				$state            = (string) ( $status['state'] ?? '' );
-				$known[ $job_id ] = in_array( $state, [ 'done', 'cancelled' ], true ) ? $state : 'open';
+		if ( ! isset( $known[ $job_id ] ) && $poll ) {
+			$known[ $job_id ] = $this->read_job_outcome( $job_id, \TranslateWP\Components\SiteRequests::DEFAULT_TIMEOUT_SECONDS );
+		}
+		$outcome = $known[ $job_id ] ?? 'open';
+		return 'unavailable' === $outcome ? 'open' : $outcome;
+	}
+
+	private function read_job_outcome( string $job_id, float $timeout ): string {
+		$status = SiteRequests::get( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/status', [], $timeout );
+		if ( is_wp_error( $status ) ) {
+			$data = (array) $status->get_error_data();
+			$state = in_array( (int) ( $data['status'] ?? 0 ), [ 404, 410 ], true ) ? 'unknown' : 'unavailable';
+		} else {
+			$state = (string) ( $status['state'] ?? '' );
+			$state = in_array( $state, [ 'finished', 'completed' ], true ) ? 'done' : ( 'canceled' === $state ? 'cancelled' : $state );
+			$state = 'open' === $state || in_array( $state, self::TERMINAL_JOB_OUTCOMES, true ) ? $state : 'unavailable';
+		}
+		if ( in_array( $state, self::TERMINAL_JOB_OUTCOMES, true ) ) {
+			$this->queue->finish_job( $job_id, $state );
+		}
+		return $state;
+	}
+
+	public function poll_remembered_jobs( \TranslateWP\Components\ReadinessBudget $budget ): array {
+		$groups = $this->queue->remembered_jobs();
+		$pending = get_option( \TranslateWP\Components\Migrations::JOB_CLEANUP_OPTION, false );
+		$ids = array_values( array_unique( array_merge( is_array( $pending ) ? $pending : [], array_keys( $groups ) ) ) );
+		$known = [];
+		$last = array_search( get_option( self::JOB_POLL_CURSOR_OPTION, '' ), $ids, true );
+		$job_count = count( $ids );
+		$start = false === $last ? 0 : ( $last + 1 ) % max( 1, $job_count );
+		for ( $offset = 0; $offset < $job_count; ++$offset ) {
+			$id = $ids[ ( $start + $offset ) % $job_count ];
+			if ( ! isset( $groups[ $id ] ) ) {
+				$pending = is_array( $pending ) ? array_values( array_diff( $pending, [ $id ] ) ) : $pending;
+				continue;
+			}
+			$timeout = $budget->claim_status_timeout();
+			if ( $timeout <= 0 ) {
+				break;
+			}
+			$known[ $id ] = $this->read_job_outcome( $id, $timeout );
+			update_option( self::JOB_POLL_CURSOR_OPTION, $id, false );
+			if ( 'unavailable' !== $known[ $id ] && is_array( $pending ) ) {
+				$pending = array_values( array_diff( $pending, [ $id ] ) );
 			}
 		}
-		return $known[ $job_id ];
+		if ( is_array( $pending ) ) {
+			update_option( \TranslateWP\Components\Migrations::JOB_CLEANUP_OPTION, $pending, false );
+		}
+		return $known;
 	}
 
 	public function reset_cold_retries( array $ids ): void {

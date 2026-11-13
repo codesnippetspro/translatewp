@@ -53,6 +53,7 @@ class IndexQueue {
 	private const META_COLD_EXHAUSTED = '_twp_cold_exhausted';
 	private const META_DEAD_RETRIES = '_twp_dead_retries';
 	private const META_JOB_ID = '_twp_job_id';
+	private const META_JOB_OUTCOME = '_twp_job_outcome';
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
 	// A read row re-queued because its page changed; its next reading is translated.
@@ -1435,11 +1436,35 @@ class IndexQueue {
 	}
 
 	public function remember_job( int $id, string $job_id ): void {
+		delete_post_meta( $id, self::META_JOB_OUTCOME );
 		update_post_meta( $id, self::META_JOB_ID, $job_id );
 	}
 
 	public function job_id( int $id ): string {
 		return (string) get_post_meta( $id, self::META_JOB_ID, true );
+	}
+
+	public function remembered_jobs(): array {
+		$jobs = [];
+		foreach ( $this->all_row_ids() as $id ) {
+			$job_id = $this->job_id( $id );
+			if ( '' !== $job_id ) {
+				$jobs[ $job_id ][] = $id;
+			}
+		}
+		return $jobs;
+	}
+
+	public function finish_job( string $job_id, string $outcome ): void {
+		foreach ( $this->remembered_jobs()[ $job_id ] ?? [] as $id ) {
+			update_post_meta( $id, self::META_JOB_OUTCOME, $outcome );
+			delete_post_meta( $id, self::META_JOB_ID, $job_id );
+		}
+	}
+
+	public function job_outcome( int $id ): string {
+		$outcome = (string) get_post_meta( $id, self::META_JOB_OUTCOME, true );
+		return '' !== $outcome ? $outcome : 'unknown';
 	}
 
 	public function reset_cold_retries( array $ids ): void {
