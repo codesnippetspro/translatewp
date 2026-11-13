@@ -172,7 +172,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Clarify setup labels, singular and plural language counts, usage wording and content option descriptions.
 * Use consistent, quieter Pro tags and group related writing settings without overlapping their descriptions.
 * Explain access for AI answer services such as ChatGPT and Perplexity in plain language.
-* Reuse saved term suggestions after activating Pro without repeating the original scan or overwriting edited site context. New scans can suggest terms from additional pages in the background.
+* Reuse saved term suggestions after activating Pro without repeating the original scan or overwriting edited site context. After activating Pro, terms from pages the earlier scan did not read are suggested in the background.
 * Exclude Query Monitor and Debug Bar panels from translation requests and usage.
 * Improve first visits to shop, cart and checkout pages, retain accepted translations when some requests must wait, and retry the remaining work within the available time.
 * Prices and numbers that only need reformatting no longer count toward the limit for new texts per visitor.
