@@ -19,7 +19,7 @@ export const Table = ({ className, children, containerProps, header, ...props }:
 	return (
 		<div
 			className={joinClassNames(
-				'max-w-full overflow-x-auto rounded-lg border border-translatewp-border',
+				'relative max-w-full overflow-x-auto rounded-lg border border-translatewp-border',
 				containerClassName
 			)}
 			{...containerAttributes}

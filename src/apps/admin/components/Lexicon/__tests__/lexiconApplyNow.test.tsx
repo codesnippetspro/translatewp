@@ -89,7 +89,7 @@ describe('Lexicon retranslate action', () =>
         mockStaleResponse = { lexicon: {}, localizer: {} };
         jest.mocked(deleteWordPressLexiconTerm).mockResolvedValue({ id: 7, success: true });
         await renderLexicon();
-        const remove = document.querySelector<HTMLButtonElement>('button[aria-label="Delete lexicon term"]')!;
+        const remove = document.querySelector<HTMLButtonElement>('button[aria-label="Delete Term 7"]')!;
         expect(remove).not.toBeNull();
         await act(async () => { remove.click(); });
         await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
