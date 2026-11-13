@@ -83,37 +83,39 @@ const CandidateRow = ({ candidate, dismissed, selected, onSelect, onAct, busy }:
 
     return (
         <li className={`${suggestionRowClass} @container flex flex-col gap-2`} data-candidate={candidate.id}>
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 @min-[700px]:grid-cols-[minmax(9rem,1fr)_minmax(12rem,2fr)_auto_auto]">
-                <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
-                    {onSelect && <SuggestionCheckbox id={checkboxId} labelId={`${checkboxId}-label`}
-                        reasonId={`${checkboxId}-reason`} checked={!!selected} disabled={busy} onChange={onSelect} />}
-                    {candidate.evidence.length > 0 && <Button
-                        variant="tertiary"
-                        className="h-7! min-w-7! shrink-0 rounded-sm! p-1!"
-                        aria-label={sprintf(
-                            /* translators: %s: suggested term. */
-                            __('Details for %s', 'translate'), candidate.sourceText
-                        )}
-                        aria-expanded={detailsOpen}
-                        aria-controls={detailsId}
-                        onClick={() => setDetailsOpen(value => !value)}
-                    >
-                        <ChevronRight className={`h-4 w-4 ${detailsOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
-                        <span className="screen-reader-text">{__('Details', 'translate')}</span>
-                    </Button>}
-                    <label id={`${checkboxId}-label`} htmlFor={onSelect ? checkboxId : undefined} className={`${suggestionTermClass} min-w-0 font-semibold!`}>{candidate.sourceText}</label>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 @min-[700px]:grid-cols-[minmax(9rem,1fr)_minmax(12rem,2fr)_5rem_5rem]">
+                <div className={`${candidate.siteOnly ? 'col-start-1 row-start-1' : 'col-span-2'} flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 @min-[700px]:contents`}>
+                    <div className="col-start-1 row-start-1 flex min-w-0 max-w-full shrink-0 items-center gap-2">
+                        {onSelect && <SuggestionCheckbox id={checkboxId} labelId={`${checkboxId}-label`}
+                            reasonId={`${checkboxId}-reason`} checked={!!selected} disabled={busy} onChange={onSelect} />}
+                        {candidate.evidence.length > 0 && <Button
+                            variant="tertiary"
+                            className="h-7! min-w-7! shrink-0 rounded-sm! p-1!"
+                            aria-label={sprintf(
+                                /* translators: %s: suggested term. */
+                                __('Details for %s', 'translate'), candidate.sourceText
+                            )}
+                            aria-expanded={detailsOpen}
+                            aria-controls={detailsId}
+                            onClick={() => setDetailsOpen(value => !value)}
+                        >
+                            <ChevronRight className={`h-4 w-4 ${detailsOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+                            <span className="screen-reader-text">{__('Details', 'translate')}</span>
+                        </Button>}
+                        <label id={`${checkboxId}-label`} htmlFor={onSelect ? checkboxId : undefined} title={candidate.sourceText} className={`${suggestionTermClass} min-w-0 truncate break-normal! font-semibold!`}>{candidate.sourceText}</label>
+                    </div>
+                    {Number.isFinite(candidate.confidence) && <span className="ms-auto col-start-2 row-start-1 flex h-8 shrink-0 items-center rounded-sm border border-translatewp-border px-2 text-xs font-medium text-translatewp-muted @min-[700px]:col-start-3"
+                        title={__('How sure the review is that this term needs your decision', 'translate')}>
+                        {
+                            /* translators: %s: confidence percentage, including the percent sign. */
+                            sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
+                        }
+                    </span>}
                 </div>
                 <p id={`${checkboxId}-reason`} className={`${suggestionReasonClass} col-span-2 row-start-2 ${onSelect ? candidate.evidence.length > 0 ? 'ps-16' : 'ps-8' : ''} @min-[700px]:ps-0 break-normal! @min-[700px]:col-span-1 @min-[700px]:col-start-2 @min-[700px]:row-start-1`}>
                     {candidateReason(candidate.reason)}
                 </p>
-                {Number.isFinite(candidate.confidence) && <span className="col-start-2 row-start-1 flex h-8 shrink-0 items-center rounded-sm border border-translatewp-border px-2 text-xs font-medium text-translatewp-muted @min-[700px]:col-start-3"
-                    title={__('How sure the review is that this term needs your decision', 'translate')}>
-                    {
-                        /* translators: %s: confidence percentage, including the percent sign. */
-                        sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
-                    }
-                </span>}
-                <div className="col-span-2 row-start-3 flex flex-wrap items-center gap-2 @min-[700px]:col-span-1 @min-[700px]:col-start-4 @min-[700px]:row-start-1">
+                <div className={`${candidate.siteOnly ? 'col-start-2 row-start-1 self-start' : 'col-span-2 row-start-3'} flex flex-wrap justify-end items-center gap-2 @min-[700px]:col-span-1 @min-[700px]:col-start-4 @min-[700px]:row-start-1`}>
                     {dismissed ? (
                         <>
                             <Button variant="secondary" className="h-8! rounded-sm! px-3! text-sm!" disabled={busy} onClick={() => onAct('restore')}>{__('Restore suggestion', 'translate')}</Button>
@@ -124,12 +126,18 @@ const CandidateRow = ({ candidate, dismissed, selected, onSelect, onAct, busy }:
                                 }</Button>
                             ))}
                         </>
+                    ) : candidate.siteOnly ? (
+                        <Button variant="tertiary" className="h-6! min-h-0! rounded-sm! px-1! py-0! text-xs! font-normal! text-translatewp-muted!"
+                            disabled={busy} aria-label={sprintf(
+                                /* translators: %s: suggested term. */
+                                __('Dismiss %s', 'translate'), candidate.sourceText
+                            )} onClick={() => onAct('skip')}>{__('Dismiss', 'translate')}</Button>
                     ) : (
                         <>
                             <Dropdown
                                 popoverProps={{ placement: 'bottom-end' }}
                                 renderToggle={({ isOpen, onToggle }) => (
-                                    <Button variant="tertiary" className="h-8! rounded-sm! px-2! text-sm!" disabled={busy}
+                                    <Button variant="tertiary" className="h-6! min-h-0! rounded-sm! px-1! py-0! text-xs! font-normal! text-translatewp-muted!" disabled={busy}
                                         aria-label={sprintf(
                                             /* translators: %s: suggested term. */
                                             __('Dismiss %s', 'translate'), candidate.sourceText
@@ -235,7 +243,7 @@ const CandidateList = ({ candidates, dismissed, busy, onAct, onSelect, selected 
     return (
         <div className="flex min-w-0 flex-col gap-3">
             <ol id={resultsId} tabIndex={-1} aria-busy={busy}
-                className={suggestionListClass}>
+                className={`${suggestionListClass} focus:outline-none! focus:shadow-none!`}>
                 {candidates.slice(start, start + CANDIDATES_PER_PAGE).map(candidate => (
                     <CandidateRow
                         key={candidate.id}
