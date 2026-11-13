@@ -34,6 +34,10 @@ namespace TranslateWP\Functionality\Endpoints {
 		return \get_post_types( $args, $output );
 	}
 	function wp_insert_post( array $post, $wp_error = false ) {
+		if ( ! empty( $GLOBALS['scan_test_insert_results'] ) ) {
+			$result = array_shift( $GLOBALS['scan_test_insert_results'] );
+			if ( null !== $result ) return $result;
+		}
 		return $GLOBALS['scan_test_insert_result'] ?? \wp_insert_post( $post, $wp_error );
 	}
 	function get_term_by( $field, $value, $taxonomy ) {
@@ -67,7 +71,7 @@ namespace TranslateWP\Components {
 
 namespace {
 	function scan_test_reset_boundaries(): void {
-		foreach ( [ 'scan_test_post_type_queries', 'scan_test_term_inserts', 'scan_test_term_assignments', 'scan_test_spawn_locks', 'scan_test_sample_progress' ] as $key ) {
+		foreach ( [ 'scan_test_post_type_queries', 'scan_test_term_inserts', 'scan_test_term_assignments', 'scan_test_spawn_locks', 'scan_test_sample_progress', 'scan_test_insert_results' ] as $key ) {
 			$GLOBALS[$key] = [];
 		}
 		foreach ( [ 'scan_test_insert_result', 'scan_test_term_result', 'scan_test_term_insert_result', 'scan_test_post_query' ] as $key ) {

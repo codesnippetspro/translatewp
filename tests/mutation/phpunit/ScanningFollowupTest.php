@@ -85,8 +85,10 @@ final class ScanningFollowupTest extends TestCase {
 		self::assertNotFalse( wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) );
 		Options::update( 'translations.context.pro_followup', null );
 		$GLOBALS['wp_test_scheduled'] = [];
+		$spawns = $GLOBALS['wp_test_spawn_cron'];
 		$this->scanner->schedule_pro_followup();
 		self::assertSame( 'failed', $this->state() );
+		self::assertSame( $spawns, $GLOBALS['wp_test_spawn_cron'] );
 	}
 
 	public function test_busy_lock_defers_the_run_and_does_not_consume_a_retry(): void {

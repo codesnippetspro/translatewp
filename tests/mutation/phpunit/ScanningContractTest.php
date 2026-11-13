@@ -424,4 +424,14 @@ final class ScanningContractTest extends TestCase {
 		foreach ( $GLOBALS['scan_test_queries'] as $query ) self::assertSame( -1, $query['posts_per_page'] );
 	}
 
+	public function test_a_failed_lexicon_insert_does_not_drop_later_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ false, new WP_Error( 'insert_error', 'Fixture error' ) ] as $index => $error ) {
+			$GLOBALS['scan_test_insert_results'] = [ $error, null ];
+			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Failed' . $index ], [ 'term' => 'Kept' . $index ] ] ] );
+			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertSame( 'Kept' . $index, end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
+		}
+	}
+
 }

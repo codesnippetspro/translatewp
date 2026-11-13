@@ -9,7 +9,7 @@ restarted after 25 mutant runs to bound its heap and discard cross-mutant state.
 ```sh
 CI=true npm run test:mutation:cookie
 CI=true npm run test:mutation:viewport
-XDEBUG_MODE=coverage vendor/bin/infection --configuration=infection.json --filter=Functionality/Endpoints/Scanning.php --threads=1
+XDEBUG_MODE=coverage vendor/bin/infection Functionality/Endpoints/Scanning.php --configuration=infection.json --with-uncovered --threads=1
 ```
 
 The cookie profile mutates the cookie-clear and persistence functions. The
@@ -18,6 +18,9 @@ cache lookup, miss retry and bounded-task paths. Its nine related suites are
 listed explicitly in the profile; kills are counted only from those suites.
 `stryker.viewport.full.config.cjs` retains the complete related-test selection
 for follow-up verification against the same production ranges.
+
+Always retain `--with-uncovered`: Infection 0.34 defaults to mutating covered code only.
+The complete mutation population must include unexecuted branches as uncovered.
 
 Infection executes the real `Scanning` class in process through PHPUnit. Its
 WordPress fixture replaces external storage, scheduling and HTTP boundaries;
