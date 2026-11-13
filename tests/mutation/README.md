@@ -14,7 +14,7 @@ XDEBUG_MODE=coverage vendor/bin/infection Functionality/Endpoints/Scanning.php -
 
 The cookie profile mutates the cookie-clear and persistence functions. The
 viewport profile mutates the notice, session cancellation, loading cleanup,
-cache lookup, miss retry and bounded-task paths. Its nine related suites are
+cache lookup, miss retry and bounded-task paths. Its ten related suites are
 listed explicitly in the profile; kills are counted only from those suites.
 `stryker.viewport.full.config.cjs` retains the complete related-test selection
 for follow-up verification against the same production ranges.

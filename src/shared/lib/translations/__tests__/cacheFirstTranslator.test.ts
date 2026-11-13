@@ -756,30 +756,24 @@ describe('CacheFirstTranslator', () =>
             throw new Error(`Unexpected fetch: ${url}`);
         }) as unknown as typeof fetch;
 
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-        try
-        {
-            const translator = new CacheFirstTranslator({
-                sourceLang: 'en', targetLang: 'es',
-                store: new HydrationStore(new InMemoryBackend()),
-                fetchImpl: impl,
-                delay: async () => {},
-            });
-            translator._createCacheClient = () => new TranslationCacheClient({
-                sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, fetchImpl: impl,
-            });
+        const warnSpy = console.warn as jest.Mock;
+        const translator = new CacheFirstTranslator({
+            sourceLang: 'en', targetLang: 'es',
+            store: new HydrationStore(new InMemoryBackend()),
+            fetchImpl: impl,
+            delay: async () => {},
+        });
+        translator._createCacheClient = () => new TranslationCacheClient({
+            sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, fetchImpl: impl,
+        });
 
-            const result = await translator.translateBatch(new DOMExtractor().extract(document.body));
+        const result = await translator.translateBatch(new DOMExtractor().extract(document.body));
 
-            assert(result.failures.length === 0, `a skipped>0 200 must still be treated as accepted, got ${JSON.stringify(result.failures)}`);
-            const skippedWarnings = warnSpy.mock.calls.filter(call => String(call[0]).includes('skipped'));
-            assert(skippedWarnings.length === 1, `expected exactly one skipped warning, got ${skippedWarnings.length}`);
-            assert(String(skippedWarnings[0][0]).includes('1'), 'warning must name the skipped count');
-        }
-        finally
-        {
-            warnSpy.mockRestore();
-        }
+        assert(result.failures.length === 0, `a skipped>0 200 must still be treated as accepted, got ${JSON.stringify(result.failures)}`);
+        const skippedWarnings = warnSpy.mock.calls.filter(call => String(call[0]).includes('skipped'));
+        assert(skippedWarnings.length === 1, `expected exactly one skipped warning, got ${skippedWarnings.length}`);
+        assert(String(skippedWarnings[0][0]).includes('1'), 'warning must name the skipped count');
+        expect(console).toHaveWarnedWith('[TranslateWP] Miss report skipped 1 invalid item(s); the rest were accepted.');
     });
 
     it('keeps originals and stops polling the moment the page is aborted', async () =>
@@ -1240,6 +1234,7 @@ it('never counts an unmatched marker fallback as a served DOM target', async () 
     await engine.runEntries(entries, { onEntryWritten: ({ entry }) => applied.push(entry.value) });
     expect(document.querySelector('strong')!.textContent).toBe('world');
     expect(applied).toEqual(['Bonjour ']);
+    expect(console).toHaveWarnedWith('[Translator] Translation apply mismatch for group grp_00000001 (markers 1, canonical 2, matchedById 1, matchedByPosition 0, unmatchedCanonical 1, applied 1, unmatched 1).');
 });
 
 
@@ -1304,6 +1299,7 @@ describe('bounded miss report responses', () =>
             expect(waits).toEqual(Array(8).fill(1000));
         }
         finally { clock.mockRestore(); }
+        expect(console).toHaveWarnedWith('[TranslateWP] Miss report could not retry within the available window; original text kept.');
     });
 
     const response = (status: number, body: unknown = {}, retryAfter: string | null = null) => ({
@@ -1327,6 +1323,7 @@ describe('bounded miss report responses', () =>
         await expect(result).resolves.toEqual({ outcome: 'rejected' });
         expect(post).toHaveBeenCalledTimes(1);
         expect(delay).not.toHaveBeenCalled();
+        expect(console).toHaveWarnedWith(`[TranslateWP] Miss report ${status === 400 || status === 409 ? 'rejected' : 'failed'} (${status}); original text kept.`);
     });
 
     it.each([500, 503])('retries HTTP %s only twice at one and two seconds', async status =>
@@ -1336,6 +1333,7 @@ describe('bounded miss report responses', () =>
         await expect(result).resolves.toEqual({ outcome: 'rejected' });
         expect(post).toHaveBeenCalledTimes(3);
         expect(delay.mock.calls).toEqual([[1000], [2000]]);
+        expect(console).toHaveWarnedWith(`[TranslateWP] Miss report failed (${status}); original text kept.`);
     });
 
     it.each([
@@ -1366,6 +1364,7 @@ describe('bounded miss report responses', () =>
             expect(bounded.delay).not.toHaveBeenCalled();
         }
         finally { clock.mockRestore(); }
+        expect(console).toHaveWarnedWith('[TranslateWP] Miss report could not retry within the available window; original text kept.');
     });
 
     it('retries only refused hashes and retains the accepted subscription if a later post fails', async () =>
@@ -1465,6 +1464,78 @@ describe('bounded miss report responses', () =>
         await expect(result).resolves.toEqual({ outcome: 'accepted' });
         expect(post).toHaveBeenCalledTimes(1);
         expect(delay).not.toHaveBeenCalled();
+    });
+
+    it.each([[0, 20000], [75000, 15000]])('bounds a held miss post after a %s ms retry wait to %s ms', async (retryMs, boundMs) =>
+    {
+        jest.useFakeTimers();
+        const signals: AbortSignal[] = [];
+        const post = jest.fn((signal: AbortSignal) =>
+        {
+            signals.push(signal);
+            return new Promise<Response>(() => {});
+        });
+        if (retryMs) post.mockImplementationOnce(async () => response(429, {}, String(retryMs / 1000)));
+        const { result } = run(post, { delay: ms => new Promise(resolve => setTimeout(resolve, ms)) });
+        const rejected = jest.fn();
+        void result.catch(rejected);
+        try
+        {
+            await jest.advanceTimersByTimeAsync(retryMs);
+            expect(post).toHaveBeenCalledTimes(retryMs ? 2 : 1);
+            await jest.advanceTimersByTimeAsync(boundMs - 1);
+            expect(rejected).not.toHaveBeenCalled();
+            await jest.advanceTimersByTimeAsync(1);
+            expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'TimeoutError' }));
+            await expect(result).rejects.toHaveProperty('name', 'TimeoutError');
+            expect(signals.at(-1)?.aborted).toBe(true);
+            expect(jest.getTimerCount()).toBe(0);
+        }
+        finally { jest.useRealTimers(); }
+    });
+
+    it('does not post again when a delayed retry resumes exactly at its deadline', async () =>
+    {
+        jest.useFakeTimers();
+        try
+        {
+            const post = jest.fn().mockResolvedValueOnce(response(429, {}, '1')).mockResolvedValue(response(200));
+            const { result } = run(post, { delay: async () => { jest.setSystemTime(Date.now() + 90000); } });
+            await expect(result).resolves.toEqual({ outcome: 'rejected' });
+            expect(post).toHaveBeenCalledTimes(1);
+        }
+        finally { jest.useRealTimers(); }
+        expect(console).toHaveWarnedWith('[TranslateWP] Miss report could not retry within the available window; original text kept.');
+    });
+
+    it.each([new DOMException('Cancelled', 'AbortError'), null])('keeps the abort or admitted work after a later post rejects with %s', async error =>
+    {
+        const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+        const post = jest.fn().mockResolvedValueOnce(response(200, { acceptedHashes: ['first'], retryHashes: ['second'], retryAfter: 1, subscription })).mockRejectedValue(error);
+        const { result } = run(post);
+        if (error) await expect(result).rejects.toBe(error);
+        else await expect(result).resolves.toEqual({ outcome: 'accepted', acceptedHashes: ['first'], subscriptions: [{ ...subscription, hashes: ['first'] }] });
+        expect(post).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([undefined, null, 'first', {}, [null], [42]])('refuses malformed admitted-hash data without retrying %#', async acceptedHashes =>
+    {
+        const post = jest.fn().mockResolvedValue(response(200, { acceptedHashes, retryHashes: ['second'], retryAfter: 1 }));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'rejected' });
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).not.toHaveBeenCalled();
+    });
+
+    it('retains an earlier stream when a legacy retry accepts work without its own subscription', async () =>
+    {
+        const subscription = { url: API_BASE + '/v1/translation/cache/events?token=first', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+        const post = jest.fn().mockResolvedValueOnce(response(200, {
+            acceptedHashes: ['first'], retryHashes: ['second'], retryAfter: 1, subscription,
+        })).mockResolvedValueOnce(response(200));
+        const { result } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'accepted', acceptedHashes: ['first', 'second'], subscriptions: [{ ...subscription, hashes: ['first'] }] });
+        expect(post).toHaveBeenCalledTimes(2);
     });
 
 });
@@ -1600,6 +1671,7 @@ it('reports one exact forty-group refusal without an extra empty request', async
     expect(result.failures).toHaveLength(40);
     expect(refused).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(refused.mock.calls[0][1].body)).items).toHaveLength(40);
+    expect(console).toHaveWarnedWith('[TranslateWP] Miss report rejected (400); original text kept.');
 });
 
 it('keeps stream answers identical to the source confirmed for the next visit', async () =>
@@ -1703,7 +1775,7 @@ it('rejects an in-flight miss post immediately on page abort', async () =>
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 });
 
-it('keeps the first accepted stream when a later miss chunk fails', async () =>
+it.each([new Error('Offline'), null])('keeps the first accepted stream when a later miss chunk fails with %s', async error =>
 {
     document.body.innerHTML = Array.from({ length: 41 }, (_, index) => `<p>Paragraph ${index}</p>`).join('');
     const entries = new DOMExtractor().extract(document.body);
@@ -1712,7 +1784,7 @@ it('keeps the first accepted stream when a later miss chunk fails', async () =>
     expect(plan.groupsForCache).toHaveLength(41);
     jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
     const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
-    const fetchImpl = jest.fn().mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ subscription }) }).mockRejectedValue(new Error('Offline'));
+    const fetchImpl = jest.fn().mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ subscription }) }).mockRejectedValue(error);
     const eventClient = { deliver: jest.fn(async ({ hashes, onReady }: Parameters<TranslationEventClient['deliver']>[0]) =>
     {
         for (const hash of hashes)
@@ -1724,8 +1796,141 @@ it('keeps the first accepted stream when a later miss chunk fails', async () =>
     }) } as unknown as TranslationEventClient;
     const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, eventClient });
     const result = await translator._translateContextGroups(plan, cache);
+    expect(console).toHaveWarnedWith('[TranslateWP] Miss report failed; translations arrive on a later visit.', error);
     expect(result.translatedById.size).toBe(40);
     expect(result.failures).toEqual([{ groupId: plan.groupsForCache[40].group.id, error: 'miss_report_rejected' }]);
     expect(eventClient.deliver).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the miss wire method, JSON content type and neighbouring context', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const { impl } = createFetch([new Map()]);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, sampleOrigin: () => false, fetchImpl: impl });
+    const plan = await cache.prepare(entries);
+    expect(plan.groupsForCache.some(group => Boolean(group.group.neighbours))).toBe(true);
+    const post = jest.fn().mockResolvedValue({ ok: false, status: 400 });
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl: post });
+    translator._createCacheClient = () => cache;
+    await translator.translateBatch(entries);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls[0][0]).toBe(PROXY_BASE + '/miss');
+    const request = post.mock.calls[0][1];
+    expect(request).toMatchObject({ method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: expect.any(AbortSignal) });
+    expect(typeof request.body).toBe('string');
+    const items = JSON.parse(request.body).items;
+    for (const group of plan.groupsForCache)
+        if (group.group.neighbours) expect(items.find(item => item.groupId === group.group.id).neighbours).toEqual(group.group.neighbours);
+    expect(console).toHaveWarnedWith('[TranslateWP] Miss report rejected (400); original text kept.');
+});
+
+it('ignores an incomplete stream payload and serves that group through the origin fallback', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const [first, second] = plan.groupsForCache;
+    const firstPayload = first.markerPayload.replace('Hello world', 'Hola mundo');
+    const secondPayload = second.markerPayload.replace('Second paragraph', 'Segundo párrafo');
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const origin = jest.spyOn(cache, 'lookupOrigin').mockResolvedValue({ status: 'available', entries: new Map([[first.hash, firstPayload]]) });
+    const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const post = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ subscription }) });
+    const applied = jest.fn();
+    const eventClient = { deliver: jest.fn(async ({ onReady }: Parameters<TranslationEventClient['deliver']>[0]) =>
+    {
+        onReady(first.hash, 'Incomplete stream payload');
+        expect(applied).not.toHaveBeenCalled();
+        onReady(second.hash, secondPayload);
+        return 'complete' as const;
+    }) } as unknown as TranslationEventClient;
+    const backend = new InMemoryBackend();
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(backend), fetchImpl: post, eventClient, delay: async () => {} });
+    const result = await translator._translateContextGroups(plan, cache, { onEntryTranslated: applied });
+    expect(result.failures).toEqual([]);
+    expect([...result.translatedById.values()]).toEqual(expect.arrayContaining(['Hola mundo', 'Segundo párrafo']));
+    expect(result.translatedById.size).toBe(2);
+    expect(origin).toHaveBeenCalledTimes(1);
+    expect(backend.rows.get(first.hash)?.payload).toBe(firstPayload);
+    expect(applied).toHaveBeenCalledTimes(2);
+});
+
+it('settles a coalesced refusal without starting delivery or polling', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const origin = jest.spyOn(cache, 'lookupOrigin');
+    const fetchImpl = jest.fn();
+    const coalescer = new MissReportCoalescer({ fetchImpl });
+    jest.spyOn(coalescer, 'report').mockResolvedValue({ outcome: 'rejected' });
+    const eventClient = { deliver: jest.fn() } as unknown as TranslationEventClient;
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, eventClient, missCoalescer: coalescer });
+    await expect(translator._translateContextGroups(plan, cache)).resolves.toEqual({ translatedById: new Map(), failures: plan.groupsForCache.map(group => ({ groupId: group.group.id, error: 'miss_report_rejected' })) });
+    expect(eventClient.deliver).not.toHaveBeenCalled();
+    expect(origin).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('does not enqueue a shared miss when every group is already hydrated', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const backend = new InMemoryBackend();
+    for (const group of plan.groupsForCache)
+        backend.rows.set(group.hash, { payload: group.markerPayload.replace('Hello world', 'Hola mundo').replace('Second paragraph', 'Segundo párrafo'), lastUsed: Date.now() });
+    const fetchImpl = jest.fn().mockResolvedValue({ ok: true });
+    const coalescer = new MissReportCoalescer({ fetchImpl });
+    const report = jest.spyOn(coalescer, 'report').mockRejectedValue(new Error('Unexpected shared miss'));
+    const lookup = jest.spyOn(cache, 'lookup');
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(backend), fetchImpl, missCoalescer: coalescer });
+    const result = await translator._translateContextGroups(plan, cache);
+    expect(result.failures).toEqual([]);
+    expect([...result.translatedById.values()]).toEqual(['Hola mundo', 'Segundo párrafo']);
+    expect(report).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+});
+
+it('subscribes only to its own hashes while retaining a shared stream coverage list', async () =>
+{
+    document.body.innerHTML = '<p>Hello world</p>';
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const first = plan.groupsForCache[0];
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map() });
+    const fetchImpl = jest.fn();
+    const coalescer = new MissReportCoalescer({ fetchImpl });
+    const shared = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString(), hashes: [first.hash, 'another-requester-hash'] };
+    jest.spyOn(coalescer, 'report').mockResolvedValue({ outcome: 'accepted', subscriptions: [shared] });
+    const eventClient = { deliver: jest.fn(async ({ hashes, covered, onReady }: Parameters<TranslationEventClient['deliver']>[0]) =>
+    {
+        expect(hashes).toEqual([first.hash]);
+        expect(covered).toEqual(shared.hashes);
+        onReady(first.hash, first.markerPayload.replace('Hello world', 'Hola mundo'));
+        return 'complete' as const;
+    }) } as unknown as TranslationEventClient;
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl, missCoalescer: coalescer, eventClient });
+    const result = await translator._translateContextGroups(plan, cache);
+    expect(result.failures).toEqual([]);
+    expect([...result.translatedById.values()]).toEqual(['Hola mundo']);
+    expect(eventClient.deliver).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('stores translated lookup answers without the same-as-source prefix', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const backend = new InMemoryBackend();
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await cache.prepare(entries);
+    const translated = new Map(plan.groupsForCache.map(group => [group.hash, group.markerPayload.replace('Hello world', 'Hola mundo').replace('Second paragraph', 'Segundo párrafo')]));
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: translated });
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(backend), fetchImpl: jest.fn() });
+    const result = await translator._translateContextGroups(plan, cache);
+    expect(result.failures).toEqual([]);
+    for (const [hash, payload] of translated) expect(backend.rows.get(hash)?.payload).toBe(payload);
 });

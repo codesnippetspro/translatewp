@@ -1226,4 +1226,35 @@ describe('TranslationSession', () =>
         expect(progress).toHaveBeenLastCalledWith(0);
     });
 
+    it('does not restore old source over an attached theme edit when a held main switch is disposed', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        let started!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            options.onEntryTranslated?.(entries[0].withTranslation('Partial translation'));
+            started();
+            return new Promise(resolve => { release = () =>
+            {
+                const translated = entries.map(entry => entry.withTranslation('Late translation'));
+                translated.forEach(entry => options.onEntryTranslated?.(entry));
+                resolve({ translated, failures: [], totalGroups: 1 });
+            }; });
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        const result = session.switchTo('it');
+        void result.catch(() => {});
+        await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+        document.querySelector('p')!.firstChild!.nodeValue = 'Theme current content';
+        session.dispose();
+        await expect(result).rejects.toHaveProperty('name', 'AbortError');
+        expect(document.body.textContent).toBe('Theme current content');
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.body.textContent).toBe('Theme current content');
+    });
+
 });

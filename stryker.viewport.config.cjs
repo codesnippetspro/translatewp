@@ -28,6 +28,7 @@ module.exports = {
                 '<rootDir>/src/shared/lib/translations/__tests__/servedTiming.test.ts',
                 '<rootDir>/src/shared/lib/translations/__tests__/ServedTranslationTiming.test.ts',
                 '<rootDir>/src/shared/lib/translations/__tests__/TranslationSessionTiming.test.ts',
+                '<rootDir>/src/shared/lib/translations/__tests__/TranslationCancellationTiming.test.ts',
             ],
         },
     },

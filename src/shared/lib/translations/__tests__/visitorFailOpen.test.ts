@@ -631,3 +631,22 @@ describe('bounded loading state', () =>
     });
 
 });
+
+it('reports every restored source entry after a partial provider failure', async () =>
+{
+    const original = document.body.textContent;
+    const restored = jest.fn();
+    const failure = new Error('Provider failed');
+    const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+    jest.spyOn(translator, 'translateBatch').mockImplementation(async (entries, options = {}) =>
+    {
+        options.onGroupServeStarted?.(entries);
+        options.onEntryTranslated?.(entries[0].withTranslation('Partial translation'));
+        throw failure;
+    });
+    const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+    await expect(engine.runEntries(new DOMExtractor().extract(document.body), { onEntryApplied: restored })).rejects.toBe(failure);
+    expect(document.body.textContent).toBe(original);
+    expect(restored.mock.calls.map(([entry]) => entry.value)).toEqual(['Partial translation', 'Hello world', 'Second paragraph']);
+    expect(loadingElements()).toEqual([]);
+});
