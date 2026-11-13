@@ -366,4 +366,28 @@ final class ScanningFollowupTest extends TestCase {
 		self::assertSame( 5, $response['creativity'] );
 	}
 
+	public function test_missing_setup_completion_and_stale_queued_work_never_start_a_scan(): void {
+		Options::update( 'setup', [] );
+		$this->scanner->schedule_pro_followup();
+		self::assertNull( $this->state() );
+		self::assertFalse( wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) );
+		Options::update( 'setup.ended', true );
+		foreach ( [ 'missing_ids', 'pending_status' ] as $change ) {
+			Options::update( 'translations.context.scan_result', $this->stored );
+			Options::update( 'translations.context.scan_status', 'done' );
+			Options::update( 'translations.context.pro_followup', null );
+			$this->scanner->schedule_pro_followup();
+			if ( 'missing_ids' === $change ) {
+				$stored = $this->stored;
+				unset( $stored['scanned_ids'] );
+				Options::update( 'translations.context.scan_result', $stored );
+			} else {
+				Options::update( 'translations.context.scan_status', 'pending' );
+			}
+			$this->scanner->run_pro_followup();
+			self::assertSame( 'skipped', $this->state() );
+			self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
+		}
+	}
+
 }

@@ -115,6 +115,7 @@ final class ScanningContractTest extends TestCase {
 		self::assertCount( 25, $samples );
 		self::assertLessThanOrEqual( 49152, array_sum( array_map( 'strlen', $samples ) ) );
 		foreach ( $samples as $sample ) {
+			self::assertMatchesRegularExpression( '/^Page [0-9]+\\n\\n/', $sample );
 			self::assertLessThanOrEqual( 8192, strlen( $sample ) );
 			self::assertGreaterThan( 1900, strlen( $sample ) );
 			self::assertTrue( mb_check_encoding( $sample, 'UTF-8' ) );
@@ -277,7 +278,7 @@ final class ScanningContractTest extends TestCase {
 
 	public function test_explicit_lexicon_application_preserves_metadata_categories_and_duplicates(): void {
 		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
-		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'fr', 'fr', [ 'locale' => '' ], '', null ] );
+		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'de', 'fr', 'fr', [ 'locale' => '' ], '', null ] );
 		Options::update( 'translations.context.scan_result', [ 'lexicon' => [
 			[ 'term' => 'First', 'description' => 'First description', 'category' => 'Brand' ],
 			[ 'term' => ' first ', 'description' => 'Duplicate', 'category' => 'Brand' ],
@@ -327,6 +328,8 @@ final class ScanningContractTest extends TestCase {
 			$this->respond( $this->scanResult() );
 			$this->scanner->run_scan();
 			self::assertSame( $protected ? [ 3, 2, 5, 4 ] : [ 3, 2, 4 ], Options::get( 'translations.context.scan_result' )['scanned_ids'] );
+			$names = $protected ? [ 'Front', 'Newest', 'Private', 'Oldest' ] : [ 'Front', 'Newest', 'Oldest' ];
+			self::assertSame( array_map( static fn( $name ) => $name . "\n\n" . $name . ' body', $names ), end( $GLOBALS['wp_test_remote_posts'] )['body']['samples'] );
 			self::assertSame( [ 'DESC', 'ASC' ], array_column( $GLOBALS['scan_test_queries'], 'order' ) );
 			foreach ( $GLOBALS['scan_test_queries'] as $query ) {
 				self::assertSame( $protected ? [ 'publish', 'private' ] : [ 'publish' ], $query['post_status'] );
@@ -367,6 +370,58 @@ final class ScanningContractTest extends TestCase {
 			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
 		}
 		self::assertSame( [], $GLOBALS['scan_test_term_assignments'] );
+	}
+
+	public function test_pending_progress_defaults_elapsed_and_stale_result_status(): void {
+		Options::update( 'translations.context.scan_status', 'pending' );
+		Options::update( 'translations.context.scan_result', $this->scanResult() );
+		Options::update( 'translations.context.scan_progress', [ 'phase' => 'analysing', 'sampled' => 2, 'total' => 9, 'started' => time() - 20 ] );
+		$request = new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] );
+		$response = $this->scanner->scan_status( $request );
+		self::assertSame( 'pending', $response['status'] );
+		self::assertSame( 'analysing', $response['phase'] );
+		self::assertSame( 2, $response['sampled'] );
+		self::assertSame( 9, $response['total'] );
+		self::assertEqualsWithDelta( 20, $response['elapsedSeconds'], 1 );
+		foreach ( [ [], false, [ 'started' => time() + 20 ] ] as $progress ) {
+			Options::update( 'translations.context.scan_progress', $progress );
+			self::assertSame( [ 'status' => 'pending', 'phase' => 'collecting', 'sampled' => 0, 'total' => 0, 'elapsedSeconds' => 0 ], $this->scanner->scan_status( $request ) );
+		}
+		Options::update( 'translations.context.scan_status', 'failed' );
+		Options::update( 'translations.context.scan_reason', 'Fixture reason' );
+		self::assertSame( [ 'status' => 'failed', 'reason' => 'Fixture reason' ], $this->scanner->scan_status( $request ) );
+	}
+
+	public function test_scan_numbers_are_integer_clamped_and_new_progress_has_a_real_start(): void {
+		foreach ( [ [ -3, 20, 0, 10 ], [ '2.9', '8.7', 2, 8 ], [ 3.3, 4.9, 3, 4 ] ] as [ $formality, $creativity, $expected_formality, $expected_creativity ] ) {
+			Options::update( 'translations.context.scan_progress', false );
+			$this->respond( array_replace( $this->scanResult(), [ 'formality' => $formality, 'creativity' => $creativity ] ) );
+			$this->scanner->run_scan();
+			self::assertSame( $expected_formality, Options::get( 'translations.style.formality' ) );
+			self::assertSame( $expected_creativity, Options::get( 'translations.style.creativity' ) );
+			self::assertEqualsWithDelta( time(), Options::get( 'translations.context.scan_progress' )['started'], 1 );
+		}
+	}
+
+	public function test_byte_truncation_keeps_the_start_and_trims_the_cut_boundary(): void {
+		$GLOBALS['wp_test_inserted_posts'][0]['post_title'] = 'Start';
+		$GLOBALS['wp_test_inserted_posts'][0]['post_excerpt'] = '';
+		$GLOBALS['wp_test_inserted_posts'][0]['post_content'] = str_repeat( 'word ', 2000 );
+		$this->respond( $this->scanResult() );
+		$this->scanner->run_scan();
+		$sample = $GLOBALS['wp_test_remote_posts'][0]['body']['samples'][0];
+		self::assertStringStartsWith( "Start\n\nword ", $sample );
+		self::assertSame( rtrim( $sample ), $sample );
+		self::assertLessThanOrEqual( 8192, strlen( $sample ) );
+	}
+
+	public function test_missing_lexicon_is_empty_and_duplicate_lookup_reads_all_existing_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ null, [], [ 'lexicon' => null ], [ 'lexicon' => 'invalid' ] ] as $stored ) {
+			Options::update( 'translations.context.scan_result', $stored );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+		}
+		foreach ( $GLOBALS['scan_test_queries'] as $query ) self::assertSame( -1, $query['posts_per_page'] );
 	}
 
 }
