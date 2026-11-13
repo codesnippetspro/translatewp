@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from '@wordpress/element';
 import { Button, Spinner } from '@wordpress/components';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 
@@ -274,7 +274,12 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
 
     const candidates = candidatesQuery.data?.candidates ?? [];
     const dismissed = dismissedQuery.data?.candidates ?? [];
-    const startError = startMutation.error as { code?: string; message?: string } | null;
+    const startError = startMutation.error as { code?: string; data?: { payload?: { code?: string; retryAfterSeconds?: unknown } } } | null;
+    const startCode = startError?.data?.payload?.code ?? startError?.code;
+    const retryAfter = startError?.data?.payload?.retryAfterSeconds;
+    const retryMinutes = typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter >= 0
+        ? Math.max(1, Math.ceil(retryAfter / 60)) : null;
+
 
     const body = (
         <div className="flex flex-col gap-4">
@@ -287,9 +292,14 @@ export const LexiconCandidates = ({ onAdd }: { onAdd: (prefill: CandidatePrefill
             </div>
             {startError && (
                 <p className="m-0 text-sm text-translatewp-error" role="alert">
-                    {startError.code === 'rate_limited'
-                        ? __('A scan ran for this site within the hour. Try again later.', 'translate')
-                        : startError.code === 'languages_missing'
+                    {startCode === 'rate_limited'
+                        ? retryMinutes === null
+                            ? __('A scan ran for this site within the hour. Try again later.', 'translate')
+                            : sprintf(
+                                /* translators: %d: minutes until another scan is available. */
+                                _n('You can scan again in about %d minute.', 'You can scan again in about %d minutes.', retryMinutes, 'translate'), retryMinutes
+                            )
+                        : startCode === 'languages_missing'
                             ? __('Choose a default language and at least one translation language first.', 'translate')
                             : __('The scan could not be started. Try again in a minute.', 'translate')}
                 </p>
