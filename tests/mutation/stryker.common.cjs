@@ -3,6 +3,7 @@ module.exports = {
     plugins: ['@stryker-mutator/jest-runner'],
     coverageAnalysis: 'perTest',
     concurrency: 1,
+    maxTestRunnerReuse: 25,
     dryRunTimeoutMinutes: 5,
     timeoutMS: 60000,
     reporters: ['progress', 'clear-text', 'json', 'html'],

@@ -3,7 +3,8 @@
 The normal JavaScript suite and `composer test:php` run the regression tests.
 Mutation tools are development dependencies and do not belong in the plugin zip.
 Use the repository's Node version and PHP 8.3 or newer, with Xdebug for Infection.
-Run one mutation worker at a time, without a watch process.
+Run one mutation worker at a time, without a watch process. The runner is
+restarted after 25 mutant runs to bound its heap and discard cross-mutant state.
 
 ```sh
 CI=true npm run test:mutation:cookie
@@ -44,3 +45,8 @@ kill when its source or killing tests changed. Record the tool's reused result
 count and the hashes of the original report and generated input cache. Keep a
 copy of the generated cache before the run; Stryker updates its incremental
 file with the new results.
+
+When comparing repeated runs, list every changed mutant status by source
+location, operator and replacement. Keep the prior reports and distinguish
+new assertions, runner errors and timeout evidence; do not silently replace
+a prior result with the newer status.
