@@ -166,7 +166,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Keep a selected language across pages during the same visit, including when Remember language is off.
 * Start the newest language choice while earlier translations are still loading, and clear loading states after cancelled, refused or timed-out requests.
 * Fix language selection on pages with multiple switchers and prevent an empty Fancybox lightbox when opening a language list.
-* Scale flags with the switcher icon size setting and correct the South Ndebele language name.
+* Respect the Show flag icon setting, scale flags with the switcher icon size setting and correct the South Ndebele language name.
 * Hide the floating switcher in supported page-builder editing canvases while keeping it available in normal page previews and the Customizer.
 * Show connection errors inside setup and the connection settings, with links to resolve account conflicts, contact support or try again.
 * Clarify setup labels, singular and plural language counts, usage wording and content option descriptions.
@@ -176,6 +176,12 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Exclude Query Monitor and Debug Bar panels from translation requests and usage.
 * Improve first visits to shop, cart and checkout pages, retain accepted translations when some requests must wait, and retry the remaining work within the available time.
 * Prices and numbers that only need reformatting no longer count toward the limit for new texts per visitor.
+* Keep the chosen language when WooCommerce refreshes a page for geolocation.
+* Start page retranslation reliably and show an error if it cannot start.
+* Review suggested terms in one list, choose which to add, and dismiss individual suggestions.
+* Show when another term scan is available and filter diagnostic text and ordinary interface labels from suggestions.
+* Stop translating printed PHP errors and remove completed job references so the Dashboard loads promptly.
+* Use consistent number controls with minus and plus buttons, keyboard steps and drag adjustment.
 
 ### 1.0.3
 
