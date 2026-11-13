@@ -42,7 +42,9 @@ import { CHANGE_SETTLE_MS, TranslationSession } from '@/shared/lib/translations/
 it('aggregates first DOM and full view timing across overlapping mutation work', async () =>
 {
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
-	jest.spyOn(Math, 'random').mockReturnValue(0);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+	let markStarted!: () => void;
+	const started = new Promise<void>(resolve => { markStarted = resolve; });
 	document.body.innerHTML = '<p>Hello world</p>';
 	const events: any[] = [];
 	let release!: () => void;
@@ -51,7 +53,7 @@ it('aggregates first DOM and full view timing across overlapping mutation work',
 	jest.spyOn(Translator.prototype, 'translateBatch').mockImplementation(async (entries, options) =>
 	{
 		options?.onServePath?.('ready');
-		if (++calls === 1) await gate;
+		if (++calls === 1) { markStarted(); await gate; }
 		const translated = entries.map(entry => entry.withTranslation(`fr:${entry.value}`));
 		for (const entry of translated) options?.onEntryTranslated?.(entry);
 		return { translated, failures: [], totalGroups: 1 };
@@ -61,6 +63,8 @@ it('aggregates first DOM and full view timing across overlapping mutation work',
 	try
 	{
 		const switching = session.switchTo('fr');
+		await started;
+		random.mockRestore();
 		await jest.advanceTimersByTimeAsync(10);
 		document.body.insertAdjacentHTML('beforeend', '<footer>Contact us</footer>');
 		await jest.advanceTimersByTimeAsync(CHANGE_SETTLE_MS + 20);
@@ -81,7 +85,9 @@ it('aggregates first DOM and full view timing across overlapping mutation work',
 it('starts a fresh mutation round after a timed out switch without cancelling its translation', async () =>
 {
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
-	jest.spyOn(Math, 'random').mockReturnValue(0);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+	let markStarted!: () => void;
+	const started = new Promise<void>(resolve => { markStarted = resolve; });
 	document.body.innerHTML = '<p>Hello world</p>';
 	const events: any[] = [];
 	let release!: () => void;
@@ -90,7 +96,7 @@ it('starts a fresh mutation round after a timed out switch without cancelling it
 	let signal: AbortSignal | undefined;
 	jest.spyOn(Translator.prototype, 'translateBatch').mockImplementation(async (entries, options) =>
 	{
-		if (++calls === 1) { signal = options?.signal; await gate; }
+		if (++calls === 1) { signal = options?.signal; markStarted(); await gate; }
 		const translated = entries.map(entry => entry.withTranslation(`fr:${entry.value}`));
 		for (const entry of translated) options?.onEntryTranslated?.(entry);
 		return { translated, failures: [], totalGroups: 1 };
@@ -100,6 +106,8 @@ it('starts a fresh mutation round after a timed out switch without cancelling it
 	try
 	{
 		const switching = session.switchTo('fr');
+		await started;
+		random.mockRestore();
 		await jest.advanceTimersByTimeAsync(120001);
 		expect(events).toEqual([expect.objectContaining({ outcome: 'timeout', completedMs: null })]);
 		expect(signal?.aborted).toBe(false);

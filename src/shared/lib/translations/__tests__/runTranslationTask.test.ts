@@ -26,9 +26,12 @@ describe('bounded cancellable translation tasks', () =>
             signal: controller.signal, timeoutMs: 100,
             run: signal => { child = signal; return new Promise(resolve => { deliver = resolve; }); },
         });
-        const rejected = expect(task).rejects.toMatchObject({ name: 'AbortError' });
+        const rejected = jest.fn();
+        void task.catch(rejected);
         controller.abort();
-        await rejected;
+        await Promise.resolve();
+        expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+        await expect(task).rejects.toMatchObject({ name: 'AbortError' });
         expect(child.aborted).toBe(true);
         expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
         expect(jest.getTimerCount()).toBe(0);
@@ -46,11 +49,13 @@ describe('bounded cancellable translation tasks', () =>
             child = signal;
             return new Promise((_, reject) => { fail = reject; });
         } });
-        const rejected = expect(task).rejects.toMatchObject({ name: 'TimeoutError' });
+        const rejected = jest.fn();
+        void task.catch(rejected);
         await jest.advanceTimersByTimeAsync(19);
         expect(child.aborted).toBe(false);
         await jest.advanceTimersByTimeAsync(1);
-        await rejected;
+        expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'TimeoutError' }));
+        await expect(task).rejects.toMatchObject({ name: 'TimeoutError' });
         expect(child.aborted).toBe(true);
         fail(new Error('Late failure'));
         await Promise.resolve();
@@ -67,6 +72,11 @@ describe('bounded cancellable translation tasks', () =>
             if (mode === 'throw') throw new Error('Provider');
             return mode === 'reject' ? Promise.reject(new Error('Provider')) : Promise.resolve('Translated');
         } });
+        const settled = jest.fn();
+        void task.then(value => settled({ value }), error => settled({ error }));
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(settled).toHaveBeenCalledTimes(1);
         if (mode === 'resolve') await expect(task).resolves.toBe('Translated');
         else await expect(task).rejects.toThrow('Provider');
         expect(child.aborted).toBe(true);

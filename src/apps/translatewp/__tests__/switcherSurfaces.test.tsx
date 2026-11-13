@@ -118,6 +118,7 @@ describe('TranslateWP switcher surfaces', () =>
         jest.clearAllMocks();
         document.body.innerHTML = '';
         document.cookie = 'translatewp_last_choice=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'other_cookie=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.history.replaceState(null, '', '/');
         delete (window as { TranslateWP?: unknown }).TranslateWP;
         if (originalTextRects) Object.defineProperty(Range.prototype, 'getClientRects', originalTextRects);
@@ -132,6 +133,7 @@ describe('TranslateWP switcher surfaces', () =>
     ])('persists a choice with remember=%s and lifetime=%s', async (remember, ttl, days, secure) =>
     {
         installContext(true, 'dropdown', { remember_last_choice: remember, cookie_ttl: ttl });
+        document.cookie = 'other_cookie=es; path=/';
         document.body.innerHTML = '<span data-twp-switcher></span>';
         const cookie = jest.spyOn(Document.prototype, 'cookie', 'set');
         const before = Date.now();
@@ -545,6 +547,89 @@ describe('TranslateWP switcher surfaces', () =>
         expect(document.documentElement.lang).toBe('es');
         expect(window.location.pathname).toBe('/es/par-mums/');
         expect(window.location.search).toBe('?ref=9');
+    });
+
+    it.each([[false, false], [true, false], [false, true]] as const)('follows current visible text and preserves dismissal for manager=%s, starts offscreen=%s', async (manager, initiallyOffscreen) =>
+    {
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+        const message = manager ? 'Translating this page for you' : 'Custom translation message';
+        installContext(true, 'dropdown', {}, false, manager,
+            manager ? {} : { pending_message: message });
+        document.body.innerHTML = '<main><p id="first">First visible text</p><p id="early">Early visible text</p><p id="later">Later text</p></main><span data-twp-switcher></span>';
+        let laterVisible = false;
+        let firstVisible = !initiallyOffscreen;
+        Object.defineProperty(Range.prototype, 'getClientRects', {
+            configurable: true,
+            value: function (this: Range)
+            {
+                const visible = this.startContainer.parentElement?.id === 'later' ? laterVisible : firstVisible;
+                return [{ top: visible ? 10 : 2000, left: 10, right: 110,
+                    bottom: visible ? 30 : 2020, width: 100, height: 20 }];
+            },
+        });
+        const apply = new Map<string, () => void>();
+        const finish: Array<(result: { translated: []; failures: []; totalGroups: number }) => void> = [];
+        jest.spyOn(CacheFirstTranslator.prototype, 'translateBatch').mockImplementation((entries, options) =>
+            new Promise(resolve =>
+            {
+                finish.push(resolve);
+                for (const entry of entries) apply.set(entry.value,
+                    () => options.onEntryTranslated?.(entry.withTranslation('Translated ' + entry.value)));
+            }));
+        const tick = async (ms: number) =>
+        {
+            await act(async () => { await jest.advanceTimersByTimeAsync(ms); });
+        };
+        const notice = () => document.querySelector('[role="status"]')?.textContent ?? '';
+        try
+        {
+            await renderApp();
+            await act(async () => { (document.querySelector('.twp-trigger') as HTMLElement).click(); });
+            const spanish = Array.from(document.querySelectorAll('.twp-dropdown-item'))
+                .find(option => option.textContent?.includes('Español')) as HTMLElement;
+            await act(async () => { spanish.click(); });
+            expect(document.querySelector('.twp-trigger')?.getAttribute('aria-busy')).toBe('true');
+            await tick(4000);
+            await act(async () => { apply.get('Early visible text')!(); });
+            await tick(3999);
+            expect(notice()).not.toContain(message);
+            await tick(17);
+            if (initiallyOffscreen)
+            {
+                expect(notice()).not.toContain(message);
+                firstVisible = true;
+                window.dispatchEvent(new Event('scroll'));
+                await tick(17);
+            }
+            expect(notice()).toContain(message);
+            await act(async () => { apply.get('First visible text')!(); });
+            await tick(17);
+            expect(notice()).not.toContain(message);
+            expect(document.getElementById('later')?.textContent).toBe('Later text');
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).toContain(message);
+            laterVisible = false;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).toContain(message);
+            const dismiss = document.querySelector('button[aria-label="Dismiss message"]') as HTMLElement;
+            await act(async () => { dismiss.click(); });
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
+        }
+        finally
+        {
+            await act(async () => { finish.forEach(resolve => resolve({ translated: [], failures: [], totalGroups: 0 })); });
+            expect(document.querySelector('.twp-trigger')?.hasAttribute('aria-busy')).toBe(false);
+            jest.useRealTimers();
+        }
     });
 
     it('keeps the pending notice through the first translation and dismisses it on the last', async () =>

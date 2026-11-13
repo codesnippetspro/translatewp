@@ -90,17 +90,22 @@ describe('TranslationSession', () =>
         const cancelled = first.catch(error => error);
         await firstStarted;
         const second = session.switchTo(target);
+        const settled = jest.fn();
+        void second.then(settled, settled);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(settled).toHaveBeenCalledTimes(1);
         await second;
-        await cancelled;
         const heading = target === 'en' ? 'Original heading' : 'it:Original heading';
         const alt = target === 'en' ? 'Original image' : 'it:Original image';
         expect(document.querySelector('h1')?.textContent).toBe(heading);
         expect(document.querySelector('img')?.alt).toBe(alt);
         release();
         await Promise.resolve();
+        await Promise.resolve();
         expect(document.querySelector('h1')?.textContent).toBe(heading);
         expect(document.querySelector('img')?.alt).toBe(alt);
         expect(document.querySelectorAll('[aria-busy="true"],.translatewp-translating')).toHaveLength(0);
+        await cancelled;
     });
 
     it('restores originals after a translated subtree is replaced', async () =>
@@ -989,4 +994,51 @@ describe('TranslationSession', () =>
         expect(sentValues().filter(value => words.includes(value)).length).toBe(VolatilityTracker.DEFAULT_THRESHOLD - 1);
         session.dispose();
     });
+    it('never lets a disposed session write late answers over a replacement session', async () =>
+    {
+        document.body.innerHTML = '<h1>Original heading</h1><img alt="Original image">';
+        let release!: () => void;
+        let started!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            options.onGroupServeStarted?.(entries);
+            return new Promise(resolve =>
+            {
+                release = () =>
+                {
+                    const translated = entries.map(entry => entry.withTranslation('OLD:' + entry.value));
+                    translated.forEach(entry => options.onEntryTranslated?.(entry));
+                    resolve({ translated, failures: [], totalGroups: 1 });
+                };
+            });
+        });
+        const options = { root: document.body, sourceLang: 'en', extractionOptions: { includeAlt: true, includeAttributes: true } };
+        const old = createSession(options);
+        const first = old.switchTo('de').catch(error => error);
+        await pending;
+        old.dispose();
+        const replacement = createSession(options);
+        await replacement.switchTo('it');
+        expect(document.querySelector('h1')?.textContent).toBe('it:Original heading');
+        release();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.querySelector('h1')?.textContent).toBe('it:Original heading');
+        expect(document.querySelector('img')?.alt).toBe('it:Original image');
+        await first;
+    });
+
+    it('can switch from an idle session and dispose it repeatedly without an active controller', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        let switched!: Promise<unknown>;
+        expect(() => { switched = session.switchTo('it'); }).not.toThrow();
+        await switched;
+        expect(() => session.dispose()).not.toThrow();
+        expect(() => session.dispose()).not.toThrow();
+    });
+
 });

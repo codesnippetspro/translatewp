@@ -1,3 +1,4 @@
+import { sanitizeTranslationSubscription, postMissChunkWithBackoff } from '@/shared/lib/translations/missReportBackoff';
 import { TextEncoder } from 'util';
 
 if (typeof globalThis.TextEncoder === 'undefined')
@@ -622,6 +623,8 @@ describe('CacheFirstTranslator', () =>
     it('sends the canonical page url (lang stripped) with each miss report', async () =>
     {
         const originalTarget = `${window.location.pathname}${window.location.search}`;
+        const originalTitle = document.title;
+        document.title = 'Shop hours and prices';
         window.history.replaceState({}, '', '/shop/?lang=es&ref=42');
         try
         {
@@ -654,6 +657,7 @@ describe('CacheFirstTranslator', () =>
             assert(missReports.length >= 1, 'at least one miss report must be sent');
             for (const report of missReports)
             {
+                expect(report.body.pageTitle).toBe('Shop hours and prices');
                 const url = report.body.url;
                 assert(typeof url === 'string' && url.length > 0, `miss report must carry a url, got ${JSON.stringify(url)}`);
                 assert((url as string).startsWith('https://'), `miss report url must be https-canonical, got ${url}`);
@@ -664,6 +668,7 @@ describe('CacheFirstTranslator', () =>
         finally
         {
             window.history.replaceState({}, '', originalTarget || '/');
+            document.title = originalTitle;
         }
     });
 
@@ -1225,4 +1230,241 @@ it('never counts an unmatched marker fallback as a served DOM target', async () 
     await engine.runEntries(entries, { onEntryWritten: ({ entry }) => applied.push(entry.value) });
     expect(document.querySelector('strong')!.textContent).toBe('world');
     expect(applied).toEqual(['Bonjour ']);
+});
+
+
+describe('miss subscription validation', () =>
+{
+    const now = Date.UTC(2026, 0, 1);
+    const valid = { url: 'https://api.example.test/v1/translation/cache/events?token=signed', expiresAt: new Date(now + 60_000).toISOString() };
+    it('retains a valid subscription including the exact maximum lifetime', () =>
+    {
+        expect(sanitizeTranslationSubscription(valid, API_BASE, now)).toEqual(valid);
+        const maximum = { ...valid, expiresAt: new Date(now + 600_000).toISOString() };
+        expect(sanitizeTranslationSubscription(maximum, API_BASE, now)).toEqual(maximum);
+        expect(sanitizeTranslationSubscription({ ...valid, expiresAt: new Date(now + 1).toISOString() }, API_BASE, now)).not.toBeNull();
+    });
+
+    it.each([
+        null, false, [], Object.assign([], valid), 'subscription', {}, { ...valid, url: 1 }, { ...valid, expiresAt: 1 },
+        { ...valid, url: 'not a URL' },
+        { ...valid, url: 'http://api.example.test/v1/translation/cache/events?token=signed' },
+        { ...valid, url: 'https://foreign.example/v1/translation/cache/events?token=signed' },
+        { ...valid, url: 'https://api.example.test/wrong?token=signed' },
+        { ...valid, url: 'https://user@api.example.test/v1/translation/cache/events?token=signed' },
+        { ...valid, url: 'https://:password@api.example.test/v1/translation/cache/events?token=signed' },
+        { ...valid, url: valid.url + '#fragment' },
+        { ...valid, url: valid.url + '&other=1' },
+        { ...valid, url: valid.url + '&token=again' },
+        { ...valid, url: valid.url.replace('?token=signed', '?other=signed') },
+        { ...valid, url: valid.url.replace('?token=signed', '') },
+        { ...valid, url: valid.url.replace('signed', '') },
+        { ...valid, url: valid.url + 'a'.repeat(20_000) },
+        { ...valid, expiresAt: 'invalid date' },
+        { ...valid, expiresAt: new Date(now).toISOString() },
+        { ...valid, expiresAt: new Date(now - 1).toISOString() },
+        { ...valid, expiresAt: new Date(now + 600_001).toISOString() },
+    ].map(value => [value]))('rejects a malformed or unsafe subscription %#', value =>
+    {
+        expect(sanitizeTranslationSubscription(value, API_BASE, now)).toBeNull();
+    });
+
+    it('accepts the exact URL length bound but refuses the next character', () =>
+    {
+        const url = valid.url + 'a'.repeat(20_000 - valid.url.length);
+        expect(sanitizeTranslationSubscription({ ...valid, url }, API_BASE, now)?.url).toBe(url);
+        expect(sanitizeTranslationSubscription({ ...valid, url: url + 'a' }, API_BASE, now)).toBeNull();
+        expect(sanitizeTranslationSubscription(valid, 'invalid origin', now)).toBeNull();
+    });
+});
+
+describe('bounded miss report responses', () =>
+{
+    const response = (status: number, body: unknown = {}, retryAfter: string | null = null) => ({
+        status, ok: status >= 200 && status < 300,
+        headers: { get: (name: string) => name === 'Retry-After' ? retryAfter : null },
+        json: async () => body,
+    } as Response);
+    const run = (post: jest.Mock, overrides: Partial<Parameters<typeof postMissChunkWithBackoff>[0]> = {}) =>
+    {
+        const delay = jest.fn(async () => {});
+        return { delay, result: postMissChunkWithBackoff({
+            post, hashes: ['first', 'second'], delay, random: () => 0,
+            throwIfAborted: () => {}, subscriptionOrigin: API_BASE, ...overrides,
+        }) };
+    };
+
+    it.each([400, 409, 401, 403, 422])('refuses HTTP %s without retrying', async status =>
+    {
+        const post = jest.fn().mockResolvedValue(response(status));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'rejected' });
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).not.toHaveBeenCalled();
+    });
+
+    it.each([500, 503])('retries HTTP %s only twice at one and two seconds', async status =>
+    {
+        const post = jest.fn().mockResolvedValue(response(status));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'rejected' });
+        expect(post).toHaveBeenCalledTimes(3);
+        expect(delay.mock.calls).toEqual([[1000], [2000]]);
+    });
+
+    it.each([
+        ['4', 4000], [null, 3000], ['invalid', 3000], ['0', 1000],
+    ] as const)('honours Retry-After=%s', async (header, expected) =>
+    {
+        const post = jest.fn().mockResolvedValueOnce(response(429, {}, header)).mockResolvedValue(response(200));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'accepted' });
+        expect(delay.mock.calls).toEqual([[expected]]);
+        expect(post).toHaveBeenCalledTimes(2);
+    });
+
+    it('honours an HTTP-date with bounded jitter and refuses a wait that exhausts the budget', async () =>
+    {
+        const now = Date.UTC(2026, 0, 1);
+        const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+        try
+        {
+            const post = jest.fn().mockResolvedValueOnce(response(429, {}, new Date(now + 4000).toUTCString())).mockResolvedValue(response(200));
+            const { result, delay } = run(post, { random: () => 1 });
+            await expect(result).resolves.toEqual({ outcome: 'accepted' });
+            expect(delay.mock.calls).toEqual([[4250]]);
+            const refused = jest.fn().mockResolvedValue(response(429, {}, '90'));
+            const bounded = run(refused);
+            await expect(bounded.result).resolves.toEqual({ outcome: 'rejected' });
+            expect(refused).toHaveBeenCalledTimes(1);
+            expect(bounded.delay).not.toHaveBeenCalled();
+        }
+        finally { clock.mockRestore(); }
+    });
+
+    it('retries only refused hashes and retains the accepted subscription if a later post fails', async () =>
+    {
+        const subscription = { url: API_BASE + '/v1/translation/cache/events?token=signed', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+        const post = jest.fn().mockResolvedValueOnce(response(200, {
+            acceptedHashes: ['first'], retryHashes: ['second'], retryAfter: 2, subscription,
+        })).mockRejectedValue(new Error('Transport failure'));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'accepted', acceptedHashes: ['first'], subscriptions: [{ ...subscription, hashes: ['first'] }] });
+        expect(post.mock.calls.map(call => call[1])).toEqual([['first', 'second'], ['second']]);
+        expect(delay.mock.calls).toEqual([[2000]]);
+    });
+
+    it.each([
+        { acceptedHashes: ['first'], retryHashes: ['first'], retryAfter: 1 },
+        { acceptedHashes: ['unknown'], retryHashes: ['second'], retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: 'second', retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: [''], retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: ['a'.repeat(129)], retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: Array.from({ length: 41 }, (_, i) => String(i)), retryAfter: 1 },
+        { acceptedHashes: [], retryHashes: ['second'], retryAfter: '1' },
+        { acceptedHashes: [], retryHashes: ['second'], retryAfter: 0 },
+        { acceptedHashes: [], retryHashes: ['second'], retryAfter: -1 },
+        { acceptedHashes: [], retryHashes: ['second'], retryAfter: Infinity },
+        { acceptedHashes: [], retryHashes: ['second'], retryAfter: NaN },
+    ])('does not retry a malformed partial admission %#', async body =>
+    {
+        const post = jest.fn().mockResolvedValue(response(200, body));
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'rejected' });
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).not.toHaveBeenCalled();
+    });
+    it('accepts forty admitted hashes and the 128-character hash boundary without another post', async () =>
+    {
+        const hashes = ['a'.repeat(128), ...Array.from({ length: 39 }, (_, index) => `hash-${index}`)];
+        const post = jest.fn().mockResolvedValue(response(200, { acceptedHashes: hashes, retryHashes: [], retryAfter: 1 }));
+        const { result, delay } = run(post, { hashes });
+        await expect(result).resolves.toEqual({ outcome: 'accepted', acceptedHashes: hashes, subscriptions: [] });
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).not.toHaveBeenCalled();
+    });
+
+    it('propagates an initial transport failure and preserves abort identity', async () =>
+    {
+        for (const error of [new Error('Offline'), new DOMException('Cancelled', 'AbortError')])
+        {
+            const post = jest.fn().mockRejectedValue(error);
+            const { result, delay } = run(post);
+            await expect(result).rejects.toBe(error);
+            expect(post).toHaveBeenCalledTimes(1);
+            expect(delay).not.toHaveBeenCalled();
+        }
+    });
+
+    it('keeps legacy successful responses usable when no JSON body is available', async () =>
+    {
+        const post = jest.fn().mockResolvedValue({ ...response(200), json: async () => { throw new Error('No JSON'); } });
+        const { result, delay } = run(post);
+        await expect(result).resolves.toEqual({ outcome: 'accepted' });
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(delay).not.toHaveBeenCalled();
+    });
+
+});
+
+it('waits for a direct cache lookup before returning the translated group result', async () =>
+{
+    document.body.innerHTML = '<p>Hello world</p>';
+    const entries = new DOMExtractor().extract(document.body);
+    const cache = new TranslationCacheClient({
+        sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings,
+    });
+    const plan = await cache.prepare(entries);
+    jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map(plan.groupsForCache.map(group => [
+        group.hash, group.markerPayload.replace('Hello world', 'Hola mundo'),
+    ])) });
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()) });
+    await expect(translator._translateContextGroups(plan, cache)).resolves.toEqual({
+        translatedById: new Map([[entries[0].id, 'Hola mundo']]), failures: [],
+    });
+});
+
+it('returns an empty cache plan without a lookup or miss report', async () =>
+{
+    const cache = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const lookup = jest.spyOn(cache, 'lookup');
+    const fetchImpl = jest.fn();
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()), fetchImpl });
+    await expect(translator._translateContextGroups(await cache.prepare([]), cache)).resolves.toEqual({ translatedById: new Map(), failures: [] });
+    expect(lookup).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('uses the browser fetch and waits the first poll delay without injected transport or clock helpers', async () =>
+{
+    const entries = new DOMExtractor().extract(document.body);
+    const seed = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
+    const plan = await seed.prepare(entries);
+    const served = new Map(plan.groupsForCache.map(group => [group.hash, group.markerPayload.replace('Hello world', 'Hola mundo').replace('Second paragraph', 'Segundo párrafo')]));
+    const { impl, log } = createFetch([new Map(), served]);
+    const original = globalThis.fetch;
+    globalThis.fetch = impl;
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try
+    {
+        const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()) });
+        translator._createCacheClient = () => new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings, sampleOrigin: () => false });
+        const result = translator.translateBatch(entries);
+        const failed = jest.fn();
+        void result.catch(failed);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(log.filter(item => isLookup(item.url))).toHaveLength(1);
+        expect(log.filter(item => item.url.endsWith('/miss'))).toHaveLength(1);
+        await jest.advanceTimersByTimeAsync(999);
+        expect(log.filter(item => isLookup(item.url))).toHaveLength(1);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(log.filter(item => isLookup(item.url))).toHaveLength(2);
+        expect(failed).not.toHaveBeenCalled();
+        expect((await result).translated.map(entry => entry.value)).toEqual(['Hola mundo', 'Segundo párrafo']);
+    }
+    finally
+    {
+        globalThis.fetch = original;
+        jest.useRealTimers();
+    }
 });

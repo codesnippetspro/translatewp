@@ -423,3 +423,148 @@ describe('TranslationEngine loading counter balance', () =>
         expect(loadingElements()).toHaveLength(0);
     });
 });
+
+describe('bounded loading state', () =>
+{
+    it('leaves attributes unfaded while marking pending text, then clears every mark on abort', async () =>
+    {
+        document.body.innerHTML = '<main><p>Hello world</p><img alt="Company icon"><iframe title="Video title"></iframe></main>';
+        const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+        jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+        {
+            options.onGroupServeStarted?.(entries);
+            options.onGroupServeStarted?.(entries);
+            return new Promise(() => {});
+        });
+        const controller = new AbortController();
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = engine.run(document.body, { includeAlt: true, includeAttributes: true }, { signal: controller.signal });
+        const assertion = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+        expect(loadingElements().map(element => element.tagName)).toEqual(['P']);
+        expect(document.querySelector('p')?.getAttribute('data-translatewp-loading-count')).toBe('1');
+        expect(document.querySelector('img')?.hasAttribute('aria-busy')).toBe(false);
+        expect(document.querySelector('iframe')?.hasAttribute('aria-busy')).toBe(false);
+        const css = document.getElementById('translatewp-translating-style')?.textContent ?? '';
+        expect(css).toMatch(/opacity:\s*0\.65 !important/);
+        expect(css).not.toMatch(/background|color:/);
+        expect(css).toContain('prefers-reduced-motion: reduce');
+        expect(css).toMatch(/transition:\s*none/);
+
+        controller.abort();
+        await assertion;
+        expect(loadingElements()).toHaveLength(0);
+        expect(document.querySelector('[aria-busy],[data-translatewp-loading-count]')).toBeNull();
+    });
+
+    it('clears the original loading parent when a theme replaces its text node during the run', async () =>
+    {
+        document.body.innerHTML = '<main><p>Hello world</p></main>';
+        const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+        jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+        {
+            options.onGroupServeStarted?.(entries);
+            return new Promise(() => {});
+        });
+        const controller = new AbortController();
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = engine.run(document.body, undefined, { signal: controller.signal });
+        const assertion = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+        const parent = document.querySelector('p')!;
+        expect(parent.getAttribute('aria-busy')).toBe('true');
+        parent.textContent = 'Theme replacement';
+        controller.abort();
+        await assertion;
+        expect(parent.textContent).toBe('Theme replacement');
+        expect(parent.hasAttribute('aria-busy')).toBe(false);
+        expect(parent.classList.contains(loadingClass)).toBe(false);
+        expect(parent.hasAttribute('data-translatewp-loading-count')).toBe(false);
+    });
+
+    it('keeps a cold run alive past 90 s and restores originals at the 180 s hard bound', async () =>
+    {
+        jest.useFakeTimers();
+        try
+        {
+            const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+            let signal!: AbortSignal;
+            let late!: () => void;
+            jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+            {
+                signal = options.signal!;
+                options.onGroupServeStarted?.(entries);
+                options.onEntryTranslated?.(entries[0].withTranslation('Hola mundo'));
+                late = () => options.onEntryTranslated?.(entries[1].withTranslation('Late answer'));
+                return new Promise(() => {});
+            });
+            const settled = jest.fn();
+            const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+            const result = engine.run(document.body);
+            void result.then(settled, settled);
+            const assertion = expect(result).rejects.toMatchObject({ name: 'TimeoutError' });
+            await jest.advanceTimersByTimeAsync(179999);
+            expect(settled).not.toHaveBeenCalled();
+            expect(document.querySelector('p')?.textContent).toBe('Hola mundo');
+            expect(signal.aborted).toBe(false);
+            await jest.advanceTimersByTimeAsync(1);
+            await assertion;
+            expect(signal.aborted).toBe(true);
+            expect(document.querySelector('p')?.textContent).toBe('Hello world');
+            expect(loadingElements()).toHaveLength(0);
+            late();
+            expect(document.body.textContent).not.toContain('Late answer');
+        }
+        finally { jest.useRealTimers(); }
+    });
+    it('decrements a shared text container and clears only a failed group before the batch finishes', async () =>
+    {
+        document.body.innerHTML = '<main><p>Hello<!--split-->world</p><p>Other group</p></main>';
+        const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+        let failGroup!: () => void;
+        let first!: () => void;
+        let finish!: () => void;
+        const failed = jest.fn();
+        jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+        {
+            options.onGroupServeStarted?.(entries);
+            const sameParent = entries.filter(entry => entry.node.parentElement === document.querySelector('p'));
+            expect(sameParent).toHaveLength(2);
+            first = () => options.onEntryTranslated?.(sameParent[0].withTranslation('Hola'));
+            failGroup = () => options.onGroupServeFailed?.(sameParent);
+            return new Promise(resolve => { finish = () => resolve({ translated: [], failures: [], totalGroups: 2 }); });
+        });
+        const controller = new AbortController();
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        const result = engine.run(document.body, undefined, { signal: controller.signal, onGroupServeFailed: failed });
+        const paragraph = document.querySelector('p')!;
+        expect(paragraph.getAttribute('data-translatewp-loading-count')).toBe('2');
+        first();
+        expect(paragraph.getAttribute('data-translatewp-loading-count')).toBe('1');
+        expect(paragraph.getAttribute('aria-busy')).toBe('true');
+        failGroup();
+        expect(paragraph.hasAttribute('aria-busy')).toBe(false);
+        expect(loadingElements().map(element => element.textContent)).toEqual(['Other group']);
+        expect(failed).toHaveBeenCalledTimes(1);
+        finish();
+        await result;
+        failGroup();
+        expect(failed).toHaveBeenCalledTimes(1);
+        expect(loadingElements()).toHaveLength(0);
+    });
+
+    it.each([undefined, null, 'network-error'])('restores partial writes and busy state for a non-Error rejection %#', async error =>
+    {
+        const translator = new Translator({ sourceLang: 'en', targetLang: 'es' });
+        jest.spyOn(translator, 'translateBatch').mockImplementation((entries, options = {}) =>
+        {
+            options.onGroupServeStarted?.(entries);
+            options.onEntryTranslated?.(entries[0].withTranslation('Hola mundo'));
+            return Promise.reject(error);
+        });
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
+        await expect(engine.run(document.body)).rejects.toBe(error);
+        expect(document.querySelector('p')?.textContent).toBe('Hello world');
+        expect(document.querySelector('[aria-busy],[data-translatewp-loading-count]')).toBeNull();
+        expect(loadingElements()).toHaveLength(0);
+    });
+
+});

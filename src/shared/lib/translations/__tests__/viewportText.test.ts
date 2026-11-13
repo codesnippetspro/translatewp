@@ -156,4 +156,37 @@ describe('current viewport pending text', () =>
         expect(frames.size).toBe(0);
         expect(changed.mock.calls).toEqual([[2]]);
     });
+    it('counts a wrapped text line when any one of its rectangles is visible', () =>
+    {
+        rangeRects.mockReturnValue([rect({ top: 900 }), rect()]);
+        expect(isTextNodeInViewport(document.querySelector('p')!.firstChild!)).toBe(true);
+    });
+
+    it('does not observe a null parent and handles a non-bubbling nested scroll', () =>
+    {
+        const detached = entry('detached', document.createTextNode('Detached'));
+        const node = document.querySelector('p')!.firstChild!;
+        rangeRects.mockReturnValue([rect({ top: 900 })]);
+        const changed = jest.fn();
+        const tracker = observePendingTextEntries([detached, entry('visible', node)], changed);
+        expect(observe.mock.calls).toEqual([[node.parentElement]]);
+        rangeRects.mockReturnValue([rect()]);
+        node.parentElement!.dispatchEvent(new Event('scroll', { bubbles: false }));
+        flush();
+        expect(changed.mock.calls).toEqual([[0], [1]]);
+        tracker.disconnect();
+    });
+
+    it('releases the registered listeners with matching capture and avoids cancelling an absent frame', () =>
+    {
+        const add = jest.spyOn(window, 'addEventListener');
+        const remove = jest.spyOn(window, 'removeEventListener');
+        const tracker = observePendingTextEntries([entry('one', document.querySelector('p')!.firstChild!)], jest.fn());
+        tracker.disconnect();
+        for (const call of add.mock.calls.filter(call => ['scroll', 'resize'].includes(call[0]))) {
+            expect(remove).toHaveBeenCalledWith(...call);
+        }
+        expect(window.cancelAnimationFrame).not.toHaveBeenCalled();
+    });
+
 });

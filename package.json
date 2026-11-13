@@ -31,7 +31,10 @@
 		"translate:js": "wp i18n make-json ./languages --pretty-print",
 		"bundle": "node scripts/bundle.mjs",
 		"e2e:env": "wp-env start",
-		"e2e": "playwright test --config e2e/playwright.config.ts"
+		"e2e": "playwright test --config e2e/playwright.config.ts",
+		"test:mutation:cookie": "stryker run stryker.cookie.config.cjs",
+		"test:mutation:viewport": "stryker run stryker.viewport.config.cjs",
+		"test:mutation:viewport:full": "stryker run stryker.viewport.full.config.cjs"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.56.0",
