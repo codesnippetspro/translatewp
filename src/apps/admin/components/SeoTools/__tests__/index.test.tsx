@@ -115,6 +115,29 @@ it('honors a refreshed denial over the initial entitled state', async () =>
     await render();
 
     expect(container.textContent).not.toContain('SEO controls');
+    expect(container.querySelector('#twp-seo-basic')).not.toBeNull();
+    expect(toggle('Output hreflang tags')?.disabled).toBe(false);
+    expect(document.body.textContent).toContain('Upgrade now');
+});
+
+it('keeps Basic visible on a Free account with an active addon and registered SEO panel', async () =>
+{
+    Object.defineProperty(window, 'translatewpPro', {
+        value: { connected: true, entitled: false, installed: true, active: true },
+        writable: true,
+        configurable: true,
+    });
+    addFilter('translatewp.slot.seo', 'test', () => panel);
+    client.setQueryData(['connectStatus'], {
+        connected: true,
+        pro: { entitled: false, installed: true, active: false },
+    });
+
+    await render();
+
+    expect(container.querySelector('#twp-seo-basic')).not.toBeNull();
+    expect(toggle('Output hreflang tags')?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('SEO controls');
     expect(document.body.textContent).toContain('Upgrade now');
 });
 
