@@ -1561,3 +1561,22 @@ it('stops emitting locally cached entries as soon as their consumer aborts', asy
     expect(applied).toHaveBeenCalledTimes(1);
     expect(applied.mock.calls[0][0].value).toBe('Hola mundo');
 });
+
+it('reports one exact forty-group refusal without an extra empty request', async () =>
+{
+    document.body.innerHTML = Array.from({ length: 40 }, (_, index) => `<p>Page paragraph number ${index}</p>`).join('');
+    const { impl } = createFetch([new Map()]);
+    const refused = jest.fn().mockResolvedValue({ ok: false, status: 400 });
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es',
+        store: new HydrationStore(new InMemoryBackend()), fetchImpl: refused,
+    });
+    translator._createCacheClient = () => new TranslationCacheClient({
+        sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE,
+        aiSettings: basicFixture.settings, sampleOrigin: () => false, fetchImpl: impl,
+    });
+    const result = await translator.translateBatch(new DOMExtractor().extract(document.body));
+    expect(result.totalGroups).toBe(40);
+    expect(result.failures).toHaveLength(40);
+    expect(refused).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(refused.mock.calls[0][1].body)).items).toHaveLength(40);
+});
