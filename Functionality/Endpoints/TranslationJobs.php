@@ -143,6 +143,14 @@ class TranslationJobs extends BaseApiEndpoints {
 	 * through the index queue.
 	 */
 	public function report_misses( $request ) {
+		return $this->handle_misses( $request, true );
+	}
+
+	public function enqueue_misses( $request ) {
+		return $this->handle_misses( $request, false );
+	}
+
+	private function handle_misses( $request, bool $subscribe ) {
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;
@@ -374,7 +382,7 @@ class TranslationJobs extends BaseApiEndpoints {
 			$response['retryHashes'] = array_values( array_unique( $retry_hashes ) );
 			$response['retryAfter'] = $retry_after;
 		}
-		$subscription = TranslationSubscription::mint( $language, array_values( array_unique( $subscription_hashes ) ) );
+		$subscription = $subscribe ? TranslationSubscription::mint( $language, array_values( array_unique( $subscription_hashes ) ) ) : null;
 		if ( null !== $subscription ) {
 			$response['subscription'] = $subscription;
 		}
