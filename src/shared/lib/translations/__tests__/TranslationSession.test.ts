@@ -1164,4 +1164,64 @@ describe('TranslationSession', () =>
         expect(document.querySelector('main p:last-child')?.textContent).toBe('New content');
     });
 
+    it('keeps an empty translated view active for content added later', async () =>
+    {
+        document.body.innerHTML = '<main></main>';
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('it');
+        document.querySelector('main')!.insertAdjacentHTML('beforeend', '<p>Later content</p>');
+        await flushMutations();
+        expect(document.querySelector('main')?.textContent).toBe('it:Later content');
+    });
+
+    it('restores partial writes and stops new translation when every group is refused', async () =>
+    {
+        document.body.innerHTML = '<p>Original content</p><p>Other content</p>';
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce(async (entries, options) =>
+        {
+            const written = entries[0].withTranslation('Partial write');
+            options.onEntryTranslated?.(written);
+            return { translated: [written], failures: [{ groupId: 'refused', error: 'miss_report_rejected' }], totalGroups: 1 };
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        await session.switchTo('it');
+        expect(document.body.textContent).toBe('Original contentOther content');
+        document.body.insertAdjacentHTML('beforeend', '<footer>Later content</footer>');
+        await flushMutations();
+        expect(document.querySelector('footer')?.textContent).toBe('Later content');
+        expect(Translator.prototype.translateBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('retires a failed visible entry before the rest of the switch settles', async () =>
+    {
+        document.body.innerHTML = '<p>First content</p><p>Second content</p>';
+        jest.spyOn(viewportText, 'observePendingTextEntries').mockImplementation((entries, onChange) =>
+        {
+            const pending = new Set(entries.map(entry => entry.id));
+            onChange(pending.size);
+            return { disconnect: jest.fn(), settle: entry => { pending.delete(entry.id); onChange(pending.size); } };
+        });
+        let started!: () => void;
+        let fail!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce((entries, options) =>
+        {
+            started();
+            fail = () => options.onGroupServeFailed?.([entries[0]]);
+            return new Promise(resolve => { release = () => resolve({ translated: [], failures: [{ groupId: 'first', error: 'translation_failed' }], totalGroups: 2 }); });
+        });
+        const progress = jest.fn();
+        const session = createSession({ root: document.body, sourceLang: 'en' });
+        const result = session.switchTo('it', { onViewportPendingChange: progress });
+        void result.catch(() => {});
+        await expect(Promise.race([pending, result])).resolves.toBeUndefined();
+        expect(progress).toHaveBeenLastCalledWith(2);
+        fail();
+        expect(progress).toHaveBeenLastCalledWith(1);
+        release();
+        await result;
+        expect(progress).toHaveBeenLastCalledWith(0);
+    });
+
 });

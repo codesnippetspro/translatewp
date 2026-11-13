@@ -177,3 +177,44 @@ it('finishes sampled timing as cancelled when a held session is disposed', async
         document.body.innerHTML = '';
     }
 });
+
+it('records refused groups in sampled completion timing', async () =>
+{
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    let Session!: typeof TranslationSession;
+    let settleMs = 0;
+    jest.isolateModules(() => { ({ TranslationSession: Session, CHANGE_SETTLE_MS: settleMs } = require('../TranslationSession')); });
+    let started!: () => void;
+    const pending = new Promise<void>(resolve => { started = resolve; });
+    const events: ServedTimingEvent[] = [];
+    document.body.innerHTML = '<p>Original content</p>';
+    const session = new Session({ root: document.body, sourceLang: 'en', onTiming: event => events.push(event),
+        createTranslator: (sourceLang, targetLang) =>
+        {
+            const translator = new Translator({ sourceLang, targetLang });
+            jest.spyOn(translator, 'translateBatch').mockImplementation(async () =>
+            {
+                started();
+                return { translated: [], failures: [{ groupId: 'refused', error: 'miss_report_rejected' }], totalGroups: 1 };
+            });
+            return translator;
+        },
+    });
+    const result = session.switchTo('it');
+    void result.catch(() => {});
+    try
+    {
+        await expect(Promise.race([pending, result]).finally(() => random.mockRestore())).resolves.toBeUndefined();
+        await result;
+        await jest.advanceTimersByTimeAsync(settleMs + 1);
+        expect(events).toEqual([expect.objectContaining({ outcome: 'error', sourceCount: 1, appliedCount: 0, failedGroups: 1, pendingGroups: 0 })]);
+    }
+    finally
+    {
+        session.dispose();
+        jest.restoreAllMocks();
+        jest.useRealTimers();
+        document.body.innerHTML = '';
+    }
+});
