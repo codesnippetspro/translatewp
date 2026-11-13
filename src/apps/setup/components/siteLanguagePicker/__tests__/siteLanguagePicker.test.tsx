@@ -29,8 +29,10 @@ describe('the site language on the connection line', () =>
     {
         useSetupStore.setState({ defaultLanguage: 'lv', languages: ['de'] });
         const container = await render();
-        const input = container.querySelector('input[aria-label="Filter languages"]') as HTMLInputElement;
+        const input = container.querySelector('input[aria-label="Default language"]') as HTMLInputElement;
         expect(input).not.toBeNull();
+        expect(input.getAttribute('aria-label')).not.toBe('Filter languages');
+        expect(container.querySelector('[title]')?.getAttribute('title')).toContain('The language your content is written in');
         expect(container.textContent).toContain('Latvian');
 
         await act(async () => { input.focus(); input.dispatchEvent(new FocusEvent('focus')); });

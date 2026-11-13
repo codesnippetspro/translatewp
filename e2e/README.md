@@ -29,3 +29,17 @@ checks themselves.
   dragged switcher must land exactly where it is let go on a page with one.
 - Switching branches while `wp-env` runs can leave its mounted folders empty.
   Run `npx wp-env stop && yarn e2e:env` after switching.
+
+## Number-field layout without WordPress
+
+The isolated number-field check uses markup rendered from the production component
+by its Jest suite and the built admin CSS. It checks actual left-to-right and
+right-to-left positions at 390px and desktop widths, without a running WordPress.
+A source hash rejects a stale markup fixture. `yarn e2e` refreshes it automatically
+through the `pree2e` hook; direct Playwright calls use the two-step command below.
+
+```bash
+yarn build
+CI=true yarn test --watch=false --ci --runTestsByPath src/shared/components/form/numberField/__tests__/numberField.test.tsx
+npx playwright test --config e2e/playwright.config.ts e2e/specs/number-field-layout.spec.ts
+```

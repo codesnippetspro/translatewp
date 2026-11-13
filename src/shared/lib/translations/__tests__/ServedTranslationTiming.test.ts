@@ -15,13 +15,14 @@ beforeEach(() =>
 {
 	jest.useFakeTimers();
 	Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
-	jest.spyOn(Math, 'random').mockReturnValue(0);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0);
 	jest.isolateModules(() =>
 	{
 		Timing = require('../ServedTranslationTiming').ServedTranslationTiming;
 	});
 	events = [];
 	round = new Timing({ kind: 'switch', emit: event => events.push(event) });
+	random.mockRestore();
 });
 afterEach(() => { round.finish('cancelled'); jest.restoreAllMocks(); jest.useRealTimers(); });
 
@@ -91,9 +92,10 @@ it('leaves unsampled rounds and a failing emitter outside translation outcomes',
 	round.finish('cancelled');
 	round = new Timing({ kind: 'switch', emit: () => { throw new Error('collector down'); } });
 	expect(() => round.finish()).not.toThrow();
-	jest.spyOn(Math, 'random').mockReturnValue(0.9);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0.9);
 	jest.isolateModules(() => { Timing = require('../ServedTranslationTiming').ServedTranslationTiming; });
 	round = new Timing({ kind: 'switch', emit: () => { throw new Error('collector down'); } });
+	random.mockRestore();
 	expect(() => round.finish()).not.toThrow();
 	expect(events).toHaveLength(1);
 });
@@ -145,10 +147,11 @@ it.each(['hidden', 'offscreen', 'replaced', 'css_hidden'])(
 it('does no per-target work or deadline scheduling for an unsampled document', () =>
 {
 	round.finish('cancelled');
-	jest.spyOn(Math, 'random').mockReturnValue(0.9);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0.9);
 	jest.isolateModules(() => { Timing = require('../ServedTranslationTiming').ServedTranslationTiming; });
 	const timers = jest.getTimerCount();
 	round = new Timing({ kind: 'switch', emit: () => { throw new Error('must not emit'); } });
+	random.mockRestore();
 	const targets = new Proxy([] as TranslatableEntry[], { get: () => { throw new Error('target work'); } });
 	expect(() => round.observe(targets)).not.toThrow();
 	expect(jest.getTimerCount()).toBe(timers);

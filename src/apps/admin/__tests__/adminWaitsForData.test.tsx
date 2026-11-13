@@ -8,6 +8,7 @@ import { useAdminSettingsStore } from '@/apps/admin/stores/settingsStore';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('@/apps/admin/components/Header', () => ({ Header: () => null }));
+jest.mock('@/apps/admin/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/apps/admin/components/Dashboard/DashboardPage', () => ({ DashboardPage: () => <div data-testid='dashboard-page' /> }));
 jest.mock('@/apps/admin/components/Lexicon', () => ({ Lexicon: () => null }));
 jest.mock('@/apps/admin/components/SeoTools', () => ({ SeoTools: () => null }));

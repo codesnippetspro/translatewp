@@ -42,7 +42,7 @@ describe('a restarted wizard says what a new context costs', () =>
         expect(content.title).toBe('Translate the site again');
         expect(content.message).toContain('321 pages in 2 translation languages');
         expect(content.message).not.toMatch(/token/i);
-        expect(content.message).toContain('This counts 642 page translations towards your quota. 63% of it is available right now.');
+        expect(content.message).toContain('This counts 642 page translations towards your usage. 63% is available right now.');
         expect(content.message).not.toContain('stale');
         expect(content.confirmLabel).toBe('Read again and retranslate');
         expect(content.tone).toBe('proceed');

@@ -1,5 +1,5 @@
+import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import { useQuery } from "@tanstack/react-query";
-import { Spinner } from "@wordpress/components";
 import { __, sprintf } from "@wordpress/i18n";
 
 import { type DashboardMetrics } from "@/shared/api/admin";
@@ -41,6 +41,7 @@ export const Dashboard = () =>
     const { data, isLoading, isError } = useQuery(getDashboardMetricsQueryOptions());
     const { data: connectStatus, isPending: connectStatusPending } = useQuery(getConnectStatusQueryOptions());
     const connected = connectStatus?.connected === true;
+    const liveStatus = useTranslationReadiness(!isLoading);
     // The install card owns the install and activate states; the
     // plain Pro status stays for the update and payment timeline states.
     const proCardShown = pendingProAction(connectStatus) !== null;
@@ -48,9 +49,9 @@ export const Dashboard = () =>
     return (
         <div className="flex flex-col">
             <PageHeader
-                title="Dashboard"
+                title={__('Dashboard', 'translate')}
                 description={connected && <ConnectionStatusText />}
-                actions={connected && <OverviewNextAction />}
+                actions={connected && <OverviewNextAction liveStatus={liveStatus} />}
             />
 
             <PageBody>
@@ -70,19 +71,19 @@ export const Dashboard = () =>
                 {/* The connection card waits for the status: a site is never shown
                     as disconnected before the answer is in. */}
                 {!connected && !connectStatusPending && (
-                    <Card title="Connection">
+                    <Card title={__('Connection', 'translate')}>
                         <ConnectionPanel />
                     </Card>
                 )}
 
                 {isLoading && (
-                    <div className="flex items-center justify-center p-16">
-                        <Spinner />
-                    </div>
+                    <p className="m-0 text-sm text-translatewp-muted" role="status">
+                        {__('Loading translation figures…', 'translate')}
+                    </p>
                 )}
 
                 {(isError || (!isLoading && !data)) && (
-                    <p className="m-0 text-sm text-translatewp-muted">Failed to load dashboard metrics.</p>
+                    <p className="m-0 text-sm text-translatewp-muted">{__('Failed to load dashboard metrics.', 'translate')}</p>
                 )}
 
                 {data && !isLoading && (
@@ -99,11 +100,14 @@ export const Dashboard = () =>
                 )}
 
                 {/* The controls follow the figures, on the same store as Settings. */}
-                <Section title="Quick settings" description="The main settings, right here. Everything else lives under Settings.">
+                <Section
+                    heading={__("Quick settings", "translate")}
+                    description={__("The main settings, right here. Everything else lives under Settings.", "translate")}
+                >
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                         <LanguagesCard />
                         <TranslationCard />
-                        <IndexingSummary />
+                        <IndexingSummary liveStatus={liveStatus} />
                     </div>
                 </Section>
             </PageBody>
@@ -157,12 +161,12 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
 {
     return (
         <>
-            <Section title="Today" description={__("Since midnight.", "translate")}>
+            <Section heading={__("Today", "translate")} description={__("Since midnight.", "translate")}>
                 <SummaryStats data={data} />
             </Section>
 
             <Section
-                title="Usage"
+                heading={__("Usage", "translate")}
                 description={connected
                     ? __("What is available to your account and where the translations went.", "translate")
                     : __("Where the translations went.", "translate")}
@@ -170,15 +174,15 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     {connected && <QuotaCard />}
 
-                    <Card title="Language usage">
+                    <Card title={__('Language usage', 'translate')}>
                         {data.languageUsage.length === 0 ? (
-                            <p className="m-0 text-sm text-translatewp-muted">No translation data yet.</p>
+                            <p className="m-0 text-sm text-translatewp-muted">{__('No translation data yet.', 'translate')}</p>
                         ) : (
                             <Table>
                                 <TableHeaderRow>
-                                    <TableCell variant="header">Language</TableCell>
-                                    <TableCell variant="header">Translations</TableCell>
-                                    <TableCell variant="header">Share</TableCell>
+                                    <TableCell variant="header">{__('Language', 'translate')}</TableCell>
+                                    <TableCell variant="header">{__('Translations', 'translate')}</TableCell>
+                                    <TableCell variant="header">{__('Share', 'translate')}</TableCell>
                                 </TableHeaderRow>
 
                                 {data.languageUsage.map((lang, index) => (
@@ -199,16 +203,19 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                 </div>
             </Section>
 
-            <Section title="Content" description="The pages visitors read most in another language, and the terms you fixed lately.">
+            <Section
+                heading={__("Content", "translate")}
+                description={__("The pages visitors read most in another language, and the terms you fixed lately.", "translate")}
+            >
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                    <Card title="Most translated content">
+                    <Card title={__('Most translated content', 'translate')}>
                         {data.recentContent.length === 0 ? (
-                            <p className="m-0 text-sm text-translatewp-muted">No translated content yet.</p>
+                            <p className="m-0 text-sm text-translatewp-muted">{__('No translated content yet.', 'translate')}</p>
                         ) : (
                             <Table>
                                 <TableHeaderRow>
-                                    <TableCell variant="header">Page</TableCell>
-                                    <TableCell variant="header">Language</TableCell>
+                                    <TableCell variant="header">{__('Page', 'translate')}</TableCell>
+                                    <TableCell variant="header">{__('Language', 'translate')}</TableCell>
                                 </TableHeaderRow>
 
                                 {data.recentContent.map((item, index) => (
@@ -236,8 +243,8 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                         ) : (
                             <Table>
                                 <TableHeaderRow>
-                                    <TableCell variant="header">Term</TableCell>
-                                    <TableCell variant="header">Added</TableCell>
+                                    <TableCell variant="header">{__('Term', 'translate')}</TableCell>
+                                    <TableCell variant="header">{__('Added', 'translate')}</TableCell>
                                 </TableHeaderRow>
 
                                 {data.recentLexicon.map((entry, index) => (

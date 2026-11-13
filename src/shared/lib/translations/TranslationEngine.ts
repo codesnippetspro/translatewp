@@ -1,3 +1,4 @@
+import { runTranslationTask } from '@/shared/lib/translations/runTranslationTask';
 import {
     DEFAULT_EXTRACTION_OPTIONS,
     DEFAULT_NO_TRANSLATE_CLASS,
@@ -14,6 +15,8 @@ import {
     type TranslationBatchResult,
 } from '@/shared/lib/translations/Translator';
 
+const TRANSLATION_RUN_TIMEOUT_MS = 180_000;
+
 export type TranslationEntryWrite = {
     entry: TranslatableEntry;
     changed: boolean;
@@ -28,6 +31,7 @@ export type TranslationRunOptions = {
     onServePath?: (path: 'ready' | 'cold') => void;
     onGroupServeStarted?: (entries: TranslatableEntry[]) => void;
     onGroupServeFailed?: (entries: TranslatableEntry[]) => void;
+    onEntrySettled?: (entry: TranslatableEntry) => void;
 };
 
 export type TranslationEngineResult = TranslationBatchResult & {
@@ -189,6 +193,7 @@ export class TranslationEngine
             options.onEntryApplied?.(entry);
             const changed = options.onEntryWritten ? DOMWriter.read(entry) !== entry.value : false;
             DOMWriter.write(entry);
+            options.onEntrySettled?.(entry);
             if (options.onEntryWritten && entry.node.isConnected)
             {
                 options.onEntryWritten({ entry, changed });
@@ -213,42 +218,50 @@ export class TranslationEngine
         };
         try
         {
-            const result = await this.translator.translateBatch(remote, {
+            const result = await runTranslationTask({
                 signal: options.signal,
-                onServePath: options.onServePath,
-                onGroupServeStarted: (entries) =>
-                {
-                    for (const entry of entries)
+                timeoutMs: TRANSLATION_RUN_TIMEOUT_MS,
+                run: signal => this.translator.translateBatch(remote, {
+                    signal,
+                    onServePath: options.onServePath,
+                    onGroupServeStarted: (entries) =>
                     {
-                        if (loading.has(entry)) continue;
-                        loading.add(entry);
-                        DOMWriter.setLoading(entry, true);
-                    }
-                },
-                onGroupServeFailed: (entries) =>
-                {
-                    for (const entry of entries) unmark(entry);
-                },
-                onEntryTranslated: (entry, served = true) =>
-                {
-                    if (options.signal?.aborted) return;
-                    const applied = TranslationEngine.#withCurrentNumbers(sourceById.get(entry.id), entry);
-                    if (applied)
-                    {
-                        options.onEntryApplied?.(applied);
-                        const changed = options.onEntryWritten
-                            ? DOMWriter.read(applied) !== applied.value
-                            : false;
-                        DOMWriter.write(applied);
-                        if (options.onEntryWritten && served && applied.node.isConnected)
+                        if (signal.aborted) return;
+                        for (const entry of entries)
                         {
-                            options.onEntryWritten({
-                                entry: applied, changed, sourceValue: sourceById.get(entry.id)?.value,
-                            });
+                            if (loading.has(entry)) continue;
+                            loading.add(entry);
+                            DOMWriter.setLoading(entry, true);
                         }
+                    },
+                    onGroupServeFailed: (entries) =>
+                    {
+                        if (signal.aborted) return;
+                        for (const entry of entries) unmark(entry);
+                        options.onGroupServeFailed?.(entries);
+                    },
+                    onEntryTranslated: (entry, served = true) =>
+                    {
+                        if (signal.aborted) return;
+                        const applied = TranslationEngine.#withCurrentNumbers(sourceById.get(entry.id), entry);
+                        if (applied)
+                        {
+                            options.onEntryApplied?.(applied);
+                            const changed = options.onEntryWritten
+                                ? DOMWriter.read(applied) !== applied.value
+                                : false;
+                            DOMWriter.write(applied);
+                            if (options.onEntryWritten && served && applied.node.isConnected)
+                            {
+                                options.onEntryWritten({
+                                    entry: applied, changed, sourceValue: sourceById.get(entry.id)?.value,
+                                });
+                            }
+                        }
+                        unmark(sourceById.get(entry.id) ?? entry);
+                        options.onEntrySettled?.(entry);
                     }
-                    unmark(sourceById.get(entry.id) ?? entry);
-                }
+                }),
             });
             for (const entry of [...loading]) unmark(entry);
 
@@ -317,6 +330,7 @@ class DOMWriter
 {
     static #loadingClassName = 'translatewp-translating';
     static #loadingCountAttribute = 'data-translatewp-loading-count';
+    static #loadingElements = new WeakMap<Node, Element>();
     static #styleTagId = 'translatewp-translating-style';
 
     static ensureLoadingStyles(): void
@@ -327,31 +341,13 @@ class DOMWriter
         style.id = DOMWriter.#styleTagId;
         style.textContent = `
             .${DOMWriter.#loadingClassName} {
-                color: transparent !important;
-                border-radius: .2em;
-                background-image: linear-gradient(
-                    90deg,
-                    rgba(237, 237, 237, .92) 25%,
-                    rgba(245, 245, 245, .96) 37%,
-                    rgba(237, 237, 237, .92) 63%
-                );
-                background-size: 400% 100%;
-                animation: translatewp-skeleton-shimmer 1.2s ease-in-out infinite;
-            }
-
-            @keyframes translatewp-skeleton-shimmer {
-                0% {
-                    background-position: 100% 50%;
-                }
-                100% {
-                    background-position: 0 50%;
-                }
+                opacity: 0.65 !important;
+                transition: opacity 180ms ease;
             }
 
             @media (prefers-reduced-motion: reduce) {
                 .${DOMWriter.#loadingClassName} {
-                    animation: none;
-                    background-position: 50% 50%;
+                    transition: none;
                 }
             }
         `;
@@ -366,7 +362,8 @@ class DOMWriter
     {
         for (const entry of entries)
         {
-            const element = DOMWriter.#getLoadingElement(entry);
+            const element = DOMWriter.#loadingElements.get(entry.node) ?? DOMWriter.#getLoadingElement(entry);
+            DOMWriter.#loadingElements.delete(entry.node);
             if (!element) continue;
             element.removeAttribute(DOMWriter.#loadingCountAttribute);
             element.classList.remove(DOMWriter.#loadingClassName);
@@ -376,10 +373,15 @@ class DOMWriter
 
     static setLoading(entry: TranslatableEntry, isLoading: boolean): void
     {
+        if (entry.type !== EntryType.TEXT) return;
         if (!/\p{L}/u.test(entry.value)) return;
 
-        const element = DOMWriter.#getLoadingElement(entry);
+        const element = isLoading
+            ? DOMWriter.#getLoadingElement(entry)
+            : DOMWriter.#loadingElements.get(entry.node) ?? DOMWriter.#getLoadingElement(entry);
         if (!element) return;
+        if (isLoading) DOMWriter.#loadingElements.set(entry.node, element);
+        else DOMWriter.#loadingElements.delete(entry.node);
 
         const currentCount = Number(element.getAttribute(DOMWriter.#loadingCountAttribute) || 0);
 

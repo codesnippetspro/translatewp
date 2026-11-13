@@ -1,4 +1,6 @@
+import { runTranslationTask, TRANSLATION_IO_TIMEOUT_MS } from '@/shared/lib/translations/runTranslationTask';
 import type { TranslationCachePlan } from '@/shared/lib/translations/TranslationCacheClient';
+import type { CoveredTranslationSubscription } from '@/shared/lib/translations/MissReportCoalescer';
 import type { TranslationSubscription } from '@/shared/lib/translations/TranslationEventClient';
 
 type MissReportGroup = TranslationCachePlan['groupsForCache'][number];
@@ -7,6 +9,7 @@ export const MISS_REPORT_MAX_ITEMS = 40;
 export const MISS_REPORT_RETRY_WINDOW_MS = 90_000;
 
 const MISS_REPORT_RETRY_STATUS = 429;
+const MISS_REPORT_MIN_RETRY_DELAY_MS = 1000;
 const MISS_REPORT_FATAL_STATUSES = new Set([400, 409]);
 const MISS_REPORT_DEFAULT_RETRY_DELAY_MS = 3000;
 const MISS_REPORT_RETRY_JITTER_MS = 250;
@@ -16,10 +19,15 @@ const MISS_REPORT_SERVER_ERROR_BASE_DELAY_MS = 1000;
 export type MissReportResult = {
     outcome: 'accepted' | 'rejected';
     subscription?: TranslationSubscription;
+    acceptedHashes?: string[];
+    subscriptions?: CoveredTranslationSubscription[];
+    retryHashes?: string[];
+    retryAfter?: number;
 };
 
 export type MissReportBackoffDeps = {
-    post: () => Promise<Response>;
+    post: (signal?: AbortSignal, hashes?: string[]) => Promise<Response>;
+    hashes?: string[];
     signal?: AbortSignal;
     throwIfAborted: () => void;
     delay: (ms: number) => Promise<void>;
@@ -35,98 +43,141 @@ export type MissReportBackoffDeps = {
  */
 export async function postMissChunkWithBackoff({
     post,
+    hashes,
+    signal,
     throwIfAborted,
     delay,
     random = Math.random,
     subscriptionOrigin,
 }: MissReportBackoffDeps): Promise<MissReportResult>
 {
-    let response = await post();
-    if (response.ok)
+    const deadline = Date.now() + MISS_REPORT_RETRY_WINDOW_MS;
+    let remainingBudgetMs = MISS_REPORT_RETRY_WINDOW_MS;
+    let serverRetries = 0;
+    let pendingHashes = hashes;
+    const acceptedHashes = new Set<string>();
+    const subscriptions: CoveredTranslationSubscription[] = [];
+    const finish = (): MissReportResult => acceptedHashes.size
+        ? { outcome: 'accepted', acceptedHashes: [...acceptedHashes], subscriptions }
+        : { outcome: 'rejected' };
+    while (remainingBudgetMs > 0)
     {
-        return acceptedResult(response, subscriptionOrigin);
-    }
-    if (MISS_REPORT_FATAL_STATUSES.has(response.status))
-    {
-        console.warn(`[TranslateWP] Miss report rejected (${response.status}); original text kept.`);
-        return { outcome: 'rejected' };
-    }
-
-    if (response.status === MISS_REPORT_RETRY_STATUS)
-    {
-        let remainingBudgetMs = MISS_REPORT_RETRY_WINDOW_MS;
-
-        while (remainingBudgetMs > 0)
+        throwIfAborted();
+        remainingBudgetMs = Math.min(remainingBudgetMs, deadline - Date.now());
+        if (remainingBudgetMs <= 0) break;
+        let response: Response;
+        let result: MissReportResult | undefined;
+        try
         {
-            const retryAfterSeconds = Number(response.headers.get('Retry-After'));
-            const baseDelayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-                ? retryAfterSeconds * 1000
-                : MISS_REPORT_DEFAULT_RETRY_DELAY_MS;
-            const waitMs = Math.min(baseDelayMs + random() * MISS_REPORT_RETRY_JITTER_MS, remainingBudgetMs);
-
-            await delay(waitMs);
-            remainingBudgetMs -= waitMs;
-            throwIfAborted();
-
-            response = await post();
-            if (response.ok)
+            ({ response, result } = await runTranslationTask({
+                signal,
+                timeoutMs: Math.min(TRANSLATION_IO_TIMEOUT_MS, remainingBudgetMs),
+                run: async requestSignal =>
+                {
+                    const response = await post(requestSignal, pendingHashes);
+                    const result = response.ok ? await acceptedResult(response, subscriptionOrigin) : undefined;
+                    return { response, result };
+                },
+            }));
+        }
+        catch (error)
+        {
+            if ((error as Error)?.name === 'AbortError' || !acceptedHashes.size) throw error;
+            return finish();
+        }
+        if (result && !result.retryHashes)
+        {
+            if (!acceptedHashes.size) return result;
+            if (result.outcome === 'accepted')
             {
-                return acceptedResult(response, subscriptionOrigin);
+                for (const hash of pendingHashes ?? []) acceptedHashes.add(hash);
+                if (result.subscription) subscriptions.push({ ...result.subscription, hashes: pendingHashes ?? [] });
             }
-            if (MISS_REPORT_FATAL_STATUSES.has(response.status))
-            {
-                console.warn(`[TranslateWP] Miss report rejected (${response.status}); original text kept.`);
-                return { outcome: 'rejected' };
-            }
-            if (response.status !== MISS_REPORT_RETRY_STATUS) break;
+            return finish();
+        }
+        if (result?.retryHashes)
+        {
+            const accepted = result.acceptedHashes ?? [];
+            const returned = [...accepted, ...result.retryHashes];
+            if (!pendingHashes || new Set(returned).size !== returned.length
+                || returned.some(hash => !pendingHashes!.includes(hash))) return finish();
+            for (const hash of accepted) acceptedHashes.add(hash);
+            if (result.subscription) subscriptions.push({ ...result.subscription, hashes: accepted });
+            pendingHashes = result.retryHashes;
+            if (!pendingHashes.length) return finish();
+        }
+        if (MISS_REPORT_FATAL_STATUSES.has(response.status))
+        {
+            console.warn(`[TranslateWP] Miss report rejected (${response.status}); original text kept.`);
+            return finish();
         }
 
-        if (response.status === MISS_REPORT_RETRY_STATUS)
+        let baseDelayMs: number;
+        if (result?.retryHashes || response.status === MISS_REPORT_RETRY_STATUS)
         {
-            console.warn('[TranslateWP] Miss report still rate limited after retrying through the poll window; original text kept.');
-            return { outcome: 'rejected' };
+            const retryAfter = result?.retryAfter ? String(result.retryAfter) : response.headers.get('Retry-After');
+            const seconds = Number(retryAfter);
+            const date = retryAfter ? Date.parse(retryAfter) : NaN;
+            baseDelayMs = Number.isFinite(seconds) && seconds > 0
+                ? seconds * 1000
+                : Number.isFinite(date) ? Math.max(0, date - Date.now()) : MISS_REPORT_DEFAULT_RETRY_DELAY_MS;
+            baseDelayMs = Math.max(MISS_REPORT_MIN_RETRY_DELAY_MS, baseDelayMs);
         }
-    }
-
-    if (response.status >= 500)
-    {
-        for (let attempt = 0; attempt < MISS_REPORT_SERVER_ERROR_MAX_RETRIES; attempt++)
+        else if (response.status >= 500 && serverRetries < MISS_REPORT_SERVER_ERROR_MAX_RETRIES)
         {
-            const waitMs = MISS_REPORT_SERVER_ERROR_BASE_DELAY_MS * (attempt + 1) + random() * MISS_REPORT_RETRY_JITTER_MS;
-            await delay(waitMs);
-            throwIfAborted();
-
-            response = await post();
-            if (response.ok)
-            {
-                return acceptedResult(response, subscriptionOrigin);
-            }
-            if (MISS_REPORT_FATAL_STATUSES.has(response.status))
-            {
-                console.warn(`[TranslateWP] Miss report rejected (${response.status}); original text kept.`);
-                return { outcome: 'rejected' };
-            }
+            serverRetries += 1;
+            baseDelayMs = MISS_REPORT_SERVER_ERROR_BASE_DELAY_MS * serverRetries;
+        }
+        else
+        {
+            console.warn(`[TranslateWP] Miss report failed (${response.status}); original text kept.`);
+            return finish();
         }
 
-        console.warn(`[TranslateWP] Miss report failed (${response.status}) after retrying; original text kept.`);
-        return { outcome: 'rejected' };
+        remainingBudgetMs = Math.min(remainingBudgetMs, deadline - Date.now());
+        const waitMs = baseDelayMs + random() * MISS_REPORT_RETRY_JITTER_MS;
+        if (waitMs >= remainingBudgetMs) break;
+        try
+        {
+            await runTranslationTask({
+                signal,
+                timeoutMs: Math.min(waitMs + TRANSLATION_IO_TIMEOUT_MS, remainingBudgetMs),
+                run: () => delay(waitMs),
+            });
+        }
+        catch (error)
+        {
+            if ((error as Error)?.name === 'AbortError' || !acceptedHashes.size) throw error;
+            return finish();
+        }
+        remainingBudgetMs -= waitMs;
     }
-
-    console.warn(`[TranslateWP] Miss report failed (${response.status}); original text kept.`);
-    return { outcome: 'rejected' };
+    console.warn('[TranslateWP] Miss report could not retry within the available window; original text kept.');
+    return finish();
 }
 
 async function acceptedResult(response: Response, subscriptionOrigin: string): Promise<MissReportResult>
 {
     try
     {
-        const body = await response.json() as { skipped?: number; subscription?: unknown };
+        const body = await response.json() as { skipped?: number; subscription?: unknown; acceptedHashes?: unknown; retryHashes?: unknown; retryAfter?: unknown };
         if (typeof body?.skipped === 'number' && body.skipped > 0)
         {
             console.warn(`[TranslateWP] Miss report skipped ${body.skipped} invalid item(s); the rest were accepted.`);
         }
         const subscription = sanitizeTranslationSubscription(body?.subscription, subscriptionOrigin);
-        return subscription ? { outcome: 'accepted', subscription } : { outcome: 'accepted' };
+        const result: MissReportResult = subscription ? { outcome: 'accepted', subscription } : { outcome: 'accepted' };
+        if (body?.retryHashes !== undefined)
+        {
+            const isHashes = (value: unknown): value is string[] => Array.isArray(value)
+                && value.length <= MISS_REPORT_MAX_ITEMS
+                && value.every(hash => typeof hash === 'string' && hash.length > 0 && hash.length <= 128);
+            if (!isHashes(body.retryHashes) || !isHashes(body.acceptedHashes)
+                || typeof body.retryAfter !== 'number' || !Number.isFinite(body.retryAfter)
+                || body.retryAfter <= 0) return { outcome: 'rejected' };
+            return { ...result, acceptedHashes: body.acceptedHashes, retryHashes: body.retryHashes, retryAfter: body.retryAfter };
+        }
+        return result;
     }
     catch
     {

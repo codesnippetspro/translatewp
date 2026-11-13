@@ -1,3 +1,4 @@
+import { __, sprintf } from '@wordpress/i18n';
 import { useEffect, useRef, useState } from '@wordpress/element';
 import { Search, X } from 'lucide-react';
 
@@ -128,7 +129,11 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
                             type="button"
                             className="inline-flex items-center justify-center m-0! p-0! h-auto! min-h-0! min-w-0! bg-transparent! border-none! shadow-none! cursor-pointer text-translatewp-icons hover:text-translatewp-primary shrink-0"
                             onClick={() => handleRemove(option.value)}
-                            aria-label={`Remove ${option.label}`}
+                            aria-label={sprintf(
+                                /* translators: %s: label of the selected option. */
+                                __('Remove %s', 'translate'),
+                                option.label
+                            )}
                         >
                             <X size={16} />
                         </button>
@@ -140,8 +145,8 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
                     ref={inputRef}
                     type="text"
                     value={filterValue}
-                    placeholder={placeholder ?? 'Filter options'}
-                    className="min-w-0 flex-1 bg-transparent text-translatewp-neutral! text-sm! border-none! focus:ring-0! focus:outline-none!"
+                    placeholder={placeholder ?? __('Filter options', 'translate')}
+                    className="min-w-0 flex-1 bg-transparent text-translatewp-neutral! text-[13px]! border-none! focus:ring-0! focus:outline-none!"
                     onChange={(event) => setFilterValue(event.target.value)}
                     onFocus={() => setIsOpen(true)}
                     onKeyDown={(event) =>
@@ -174,14 +179,18 @@ export const Multiselect = ({ options, value, onChange, placeholder, noOptionsTe
                             onClick={handleCreate}
                         >
                             <span className="text-sm">
-                                {createOptionLabel ? createOptionLabel(trimmedFilterValue) : `Create "${trimmedFilterValue}"`}
+                                {createOptionLabel ? createOptionLabel(trimmedFilterValue) : sprintf(
+                                    /* translators: %s: name of the new option. */
+                                    __('Create "%s"', 'translate'),
+                                    trimmedFilterValue
+                                )}
                             </span>
                         </button>
                     )}
 
                     {filteredOptions.length === 0 && (
                         <div className="px-3 py-2.75 text-sm text-translatewp-muted">
-                            {noOptionsText ?? 'No options available'}
+                            {noOptionsText ?? __('No options available', 'translate')}
                         </div>
                     )}
 

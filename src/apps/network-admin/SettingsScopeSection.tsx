@@ -1,4 +1,5 @@
-import { Button, RadioControl, SelectControl, TextControl, ToggleControl, __experimentalNumberControl as NumberControl } from '@wordpress/components';
+import { NumberField, numberFieldBounds } from '@/shared/components/form/numberField';
+import { Button, RadioControl, SelectControl, TextControl, ToggleControl } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { useRef, useState } from '@wordpress/element';
 
@@ -7,7 +8,7 @@ import { Card, Section } from '@/shared/components/adminSurface';
 import { ColorPicker } from '@/shared/components/form/colorPicker';
 import { Range } from '@/shared/components/form/range';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
-import { ProBadge } from '@/shared/components/pro/ProBadge';
+import { ProMarker } from '@/shared/components/pro/ProMarker';
 import { ProLock } from '@/shared/components/pro/ProLock';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
 
@@ -137,13 +138,13 @@ const FieldControl = ({ field, value, onChange, proActive = false }: { field: Ne
             );
         case 'number':
             return (
-                <NumberControl
-                    __next40pxDefaultSize
+                <NumberField
                     label={field.label}
                     value={Number(value)}
-                    min={0}
-                    max={500}
-                    onChange={(next) => onChange(next === undefined || next === '' ? value : Math.max(0, Math.trunc(Number(next))))}
+                    {...(field.key === 'languages.switcher.font_size' ? numberFieldBounds.fontSize
+                        : field.key === 'languages.seo.cookie_ttl' ? numberFieldBounds.cookieDays : numberFieldBounds.switcherMetric)}
+                    unit={field.key === 'languages.seo.cookie_ttl' ? __('days', 'translate') : 'px'}
+                    onChange={next => onChange(next)}
                     className="max-w-40"
                 />
             );
@@ -230,11 +231,11 @@ const ValueForm = ({ group, form, subsites, requestConfirmation, proActive = fal
             <span className="text-sm font-bold text-translatewp-neutral">{__('Network value', 'translate')}</span>
             <div className="flex flex-col gap-4">
                 {group.fields.map(field => field.pro && !proActive ? (
-                    <div key={field.key} className="flex w-full max-w-xl items-end gap-3" data-pro-field={field.key}>
+                    <div key={field.key} className="flex w-full max-w-xl items-start gap-3" data-pro-field={field.key}>
                         <ProLock feature={field.label} className="min-w-0 w-fit max-w-full">
                             <FieldControl field={field} value={values[field.key]} onChange={() => undefined} />
                         </ProLock>
-                        <ProBadge />
+                        <ProMarker />
                     </div>
                 ) : (
                     <FieldControl key={field.key} field={field} value={values[field.key]} proActive={proActive} onChange={(next) => setValues(previous => ({ ...previous, [field.key]: next }))} />
@@ -327,7 +328,7 @@ export const SettingsScopeSection = ({ scope, form, account = null, proActive = 
 
     return (
         <Section
-            title={__('Settings scope', 'translate')}
+            heading={__('Settings scope', 'translate')}
             description={__('Choose who sets each group of settings, set the network value, and make exceptions for chosen subsites.', 'translate')}
         >
             {scope.status === 'scope-saved' && (
@@ -362,7 +363,7 @@ export const SettingsScopeSection = ({ scope, form, account = null, proActive = 
                 </div>
             ))}
                 <div className="mb-6 break-inside-avoid last:mb-0" data-scope-group="switcher_position">
-                    <Card title={__('Switcher position', 'translate')} badge={<ProBadge />}>
+                    <Card title={__('Switcher position', 'translate')} badge={<ProMarker />}>
                         <p className="m-0 text-sm text-translatewp-muted!">
                             {__('Every subsite takes the floating switcher position you dragged into place on the main site.', 'translate')}
                         </p>

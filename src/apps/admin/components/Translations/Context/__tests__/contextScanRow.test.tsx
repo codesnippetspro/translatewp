@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { jest } from '@jest/globals';
+import type { ScanPollState } from '@/shared/hooks/useContextScan';
 
 jest.mock('@wordpress/i18n', () => ({
     ...(jest.requireActual('@wordpress/i18n') as object),
@@ -12,7 +13,7 @@ const mockSettingsState = {
     settings: {
         'translations.context': { text_context: '', last_scan_time: 0 },
     },
-    setSetting: () => {},
+    setSetting: jest.fn(),
 };
 
 jest.mock('@/apps/admin/stores/settingsStore', () => ({
@@ -20,11 +21,13 @@ jest.mock('@/apps/admin/stores/settingsStore', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
+    queryOptions: (options: unknown) => options,
+    useQuery: () => ({ data: { lexiconSuggestions: mockScan.state.phase === 'done' ? mockScan.state.lexiconSuggestions : [] } }),
     useMutation: () => ({ mutate: () => {}, isPending: false }),
-    useQueryClient: () => ({ invalidateQueries: () => {} }),
+    useQueryClient: () => ({ invalidateQueries: () => {}, setQueryData: () => {} }),
 }));
 
-const mockScan = { state: { phase: 'idle' }, startScan: () => {} };
+const mockScan: { state: ScanPollState; startScan: () => void } = { state: { phase: 'idle' }, startScan: () => {} };
 jest.mock('@/shared/hooks/useContextScan', () => ({
     useContextScan: () => mockScan,
     scanDoneMessage: () => '',
@@ -43,6 +46,8 @@ describe('Context scan row', () =>
     beforeEach(() =>
     {
         (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+        mockSettingsState.setSetting.mockClear();
+        mockScan.state = { phase: 'idle' };
         container = document.createElement('div');
         document.body.appendChild(container);
         root = createRoot(container);
@@ -76,4 +81,20 @@ describe('Context scan row', () =>
         expect(container.textContent).toContain('T:Scan the site for context');
         expect(container.textContent).toContain('T:No scan yet');
     });
+    test('restored suggestions leave the owner context and style untouched', () =>
+    {
+        mockSettingsState.settings['translations.context'].text_context = 'Owner edited context';
+        mockScan.state = {
+            phase: 'done', restored: true, context: 'Old stored context', applied: true, pages: 0,
+            result: { context: 'Old stored context', style: 'technical', tone: 'professional' },
+            lexiconSuggestions: [{ term: 'Orbital', description: 'Product name', category: 'Brand' }],
+        };
+        act(() => root.render(<TranslationsContext />));
+        expect(container.querySelector('textarea')?.value).toBe('Owner edited context');
+        expect(mockSettingsState.setSetting).not.toHaveBeenCalled();
+        expect(container.textContent).toContain('Orbital');
+        expect(container.textContent).toContain('Nothing is added until you choose. Unchecked terms are dismissed.');
+        expect(container.querySelector('[role="status"]')).toBeNull();
+    });
+
 });

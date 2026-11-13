@@ -30,6 +30,7 @@ export const sortedLocales = Object.keys( languages ).filter( isPickableLocale )
 type CountryFlagOptions = {
     additionalClasses?: string;
     iconStyle?: FlagIconStyle;
+    sizePx?: number;
 };
 
 export const getCountryFlagFromLocale = (
@@ -47,8 +48,8 @@ export const getCountryFlagFromLocale = (
     const additionalClasses = resolvedOptions.additionalClasses ?? '';
     const iconStyle = resolvedOptions.iconStyle ?? 'rectangle';
 
-    if ( iconStyle === 'square' || iconStyle === 'circle' ) {
-        const shapedStyle = getShapedFlagStyle( locale, iconStyle );
+    if ( iconStyle !== 'rectangle' || resolvedOptions.sizePx !== undefined ) {
+        const shapedStyle = getShapedFlagStyle( locale, { shape: iconStyle, sizePx: resolvedOptions.sizePx } );
         if ( shapedStyle ) {
             return (
                 <span

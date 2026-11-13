@@ -44,7 +44,7 @@ class AltTextNotice {
 		}
 
 		printf(
-			'%s<p><strong>%s</strong> %s</p><p><a class="button button-primary" href="%s">%s</a> <a class="button button-secondary" href="%s">%s</a></p></div>',
+			'%s<p><strong>%s</strong> %s</p><p><a class="button button-secondary" href="%s">%s</a> <a class="button button-secondary" href="%s">%s</a></p></div>',
 			AdminNotices::open( 'notice-info', self::DISMISS_ACTION ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attributes escaped in AdminNotices::open().
 			esc_html__( 'Image alt text translation is now part of TranslateWP Pro.', 'translate' ),
 			esc_html__( 'From this version, image alt text on this site stays in its original language. Everything else keeps translating as before.', 'translate' ),

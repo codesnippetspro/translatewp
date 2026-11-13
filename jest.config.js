@@ -13,7 +13,7 @@ module.exports = {
         '\\.(css|scss)$': '<rootDir>/tests/style-mock.js',
         '^@/(.*)$': '<rootDir>/src/$1',
     },
-    modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/'],
+    modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/', '<rootDir>/.stryker-tmp/'],
     preset: dirname(
         wordpressScriptsRequire.resolve(
             '@wordpress/jest-preset-default/package.json'

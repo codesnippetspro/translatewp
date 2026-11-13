@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+namespace TranslateWP\Components {
+
+	function time(): int {
+		return strtotime( '2026-10-01T00:00:00Z' );
+	}
+}
+
+namespace {
+
 use TranslateWP\Components\QuotaHandoff;
 use TranslateWP\Components\TranslationProRetry;
 
@@ -145,7 +154,7 @@ assert_handoff( ! array_key_exists( 'jobs', (array) get_option( QuotaHandoff::OP
 $GLOBALS['wp_test_transients'] = [];
 assert_handoff( QuotaHandoff::job_uses_own_providers( 'job-concurrent' ) && QuotaHandoff::job_uses_own_providers( 'job-10' ), '8. pins survive a cache flush' );
 // A pin past its expiry is gone and its row removed.
-update_option( QuotaHandoff::PIN_OPTION_PREFIX . md5( 'job-10' ), time() - 1 );
+update_option( QuotaHandoff::PIN_OPTION_PREFIX . md5( 'job-10' ), \TranslateWP\Components\time() - 1 );
 assert_handoff( ! QuotaHandoff::job_uses_own_providers( 'job-10' ) && ! in_array( 'quota_pin_' . md5( 'job-10' ), $pin_rows(), true ), '8. an expired pin is released and its row deleted' );
 
 // --- 8b. A pinned job whose providers became unusable is refused, never sent to the TranslateWP model, and stays pinned ---
@@ -176,3 +185,5 @@ if ( $failures > 0 ) {
 }
 
 echo "QuotaHandoffTest: all assertions passed\n";
+
+}

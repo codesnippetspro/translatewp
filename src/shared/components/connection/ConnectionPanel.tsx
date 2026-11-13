@@ -10,6 +10,7 @@ import {
 } from '@/shared/mutation-options/connect';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 import { AddressChangedNotice } from '@/shared/components/connection/AddressChangedNotice';
+import { ConnectReturnError } from '@/shared/components/connection/ConnectReturnError';
 import { ConnectionStatusText } from '@/shared/components/connection/ConnectionStatusText';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
@@ -102,7 +103,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     {pro.accountUrl !== '' && (
-                        <Button variant="primary" className="rounded-sm!" href={pro.accountUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="secondary" className="rounded-sm!" href={pro.accountUrl} target="_blank" rel="noopener noreferrer">
                             {__('Open your account', 'translate')}
                         </Button>
                     )}
@@ -126,7 +127,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     <Button
-                        variant="primary"
+                        variant="secondary"
                         className="rounded-sm!"
                         disabled={activateMutation.isPending}
                         isBusy={activateMutation.isPending}
@@ -153,7 +154,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                     )}
                 </p>
                 <div className="flex flex-wrap gap-3">
-                    <Button variant="primary" className="rounded-sm!" href={pro.updateUrl}>
+                    <Button variant="secondary" className="rounded-sm!" href={pro.updateUrl}>
                         {__('Update Pro', 'translate')}
                     </Button>
                 </div>
@@ -179,7 +180,7 @@ export const ProStatus = ({ pro, onlyWhenActionable = false, framed = false, acc
                 </p>
                 <div className="flex flex-wrap gap-3">
                     <Button
-                        variant="primary"
+                        variant="secondary"
                         className="rounded-sm!"
                         disabled={installMutation.isPending}
                         isBusy={installMutation.isPending}
@@ -316,12 +317,13 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     };
 
     if (isLoading) {
-        return <p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p>;
+        return <><ConnectReturnError /><p className="text-sm text-translatewp-muted!">{__('Checking connection…', 'translate')}</p></>;
     }
 
     if (isGroupLocked('account')) {
         return (
             <div className="flex flex-col gap-4">
+                <ConnectReturnError connected={data?.connected} />
                 <ConnectionStatusText />
                 {data?.siteId && (
                     <p className="text-sm text-translatewp-muted! m-0">
@@ -342,6 +344,7 @@ export const ConnectionPanel = ({ showConnectAction = true }: { showConnectActio
     return (
         <div className="flex flex-col gap-4">
             <ConfirmDialog {...confirmDialogProps} />
+            <ConnectReturnError connected={data?.connected} />
             <ConnectionStatusText />
             <AddressChangedNotice />
             {data?.connectionStatus !== 'invalidated' && (data?.connected ? (

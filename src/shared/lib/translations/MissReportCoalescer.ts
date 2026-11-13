@@ -8,6 +8,7 @@ export type CoveredTranslationSubscription = TranslationSubscription & { hashes:
 export type MissReportOutcome = {
     outcome: 'accepted' | 'rejected';
     subscriptions: CoveredTranslationSubscription[];
+    acceptedHashes?: string[];
 };
 
 const MISS_COALESCE_DEBOUNCE_MS = 200;
@@ -116,39 +117,47 @@ export class MissReportCoalescer
             {
                 const chunk = items.slice(offset, offset + MISS_REPORT_MAX_ITEMS);
                 const outcome = await postMissChunkWithBackoff({
-                    post: () => this.#fetchImpl(`${translationProxyBaseUrl}/miss`, {
+                    hashes: chunk.map(group => group.hash),
+                    post: (signal, hashes) => this.#fetchImpl(`${translationProxyBaseUrl}/miss`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ language: targetLang, url: pageUrl, pageTitle, items: toMissReportItems(chunk) }),
+                        signal,
+                        body: JSON.stringify({ language: targetLang, url: pageUrl, pageTitle, items: toMissReportItems(hashes ? chunk.filter(group => hashes.includes(group.hash)) : chunk) }),
                     }),
                     throwIfAborted: () => {},
                     delay: this.#delay,
                     random: this.#random,
                     subscriptionOrigin: remoteApiBaseUrl,
                 });
-                const subscription = outcome.subscription
-                    ? { ...outcome.subscription, hashes: chunk.map(group => group.hash) }
-                    : undefined;
+                const accepted = new Set(outcome.outcome === 'accepted'
+                    ? outcome.acceptedHashes ?? chunk.map(group => group.hash) : []);
+                const subscriptions = outcome.subscriptions ?? (outcome.subscription
+                    ? [{ ...outcome.subscription, hashes: [...accepted] }] : []);
                 for (const groupCache of chunk)
                 {
-                    outcomeByHash.set(groupCache.hash, outcome.outcome);
+                    outcomeByHash.set(groupCache.hash, accepted.has(groupCache.hash) ? 'accepted' : 'rejected');
+                    const subscription = subscriptions.find(item => item.hashes.includes(groupCache.hash));
                     if (subscription) subscriptionByHash.set(groupCache.hash, subscription);
                 }
             }
         }
         catch (error)
         {
-            for (const waiter of waiters) waiter.reject(error);
-            return;
+            if (![...outcomeByHash.values()].includes('accepted'))
+            {
+                for (const waiter of waiters) waiter.reject(error);
+                return;
+            }
         }
 
         for (const waiter of waiters)
         {
-            const allAccepted = waiter.hashes.every(hash => outcomeByHash.get(hash) === 'accepted');
-            const subscriptions = allAccepted
-                ? [...new Set(waiter.hashes.map(hash => subscriptionByHash.get(hash)).filter((value): value is CoveredTranslationSubscription => Boolean(value)))]
-                : [];
-            waiter.resolve({ outcome: allAccepted ? 'accepted' : 'rejected', subscriptions });
+            const acceptedHashes = waiter.hashes.filter(hash => outcomeByHash.get(hash) === 'accepted');
+            const subscriptions = [...new Set(acceptedHashes.map(hash => subscriptionByHash.get(hash))
+                .filter((value): value is CoveredTranslationSubscription => Boolean(value)))];
+            const partial = acceptedHashes.length > 0 && acceptedHashes.length < waiter.hashes.length;
+            waiter.resolve({ outcome: acceptedHashes.length ? 'accepted' : 'rejected', subscriptions,
+                ...(partial ? { acceptedHashes } : {}) });
         }
     }
 }

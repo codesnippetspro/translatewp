@@ -1,14 +1,12 @@
-import { useEffect, useState } from '@wordpress/element';
+import { useEffect } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { RefreshCcw, ListPlus } from "lucide-react";
-import { Button, TextareaControl } from "@wordpress/components";
+import { RefreshCcw } from "lucide-react";
+import { Button } from "@wordpress/components";
 
-import { ProBadge } from "@/shared/components/pro/ProBadge";
 import { useAdminSettingsStore, type TranslationsContext as TranslationsContextType } from '@/apps/admin/stores/settingsStore';
 import type { ScanContextResponse } from '@/shared/api/setup';
 import { scanDoneMessage, scanProgressMessage, useContextScan } from '@/shared/hooks/useContextScan';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { applyScanLexicon } from '@/shared/api/setup';
+import { SiteScanSuggestions } from '@/shared/components/siteScanSuggestions';
 
 export const TranslationsContext = () =>
 {
@@ -64,12 +62,12 @@ export const TranslationsContext = () =>
     // The scan runs on the site's scheduled tasks and finishes later; the
     // form fills in from the polled result, with the time elapsed shown
     // while it runs and a plain reason when it fails.
-    const { state: scanState, startScan } = useContextScan();
+    const { state: scanState, startScan } = useContextScan({ restoreStored: true });
     const isPending = scanState.phase === 'scanning';
 
     useEffect(() =>
     {
-        if (scanState.phase !== 'done')
+        if (scanState.phase !== 'done' || scanState.restored)
         {
             return;
         }
@@ -90,33 +88,20 @@ export const TranslationsContext = () =>
 
     const scanWebsite = () =>
     {
-        setLexiconNotice(null);
         void startScan();
     };
 
-    // The scan proposes lexicon terms to a Pro site only
-    // (a Free site gets none from the status route); they land only when asked.
-    const queryClient = useQueryClient();
-    const [lexiconNotice, setLexiconNotice] = useState<string | null>(null);
-    const suggestions = scanState.phase === 'done' ? scanState.lexiconSuggestions : [];
-    const applyLexicon = useMutation({
-        mutationFn: applyScanLexicon,
-        onSuccess: async (result) =>
-        {
-            setLexiconNotice(sprintf(
-                /* translators: %d: number of terms added. */
-                __('%d suggested terms were added to the lexicon.', 'translate'),
-                result.added,
-            ));
-            await queryClient.invalidateQueries({ queryKey: ['getWordPressLexiconTerms'] });
-        },
-        onError: () => setLexiconNotice(__('The suggested terms could not be added. Try again in a moment.', 'translate')),
-    });
 
     return (
-        <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch" data-translation-context>
+        <section
+            className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-4 self-stretch lg:col-span-2"
+            data-translation-context
+            aria-labelledby="twp-site-context"
+        >
             <div className="flex flex-col gap-1">
-                <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{ __('Site context', 'translate') }</h4>
+                <h3 id="twp-site-context" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                    { __('Site context', 'translate') }
+                </h3>
                 <p className="text-sm text-translatewp-muted!">{ __('What the translation AI should know about your site: who it is for, what it sells, how it speaks. The scan writes this brief for you; edit it freely.', 'translate') }</p>
             </div>
 
@@ -125,8 +110,8 @@ export const TranslationsContext = () =>
                 placeholder={ __('Share anything about your website that would help the AI understand your content, audience, and goals.', 'translate') }
                 value={context.text_context}
                 onChange={(event) => updateContext('text_context', event.target.value)}
-                rows={8}
-                className="block! w-full! min-h-48 grow resize-y rounded-sm! border! border-translatewp-border! bg-white! p-3! text-sm! leading-6! text-translatewp-neutral! shadow-none! focus:border-translatewp-primary! focus:shadow-none!"
+                rows={6}
+                className="block! h-[168px]! min-h-0! w-full! grow-0 resize-y rounded-sm! border! border-translatewp-border! bg-white! p-3! text-sm! leading-6! text-translatewp-neutral! shadow-none! focus:border-translatewp-primary! focus:shadow-none!"
                 data-site-context
             />
 
@@ -167,7 +152,7 @@ export const TranslationsContext = () =>
                     </p>
                 ) }
 
-                { scanState.phase === 'done' && (
+                { scanState.phase === 'done' && !scanState.restored && (
                     <p className="text-sm text-translatewp-muted!" role="status">
                         { scanDoneMessage(scanState.pages, scanState.applied) }
                     </p>
@@ -179,36 +164,9 @@ export const TranslationsContext = () =>
                     </p>
                 ) }
 
-                { suggestions.length > 0 && !lexiconNotice && (
-                    <div className="flex flex-col gap-3 rounded-sm border border-translatewp-border p-4">
-                        <p className="text-sm text-translatewp-neutral! m-0">
-                            { sprintf(
-                                /* translators: %d: number of suggested terms. */
-                                __('The scan suggests %d lexicon terms: %s', 'translate'),
-                                suggestions.length,
-                                suggestions.map(suggestion => suggestion.term).join(', ')
-                            ) }
-                        </p>
-                        <p className="text-sm text-translatewp-muted! m-0">
-                            { __('Nothing is added until you say so. Terms do not translate anything again by themselves.', 'translate') }
-                        </p>
-                        <Button
-                            variant="secondary"
-                            className="rounded-sm! w-fit"
-                            disabled={applyLexicon.isPending}
-                            isBusy={applyLexicon.isPending}
-                            onClick={() => applyLexicon.mutate()}
-                        >
-                            { __('Add suggested terms', 'translate') }
-                        </Button>
-                    </div>
-                ) }
-
-                { lexiconNotice && (
-                    <p className="text-sm text-translatewp-muted!" role="status">{ lexiconNotice }</p>
-                ) }
+                <SiteScanSuggestions scanState={scanState} />
 
             </div>
-        </div>
+        </section>
     );
 }

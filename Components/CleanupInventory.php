@@ -55,6 +55,8 @@ class CleanupInventory {
 	public const INFRASTRUCTURE_OPTIONS = [
 		'translatewp_version',
 		Migrations::TRANSLATED_MARKS_OPTION,
+		Migrations::JOB_CLEANUP_OPTION,
+		\TranslateWP\Functionality\Indexer::JOB_POLL_CURSOR_OPTION,
 		Migrations::LEXICON_PRIVATE_CACHE_PURGED_OPTION,
 		\TranslateWP\Functionality\KeepWarm::PENDING_LANGUAGES_OPTION,
 		QuotaHandoff::OPTION,
@@ -69,6 +71,7 @@ class CleanupInventory {
 		'translatewp_pro_welcome_seen',
 		'translatewp_index_last_drain',
 		'translatewp_index_reported_languages',
+		TranslationProxyRateLimit::FIRST_PASS_OPTION,
 		'translatewp_index_priority_pins',
 		'translatewp_translation_cache_generation',
 		'translatewp_translation_cache_generations',
@@ -102,6 +105,7 @@ class CleanupInventory {
 	public const SCHEDULED_HOOKS = [
 		SiteLanguageSync::RETRY_HOOK,
 		Scanning::SCAN_HOOK,
+		Scanning::PRO_FOLLOWUP_HOOK,
 		Indexer::DRAIN_HOOK,
 		ReadinessReconcile::HOOK,
 		KeepWarm::LEXICON_DEBOUNCE_HOOK,

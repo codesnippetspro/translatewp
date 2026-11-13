@@ -192,7 +192,7 @@ describe('LanguagesStep estimate before committing', () =>
 
         const estimate = container.querySelector('[data-setup-estimate]');
         expect(estimate?.textContent).toContain('Translating 25 pages into 2 languages.');
-        expect(estimate?.textContent).toContain('This counts 50 page translations towards your quota.');
+        expect(estimate?.textContent).toContain('This counts 50 page translations towards your usage.');
     });
 
     it('shows no estimate before the site was read', async () =>
@@ -211,6 +211,23 @@ describe('LanguagesStep estimate before committing', () =>
 
         const estimate = container.querySelector('[data-setup-estimate]');
         expect(estimate?.textContent).toContain('Translating 12 pages into 2 languages.');
-        expect(estimate?.textContent).toContain('This counts 24 page translations towards your quota.');
+        expect(estimate?.textContent).toContain('This counts 24 page translations towards your usage.');
     });
+    it.each([
+        [1, ['it'], 'Translating 1 page into 1 language.'],
+        [1, ['it', 'lv'], 'Translating 1 page into 2 languages.'],
+        [2, ['it'], 'Translating 2 pages into 1 language.'],
+        [2, ['it', 'lv'], 'Translating 2 pages into 2 languages.'],
+    ] as const)('uses the proper page and language plurals for %s pages', async (count, languages, sentence) =>
+    {
+        useSetupStore.setState({
+            languages: [...languages], defaultLanguage: 'en-us', siteRead: true,
+            spinePages: Array.from({ length: count }, (_, index) => ({
+                objectType: 'page', objectId: index + 1, url: `https://example.test/page${index}/`, title: `Page ${index}`, languages: {},
+            })),
+        });
+        const container = await renderStep();
+        expect(container.querySelector('[data-setup-estimate]')?.textContent).toContain(sentence);
+    });
+
 });

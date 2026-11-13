@@ -98,16 +98,20 @@ describe('AddLexiconDrawer', () =>
         await renderDrawer();
 
         expect(translated).toEqual(expect.arrayContaining([
-            'Add Term',
-            'Your term',
-            'Describe when and how this term should be interpreted...',
+            'Add term',
+            'Term',
+            'Required',
+            'For example: Black Friday',
+            'Context',
+            'Optional',
+            'When and how to translate this term.',
+            'For example: Keep it in English. It is the name of our yearly sale.',
             'All translations',
             'Apply context to',
             'Categories',
             'What are categories?',
             'Filter categories',
             'No categories available',
-            'Enter the term first; Save stays off until it has one.',
         ]));
     });
 });

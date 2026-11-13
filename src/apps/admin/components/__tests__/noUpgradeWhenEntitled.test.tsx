@@ -135,14 +135,13 @@ describe('entitled admin without the addon offers the install, never the upgrade
         expect(body).toContain('Install now');
     });
 
-    it('marks every locked feature with Install Pro instead of the Pro tag', async () =>
+    it('marks locked features with quiet tags carrying the Install Pro action', async () =>
     {
         await renderAdminSurfaces();
 
-        const markers = [...container!.querySelectorAll('button')].map(button => button.textContent?.trim()).filter(text => text === 'Install Pro');
+        const markers = [...container!.querySelectorAll('button[aria-label="Install Pro"]')];
         expect(markers.length).toBeGreaterThanOrEqual(4);
-        const tags = [...container!.querySelectorAll('span')].filter(span => span.children.length === 0 && span.textContent?.trim() === 'Pro');
-        expect(tags).toHaveLength(0);
+        expect(markers.every(button => button.textContent?.trim() === 'Pro')).toBe(true);
     });
 });
 

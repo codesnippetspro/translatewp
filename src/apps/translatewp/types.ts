@@ -40,6 +40,7 @@ export type PublicSwitcherSettings = {
     loading_border_color?: string;
     offset?: number;
     icon_size?: number;
+    font_size?: number;
     padding?: number;
 };
 

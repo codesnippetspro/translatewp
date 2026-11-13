@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { Dashboard } from '@/apps/admin/components/Dashboard';
@@ -8,6 +8,11 @@ import { Dashboard } from '@/apps/admin/components/Dashboard';
 
 const mockApi = { getConnectStatus: jest.fn(), getDashboardMetrics: jest.fn(),
     beginConnect: jest.fn(), reconnectSite: jest.fn() };
+
+const mockReadiness = jest.fn((_enabled?: boolean) => undefined);
+jest.mock('@/shared/hooks/useTranslationReadiness', () => ({
+    useTranslationReadiness: (enabled: boolean) => mockReadiness(enabled),
+}));
 
 jest.mock('@/shared/api/connect', () => ({
     getConnectStatus: (...args: unknown[]) => mockApi.getConnectStatus(...args),
@@ -31,14 +36,25 @@ jest.mock('@/shared/api/admin', () => ({
     applyLocalizerNow: jest.fn(),
 }));
 
+const mountedRoots: Root[] = [];
+const mountedClients: QueryClient[] = [];
+afterEach(async () =>
+{
+    await act(async () => { mountedRoots.splice(0).forEach(root => root.unmount()); });
+    mountedClients.splice(0).forEach(client => client.clear());
+});
+
 const render = async (): Promise<HTMLElement> =>
 {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const root = createRoot(container);
+    mountedRoots.push(root);
+    mountedClients.push(queryClient);
     await act(async () =>
     {
-        createRoot(container).render(
+        root.render(
             <QueryClientProvider client={queryClient}>
                 <Dashboard />
             </QueryClientProvider>
@@ -133,4 +149,31 @@ describe('the dashboard Pro area before the account is Pro', () =>
         const container = await render();
         expect(container.textContent).toContain('Payment received. Turning on Pro for your account.');
     });
+});
+
+it('renders local Dashboard content before readiness and starts one shared readiness hook after metrics', async () =>
+{
+    mockReadiness.mockClear();
+    mockApi.getConnectStatus.mockResolvedValue({ connected: false, siteId: null, accountLabel: '', portalSitesUrl: '', portalSiteUrl: '' });
+    let finishMetrics!: (value: unknown) => void;
+    mockApi.getDashboardMetrics.mockReturnValue(new Promise(resolve => { finishMetrics = resolve; }));
+
+    const container = await render();
+    expect(container.textContent).toContain('Quick settings');
+    expect(container.textContent).toContain('Loading translation figures…');
+    expect(container.querySelector('.p-16')).toBeNull();
+    expect(mockReadiness.mock.calls.length).toBeGreaterThan(0);
+    expect(mockReadiness.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+
+    await act(async () =>
+    {
+        finishMetrics({ tokenTrend: [], tokensToday: 0, tokensThisMonth: 0, translationsToday: 0,
+            cacheHitsToday: 0, cacheHitRatio: 0, tokensVsYesterday: 0, languageUsage: [], recentContent: [], recentLexicon: [] });
+        await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container.textContent).toContain('Page translations today');
+    expect(container.textContent).not.toContain('Loading translation figures…');
+    expect(mockReadiness.mock.calls.some(([enabled]) => enabled === true)).toBe(true);
+    expect(mockReadiness.mock.calls.every(([enabled]) => typeof enabled === 'boolean')).toBe(true);
 });

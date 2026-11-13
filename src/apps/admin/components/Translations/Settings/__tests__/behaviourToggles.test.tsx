@@ -18,9 +18,13 @@ const mockSettingsState = {
             preserve_branded_terms: false,
             localized_date_time_formats: false,
             enable_units_conversion: false,
+            translate_comments: true,
+            translate_menus: true,
+            translate_widgets: true,
+            translate_protected_pages: false,
         },
     },
-    setSetting: () => {},
+    setSetting: jest.fn(),
 };
 
 jest.mock('@/apps/admin/stores/settingsStore', () => ({
@@ -85,7 +89,9 @@ describe('Content and behaviour toggles', () =>
         const input = row.querySelector('input') as HTMLInputElement;
         expect(input.disabled).toBe(true);
         expect(input.checked).toBe(false);
-        expect(row.querySelector('button[aria-label^="Unlock"]')).not.toBeNull();
+        expect(row.querySelector(
+            'button[aria-label="T:Unlock T:image alt text translation with PRO"]'
+        )).not.toBeNull();
     });
 
     test('with Pro active the alt text setting is the live toggle', () =>
@@ -96,7 +102,9 @@ describe('Content and behaviour toggles', () =>
         const input = altRow().querySelector('input') as HTMLInputElement;
         expect(input.disabled).toBe(false);
         expect(input.checked).toBe(true);
-        expect(altRow().querySelector('button[aria-label^="Unlock"]')).toBeNull();
+        expect(altRow().querySelector(
+            'button[aria-label="T:Unlock T:image alt text translation with PRO"]'
+        )).toBeNull();
         delete (window as unknown as { translatewpPro?: unknown }).translatewpPro;
     });
 
@@ -143,7 +151,7 @@ describe('Content and behaviour toggles', () =>
 
     test('every content and behaviour label is translatable', () =>
     {
-        const headings = Array.from(container.querySelectorAll('[data-translation-settings] h4'))
+        const headings = Array.from(container.querySelectorAll('[data-translation-settings] h3'))
             .map(heading => heading.textContent)
             .filter(text => text?.startsWith('T:'));
         expect(headings).toEqual(['T:Content', 'T:Behaviour', 'T:Who can manage translations']);
@@ -178,4 +186,39 @@ describe('Content and behaviour toggles', () =>
     {
         expect(container.textContent).not.toContain('\u2014');
     });
+    test.each([
+        ['Translate comments', 'translate_comments'],
+        ['Translate menus', 'translate_menus'],
+        ['Translate widgets', 'translate_widgets'],
+        ['Translate password-protected and private pages', 'translate_protected_pages'],
+    ] as const)('keeps the On/Off description in step with %s', (title, key) =>
+    {
+        const settings = mockSettingsState.settings['translations.settings'];
+        const original = settings[key];
+        mockSettingsState.setSetting.mockImplementation((...args: unknown[]) =>
+        {
+            const updater = args[1] as (value: typeof settings) => typeof settings;
+            Object.assign(settings, updater(settings));
+        });
+        const input = () => Array.from(container.querySelectorAll('p'))
+            .find(element => element.textContent === `T:${title}`)!
+            .closest('.components-toggle-control')!.querySelector('input') as HTMLInputElement;
+        try
+        {
+            for (const value of [!original, original])
+            {
+                act(() => input().click());
+                act(() => root.render(<TranslationsSettings />));
+                expect(input().checked).toBe(value);
+                expect(settings[key]).toBe(value);
+                expect(toggleText(title)).toContain(value ? 'T:On:' : 'T:Off:');
+            }
+        }
+        finally
+        {
+            settings[key] = original;
+            mockSettingsState.setSetting.mockReset();
+        }
+    });
+
 });

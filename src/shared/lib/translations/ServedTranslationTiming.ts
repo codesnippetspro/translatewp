@@ -1,3 +1,4 @@
+import { isTextNodeInViewport } from '@/shared/lib/translations/viewportText';
 import { EntryType } from '@/shared/lib/translations/constants';
 import type { TranslationEntryWrite } from '@/shared/lib/translations/TranslationEngine';
 import type { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
@@ -171,24 +172,10 @@ export class ServedTranslationTiming
 		}
 		try
 		{
-			const width = window.innerWidth;
-			const height = window.innerHeight;
 			for (const [node, value] of this.#visibleCandidates!)
 			{
 				if (!node.isConnected || node.nodeValue !== value) continue;
-				let rendered = true;
-				for (let element = node.parentElement; element; element = element.parentElement)
-				{
-					const style = getComputedStyle(element);
-					if (style.display === 'none' || style.visibility === 'hidden'
-						|| style.visibility === 'collapse' || style.opacity === '0') rendered = false;
-				}
-				if (!rendered) continue;
-				const range = document.createRange();
-				if (typeof range.getClientRects !== 'function') continue;
-				range.selectNodeContents(node);
-				if (Array.from(range.getClientRects()).some(rect => rect.width > 0 && rect.height > 0
-					&& rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width))
+				if (isTextNodeInViewport(node))
 				{
 					this.#event.firstVisibleAppliedMs = this.#elapsed();
 					break;

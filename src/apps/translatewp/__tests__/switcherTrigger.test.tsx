@@ -59,7 +59,7 @@ describe('the closed switcher trigger', () =>
     it('caps the name trigger to the viewport minus both insets and clips a long name', () =>
     {
         trigger({ ...PHP_DEFAULTS, offset: 40 });
-        expect(cssRule('.twp-trigger[data-trigger="name_flag"]')).toContain('max-width: calc(100vw - 2 * 40px) !important;');
+        expect(cssRule('.twp-trigger[data-twp-trigger="name_flag"]')).toContain('max-width: calc(100vw - 2 * 40px) !important;');
         const label = cssRule('.twp-trigger .twp-trigger-label');
         expect(label).toContain('min-width: 0 !important;');
         expect(label).toContain('overflow: hidden !important;');
@@ -77,7 +77,7 @@ describe('the closed switcher trigger', () =>
         expect(label).not.toBeNull();
         expect(label?.textContent?.trim()).not.toBe('');
         expect(label?.textContent).toMatch(/[\u0600-\u06FF]/);
-        expect(cssRule('.twp-trigger[data-trigger="name_flag"]')).toContain('max-width: calc(100vw - 2 * 24px) !important;');
+        expect(cssRule('.twp-trigger[data-twp-trigger="name_flag"]')).toContain('max-width: calc(100vw - 2 * 24px) !important;');
     });
 
     it('the default trigger shows the selected language flag and native name', () =>
@@ -86,7 +86,7 @@ describe('the closed switcher trigger', () =>
         expect(button.textContent).toContain('English');
         expect(button.querySelector('.twp-flag-wrap')).not.toBeNull();
         expect(button.querySelector('.twp-trigger-caret')).not.toBeNull();
-        expect(button.getAttribute('data-trigger')).toBe('name_flag');
+        expect(button.getAttribute('data-twp-trigger')).toBe('name_flag');
     });
 
     it('shows the flag and name when no trigger is stored', () =>
@@ -102,6 +102,18 @@ describe('the closed switcher trigger', () =>
         expect(button.textContent).not.toContain('English');
         expect(button.querySelector('.twp-flag-wrap')).not.toBeNull();
         expect(button.getAttribute('aria-label')).toContain('English');
+    });
+
+    it.each(['name_flag', 'flag'] as const)('hides the selected flag when Show flag icon is off for %s', kind =>
+    {
+        const button = trigger({ ...PHP_DEFAULTS, trigger: kind, show_flag: false });
+        expect(button.querySelector('.twp-flag-wrap')).toBeNull();
+        if (kind === 'flag') {
+            expect(button.getAttribute('aria-label')).toContain('English');
+            expect(button.querySelector('svg[data-twp-mark="current"]')).not.toBeNull();
+        } else {
+            expect(button.textContent).toContain('English');
+        }
     });
 
     it('keeps the TranslateWP icon for Icon only', () =>

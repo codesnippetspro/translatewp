@@ -19,12 +19,12 @@ export const FeedbackForm = () =>
         {
             setMessage('');
             setStatus('success');
-            setStatusMessage('Thanks, your feedback was sent.');
+            setStatusMessage(__('Thanks, your feedback was sent.', 'translate'));
         },
         onError: () =>
         {
             setStatus('error');
-            setStatusMessage('Feedback could not be sent. Try again in a moment.');
+            setStatusMessage(__('Feedback could not be sent. Try again in a moment.', 'translate'));
         },
     });
 
@@ -47,11 +47,11 @@ export const FeedbackForm = () =>
             aria-labelledby="feedback-heading"
         >
             <div className="mb-5">
-                <h2 id="feedback-heading" className="m-0 text-lg font-semibold text-translatewp-neutral">
-                    Help shape TranslateWP
-                </h2>
+                <h3 id="feedback-heading" className="m-0 text-lg font-semibold text-translatewp-neutral">
+                    {__('Help shape TranslateWP', 'translate')}
+                </h3>
                 <p className="mb-0 mt-1 text-sm leading-6 text-translatewp-muted">
-                    Share what is working, what is unclear, or what you need next.
+                    {__('Share what is working, what is unclear, or what you need next.', 'translate')}
                 </p>
             </div>
 
@@ -81,7 +81,7 @@ export const FeedbackForm = () =>
                         disabled={feedbackMutation.isPending || !message.trim()}
                         isBusy={feedbackMutation.isPending}
                     >
-                        {feedbackMutation.isPending ? 'Sending…' : 'Send feedback'}
+                        {feedbackMutation.isPending ? __('Sending…', 'translate') : __('Send feedback', 'translate')}
                     </Button>
 
                     {status !== 'idle' && (

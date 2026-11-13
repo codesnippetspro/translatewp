@@ -143,6 +143,14 @@ class TranslationJobs extends BaseApiEndpoints {
 	 * through the index queue.
 	 */
 	public function report_misses( $request ) {
+		return $this->handle_misses( $request, true );
+	}
+
+	public function enqueue_misses( $request ) {
+		return $this->handle_misses( $request, false );
+	}
+
+	private function handle_misses( $request, bool $subscribe ) {
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;
@@ -269,15 +277,58 @@ class TranslationJobs extends BaseApiEndpoints {
 			);
 			$hashes[] = $hash;
 		}
+		$item_limit = TranslationProxyRateLimit::miss_items_limit( $site_id, $language );
+		$retry_hashes = [];
+		$retry_after = 0;
 		if ( $items ) {
-			// Only text newly claimed for translation spends the client's item
-			// budget; a report of text already queued is free.
-			$budget = TranslationProxyRateLimit::charge_miss_items( $site_id, TranslationProxyClientIp::resolve(), count( $items ) );
-			if ( is_wp_error( $budget ) ) {
+			$paid = array_values(
+                array_filter(
+                    $items,
+                    static function ( array $item ) use ( $source_lang, $language ): bool {
+						return ! \TranslateWP\Components\TranslationFormatting::is_free( $item['markerPayload'], $source_lang, $language );
+					}
+                )
+            );
+			$budget = $paid ? TranslationProxyRateLimit::charge_miss_items(
+				$site_id,
+                TranslationProxyClientIp::resolve(),
+                count( $paid ),
+                $item_limit,
+                true
+			) : [
+				'accepted' => 0,
+				'retry_after' => 0,
+			];
+			if ( is_wp_error( $budget ) && 'rate_limited' !== $budget->get_error_code() ) {
 				TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
+				return $budget;
+			}
+			$admitted_count = is_wp_error( $budget ) ? 0 : $budget['accepted'];
+			$retry_after = is_wp_error( $budget )
+				? (int) ( $budget->get_error_data()['retry_after'] ?? 1 ) : $budget['retry_after'];
+			$retry_hashes = array_map(
+                static function ( array $item ): string {
+					return $item['cache']['hash'];
+				},
+                array_slice( $paid, $admitted_count )
+            );
+			$admitted = array_values(
+                array_filter(
+                    $items,
+                    static function ( array $item ) use ( $retry_hashes ): bool {
+						return ! in_array( $item['cache']['hash'], $retry_hashes, true );
+					}
+                )
+            );
+			TranslationProxyDedupe::release_segments( $site_id, $language, $retry_hashes );
+			$hashes = array_values( array_diff( $hashes, $retry_hashes ) );
+			$subscription_hashes = array_values( array_diff( $subscription_hashes, $retry_hashes ) );
+			$items = $admitted;
+			if ( ! $items && ! $deduped && $retry_hashes ) {
 				return self::with_retry_after( $budget );
 			}
-
+		}
+		if ( $items ) {
 			// One queue row per page and language carries every missed group,
 			// so a miss costs one row, not one row per segment.
 			$queued_row = $queue->enqueue_miss_page(
@@ -326,7 +377,12 @@ class TranslationJobs extends BaseApiEndpoints {
 			'deduped'  => $deduped,
 			'skipped'  => $skipped,
 		];
-		$subscription = TranslationSubscription::mint( $language, array_values( array_unique( $subscription_hashes ) ) );
+		if ( $retry_hashes ) {
+			$response['acceptedHashes'] = array_values( array_unique( $subscription_hashes ) );
+			$response['retryHashes'] = array_values( array_unique( $retry_hashes ) );
+			$response['retryAfter'] = $retry_after;
+		}
+		$subscription = $subscribe ? TranslationSubscription::mint( $language, array_values( array_unique( $subscription_hashes ) ) ) : null;
 		if ( null !== $subscription ) {
 			$response['subscription'] = $subscription;
 		}

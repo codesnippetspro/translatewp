@@ -1,3 +1,5 @@
+export const PRO_TAG_CLASS = 'inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-solid border-translatewp-primary/20 bg-translatewp-primary/10! px-2 py-0.5 text-xs! leading-4 font-medium text-translatewp-primary!';
+
 interface ProBadgeProps
 {
     className?: string;
@@ -6,7 +8,7 @@ interface ProBadgeProps
 }
 
 export const ProBadge = ({ className, label = 'Pro' }: ProBadgeProps) => (
-    <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-translatewp-primary/10 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-translatewp-primary! ${className ?? ''}`.trim()}>
+    <span className={`${PRO_TAG_CLASS} ${className ?? ''}`.trim()}>
         {label}
     </span>
 );

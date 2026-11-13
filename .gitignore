@@ -21,4 +21,10 @@ build
 
 # End-to-end test output
 e2e/results/
+e2e/.fixtures/
 .wp-env/
+
+# Mutation test output
+/.stryker-tmp/
+/.infection/
+/reports/mutation/

@@ -4,7 +4,7 @@ namespace TranslateWP\Components;
 
 class SiteRequests {
 
-	private const DEFAULT_TIMEOUT_SECONDS = 15;
+	public const DEFAULT_TIMEOUT_SECONDS = 15;
 	private const MAX_JOB_EVENTS_LIMIT    = 500;
 
 	public static function bearer_token(): string {
@@ -111,7 +111,7 @@ class SiteRequests {
 		];
 	}
 
-	public static function get( string $path, array $query = [], int $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
+	public static function get( string $path, array $query = [], int|float $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
 		if ( '' === self::bearer_token() ) {
 			return new \WP_Error(
 				'site_not_connected',
@@ -141,7 +141,7 @@ class SiteRequests {
 		return self::decode_response( $response, $path );
 	}
 
-	public static function post( string $path, array $body, int $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
+	public static function post( string $path, array $body, int|float $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
 		if ( '' === self::bearer_token() ) {
 			return new \WP_Error(
 				'site_not_connected',

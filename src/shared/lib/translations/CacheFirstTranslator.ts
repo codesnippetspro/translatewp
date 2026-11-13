@@ -1,4 +1,5 @@
 import { orderByViewport } from '@/shared/lib/translations/viewportOrder';
+import { runTranslationTask, TRANSLATION_IO_TIMEOUT_MS } from '@/shared/lib/translations/runTranslationTask';
 import { CONFIRMED_SAME_PREFIX, HydrationStore } from '@/shared/lib/translations/hydrationStore';
 import type {
     CoveredTranslationSubscription,
@@ -26,6 +27,14 @@ const MISS_POLL_MAX_INTERVAL_MS = 2000;
 const MISS_POLL_WINDOW_MS = 60_000;
 
 type GroupCache = TranslationCachePlan['groupsForCache'][number];
+
+type CacheLookupTask = {
+    cacheClient: TranslationCacheClient;
+    groups: GroupCache[];
+    apply: (groupCache: GroupCache, payload: string) => void;
+    transport?: 'edge' | 'origin';
+    signal?: AbortSignal;
+};
 
 export type CacheFirstTranslatorOptions = {
     sourceLang?: string;
@@ -141,14 +150,13 @@ export class CacheFirstTranslator extends Translator
             const unresolved: GroupCache[] = [];
             // The visible and rest lookups are issued together; the visible
             // batch is applied the moment it answers, before the rest does.
-            const visibleLookup = visible.length ? this.#lookupAndApply(cacheClient, visible, apply) : Promise.resolve([] as GroupCache[]);
-            const restLookup = rest.length ? this.#lookupAndApply(cacheClient, rest, apply) : Promise.resolve([] as GroupCache[]);
-            unresolved.push(...await visibleLookup);
-            if (rest.length)
-            {
-                throwIfAborted();
-                unresolved.push(...await restLookup);
-            }
+            const visibleLookup = visible.length
+                ? this.#lookupAndApply({ cacheClient, groups: visible, apply, signal }) : Promise.resolve([] as GroupCache[]);
+            const restLookup = rest.length
+                ? this.#lookupAndApply({ cacheClient, groups: rest, apply, signal }) : Promise.resolve([] as GroupCache[]);
+            const [visibleMissing, restMissing] = await Promise.all([visibleLookup, restLookup]);
+            throwIfAborted();
+            unresolved.push(...visibleMissing, ...restMissing);
             remaining = unresolved;
         }
 
@@ -162,22 +170,26 @@ export class CacheFirstTranslator extends Translator
             const report = await this.#reportMisses(remaining, signal, throwIfAborted);
             const terminalFailures: GroupCache[] = [];
             let pending: GroupCache[] = [];
-            if (report.outcome === 'accepted')
+            const accepted = report.outcome === 'accepted'
+                ? remaining.filter(group => !report.acceptedHashes || report.acceptedHashes.includes(group.hash)) : [];
+            const rejected = remaining.filter(group => !accepted.includes(group));
+            if (accepted.length)
             {
-                remaining = await this.#deliverSubscriptions(
+                remaining = await this.#deliverSubscriptions({
                     cacheClient,
-                    remaining,
-                    report.subscriptions,
+                    groups: accepted,
+                    subscriptions: report.subscriptions,
                     apply,
                     terminalFailures,
                     signal,
-                );
+                    onGroupServeFailed: emitOptions.onGroupServeFailed,
+                });
                 if (remaining.length)
                 {
-                    pending = await this.#pollUntilServed(cacheClient, remaining, apply, throwIfAborted);
-                    remaining = [];
+                    pending = await this.#pollUntilServed({ cacheClient, groups: remaining, apply, throwIfAborted, signal });
                 }
             }
+            remaining = rejected;
             for (const groupCache of terminalFailures)
             {
                 failures.push({ groupId: groupCache.group.id, error: 'translation_failed' });
@@ -198,18 +210,16 @@ export class CacheFirstTranslator extends Translator
         return { translatedById, failures };
     }
 
-    async #lookupAndApply(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        transport: 'edge' | 'origin' = 'edge',
-    ): Promise<GroupCache[]>
+    async #lookupAndApply({ cacheClient, groups, apply, transport = 'edge', signal }: CacheLookupTask): Promise<GroupCache[]>
     {
         try
         {
-            const lookup = transport === 'origin'
-                ? await cacheClient.lookupOrigin(groups)
-                : await cacheClient.lookup(groups);
+            const lookup = await runTranslationTask({
+                signal,
+                timeoutMs: TRANSLATION_IO_TIMEOUT_MS,
+                run: requestSignal => transport === 'origin'
+                    ? cacheClient.lookupOrigin(groups, requestSignal) : cacheClient.lookup(groups, requestSignal),
+            });
             if (lookup.status !== 'available') return groups;
 
             const stored = new Map<string, string>();
@@ -256,51 +266,54 @@ export class CacheFirstTranslator extends Translator
             return outcome;
         }
 
-        const post = (items: GroupCache[]): Promise<Response> => this.fetchImpl(`${this._translationProxyBaseUrl()}/miss`, {
+        const post = (items: GroupCache[], requestSignal?: AbortSignal): Promise<Response> => this.fetchImpl(`${this._translationProxyBaseUrl()}/miss`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal,
+            signal: requestSignal,
             body: JSON.stringify({ language: this.targetLang, url: pageUrl, pageTitle, items: toMissReportItems(items) }),
         });
 
+        const subscriptions: CoveredTranslationSubscription[] = [];
+        const acceptedHashes: string[] = [];
         try
         {
-            const subscriptions: CoveredTranslationSubscription[] = [];
             for (let offset = 0; offset < groups.length; offset += MISS_REPORT_MAX_ITEMS)
             {
                 const items = groups.slice(offset, offset + MISS_REPORT_MAX_ITEMS);
                 const result = await postMissChunkWithBackoff({
-                    post: () => post(items),
+                    hashes: items.map(item => item.hash),
+                    post: (requestSignal, hashes) => post(hashes ? items.filter(item => hashes.includes(item.hash)) : items, requestSignal),
                     signal,
                     throwIfAborted,
                     delay: this.delay,
                     random: this.random,
                     subscriptionOrigin: this._remoteApiBaseUrl(),
                 });
-                if (result.outcome === 'rejected') return { outcome: 'rejected', subscriptions: [] };
-                if (result.subscription)
-                {
-                    subscriptions.push({ ...result.subscription, hashes: items.map(item => item.hash) });
-                }
+                if (result.outcome === 'rejected') continue;
+                const admitted = result.acceptedHashes ?? items.map(item => item.hash);
+                acceptedHashes.push(...admitted);
+                subscriptions.push(...(result.subscriptions ?? (result.subscription
+                    ? [{ ...result.subscription, hashes: admitted }] : [])));
             }
-            return { outcome: 'accepted', subscriptions };
+            return { outcome: acceptedHashes.length ? 'accepted' : 'rejected', acceptedHashes, subscriptions };
         }
         catch (error)
         {
             if ((error as Error)?.name === 'AbortError') throw error;
             console.warn('[TranslateWP] Miss report failed; translations arrive on a later visit.', error);
-            return { outcome: 'rejected', subscriptions: [] };
+            return { outcome: acceptedHashes.length ? 'accepted' : 'rejected', acceptedHashes, subscriptions };
         }
     }
 
-    async #deliverSubscriptions(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        subscriptions: CoveredTranslationSubscription[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        terminalFailures: GroupCache[],
-        signal?: AbortSignal,
-    ): Promise<GroupCache[]>
+    async #deliverSubscriptions({ cacheClient, groups, subscriptions, apply, terminalFailures, signal, onGroupServeFailed }: {
+        cacheClient: TranslationCacheClient;
+        groups: GroupCache[];
+        subscriptions: CoveredTranslationSubscription[];
+        apply: (groupCache: GroupCache, payload: string) => void;
+        terminalFailures: GroupCache[];
+        signal?: AbortSignal;
+        onGroupServeFailed?: TranslateBatchOptions['onGroupServeFailed'];
+    }): Promise<GroupCache[]>
     {
         const remaining = new Map(groups.map(group => [group.hash, group]));
 
@@ -330,6 +343,7 @@ export class CacheFirstTranslator extends Translator
                     if (!group) return;
                     terminalFailures.push(group);
                     remaining.delete(hash);
+                    onGroupServeFailed?.(group.group.entries);
                 },
             });
             await this.store.putMany(stored, this.targetLang);
@@ -338,12 +352,9 @@ export class CacheFirstTranslator extends Translator
         return [...remaining.values()];
     }
 
-    async #pollUntilServed(
-        cacheClient: TranslationCacheClient,
-        groups: GroupCache[],
-        apply: (groupCache: GroupCache, payload: string) => void,
-        throwIfAborted: () => void,
-    ): Promise<GroupCache[]>
+    async #pollUntilServed({ cacheClient, groups, apply, throwIfAborted, signal }: CacheLookupTask & {
+        throwIfAborted: () => void;
+    }): Promise<GroupCache[]>
     {
         let remaining = groups;
         let delayMs = MISS_POLL_FIRST_DELAY_MS;
@@ -351,10 +362,10 @@ export class CacheFirstTranslator extends Translator
 
         while (remaining.length && waited < MISS_POLL_WINDOW_MS)
         {
-            await this.delay(delayMs);
+            await runTranslationTask({ run: () => this.delay(delayMs), signal, timeoutMs: TRANSLATION_IO_TIMEOUT_MS });
             waited += delayMs;
             throwIfAborted();
-            remaining = await this.#lookupAndApply(cacheClient, remaining, apply, 'origin');
+            remaining = await this.#lookupAndApply({ cacheClient, groups: remaining, apply, transport: 'origin', signal });
             delayMs = MISS_POLL_MAX_INTERVAL_MS;
         }
 

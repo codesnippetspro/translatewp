@@ -11,11 +11,11 @@ export { PAGE_INSET, PageBody, PageHeader };
 // its own layout.
 const TAB_PANEL_CLASS = '[&>div[role=tablist]_button[role=tab]]:font-bold! [&>div[role=tablist]_button[role=tab]]:text-sm! [&>div[role=tablist]_button[role=tab]]:text-translatewp-neutral! [&>div[role=tablist]_button[role=tab]]:hover:text-translatewp-primary! [&>div[role=tablist]]:border-b [&>div[role=tablist]]:border-translatewp-border [&>div[role=tablist]]:flex-wrap [&>div[role=tablist]]:px-4 md:[&>div[role=tablist]]:px-8';
 
-// A tab that lays out its own header and body (`inset: false`) renders bare.
-export type PageTab = { name: string; title: string; content?: React.ReactNode; inset?: boolean };
+// A page that lays out its own header and body (`inset: false`) renders bare.
+export type NavigationPage = { name: string; title: string; content?: React.ReactNode; inset?: boolean };
 
 export const PageTabs = ({ tabs, activeTabName, onSelect, bodyClassName }: {
-    tabs: PageTab[];
+    tabs: NavigationPage[];
     activeTabName: string;
     onSelect: (name: string) => void;
     bodyClassName?: string;

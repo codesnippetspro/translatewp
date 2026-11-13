@@ -35,12 +35,14 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
     const busy = switcher.background_style === 'transparent' || switcher.background_style === 'glass';
 
     return (
-        <div className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-translatewp-neutral">{__('Preview', 'translate')}</span>
+        <section className="flex flex-col gap-2" aria-labelledby="twp-switcher-preview">
+            <h3 id="twp-switcher-preview" className="text-sm! font-bold! text-translatewp-neutral m-0!">
+                {__('Preview', 'translate')}
+            </h3>
             <div
                 data-twp-switcher-preview
                 data-busy-background={busy ? 'true' : undefined}
-                className="relative isolate flex min-h-24 items-start rounded-lg border border-translatewp-border! bg-translatewp-selection p-4"
+                className={`relative isolate flex items-start rounded-lg border border-translatewp-border! bg-translatewp-selection p-4 transition-[min-height] ${isOpen && switcher.type === 'side_tab' ? 'min-h-80' : 'min-h-24'}`}
                 style={busy ? { backgroundImage: BUSY_BACKGROUND, backgroundSize: 'cover' } : undefined}
             >
                 <SwitcherView
@@ -50,12 +52,12 @@ export const SwitcherPreview = ({ previewLoading = false }: { previewLoading?: b
                     isOpen={isOpen}
                     notice={null}
                     previewLoading={previewLoading}
-                    variant={switcher.type === 'side_tab' ? 'preview' : 'inline'}
+                    variant="preview"
                     onOpenChange={setIsOpen}
                     onLanguageSelect={() => setIsOpen(false)}
                     onDismissNotice={() => {}}
                 />
             </div>
-        </div>
+        </section>
     );
 };
