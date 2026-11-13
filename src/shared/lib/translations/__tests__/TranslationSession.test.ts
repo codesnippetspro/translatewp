@@ -1,6 +1,7 @@
 import { Translator } from '@/shared/lib/translations/Translator';
 import { TranslationEngine } from '@/shared/lib/translations/TranslationEngine';
 import { CHANGE_SETTLE_MS, TranslationSession } from '@/shared/lib/translations/TranslationSession';
+import * as viewportText from '@/shared/lib/translations/viewportText';
 import { VolatilityTracker } from '@/shared/lib/translations/VolatilityTracker';
 
 const EXTRACTION_OPTIONS = {
@@ -106,6 +107,40 @@ describe('TranslationSession', () =>
         expect(document.querySelector('img')?.alt).toBe(alt);
         expect(document.querySelectorAll('[aria-busy="true"],.translatewp-translating')).toHaveLength(0);
         await cancelled;
+    });
+
+    it.each(['it', 'en', 'dispose'])('rejects late viewport callbacks after %s supersedes a held run', async target =>
+    {
+        document.body.innerHTML = '<p>Original content</p>';
+        const reports: Array<(pending: number) => void> = [];
+        jest.spyOn(viewportText, 'observePendingTextEntries').mockImplementation((_entries, onChange) =>
+        {
+            reports.push(onChange);
+            onChange(1);
+            return { settle: jest.fn(), disconnect: jest.fn() };
+        });
+        let started!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { started = resolve; });
+        (Translator.prototype.translateBatch as jest.Mock).mockImplementationOnce(() =>
+        {
+            started();
+            return new Promise(resolve => { release = () => resolve({ translated: [], failures: [], totalGroups: 0 }); });
+        });
+        const session = createSession({ root: document.body, sourceLang: 'en', extractionOptions: EXTRACTION_OPTIONS });
+        const previous = jest.fn();
+        const first = session.switchTo('de', { onViewportPendingChange: previous }).catch(error => error);
+        await pending;
+        expect(previous).toHaveBeenLastCalledWith(1);
+        previous.mockClear();
+        if (target === 'dispose') session.dispose();
+        else await session.switchTo(target, { onViewportPendingChange: jest.fn() });
+        await first;
+        reports[0](9);
+        expect(previous).not.toHaveBeenCalled();
+        release();
+        await Promise.resolve();
+        expect(previous).not.toHaveBeenCalled();
     });
 
     it('restores originals after a translated subtree is replaced', async () =>
