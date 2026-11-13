@@ -11,7 +11,7 @@ import { TranslationEventClient } from '@/shared/lib/translations/TranslationEve
  * is set even before any counts exist, so a first failed refresh never reads as
  * "nothing ready".
  */
-export const useTranslationReadinessState = (): { status: IndexStatus | undefined; unconfirmed: boolean } =>
+export const useTranslationReadinessState = (enabled = true): { status: IndexStatus | undefined; unconfirmed: boolean } =>
 {
     const client = useQueryClient();
     const [status, setStatus] = useState<IndexStatus>();
@@ -20,6 +20,7 @@ export const useTranslationReadinessState = (): { status: IndexStatus | undefine
 
     useEffect(() =>
     {
+        if (!enabled) return;
         const abort = new AbortController();
         const streams = new Map<string, AbortController>();
         const delivery = new TranslationEventClient();
@@ -106,9 +107,9 @@ export const useTranslationReadinessState = (): { status: IndexStatus | undefine
             streams.forEach(stream => stream.abort());
             streams.clear();
         };
-    }, [client]);
+    }, [client, enabled]);
 
     return { status, unconfirmed };
 };
 
-export const useTranslationReadiness = (): IndexStatus | undefined => useTranslationReadinessState().status;
+export const useTranslationReadiness = (enabled = true): IndexStatus | undefined => useTranslationReadinessState(enabled).status;

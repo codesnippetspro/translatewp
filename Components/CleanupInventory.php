@@ -55,6 +55,8 @@ class CleanupInventory {
 	public const INFRASTRUCTURE_OPTIONS = [
 		'translatewp_version',
 		Migrations::TRANSLATED_MARKS_OPTION,
+		Migrations::JOB_CLEANUP_OPTION,
+		\TranslateWP\Functionality\Indexer::JOB_POLL_CURSOR_OPTION,
 		Migrations::LEXICON_PRIVATE_CACHE_PURGED_OPTION,
 		\TranslateWP\Functionality\KeepWarm::PENDING_LANGUAGES_OPTION,
 		QuotaHandoff::OPTION,

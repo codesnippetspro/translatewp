@@ -15,6 +15,7 @@ namespace TranslateWP\Components;
 class Migrations {
 
 	public const VERSION_OPTION = 'translatewp_version';
+	public const JOB_CLEANUP_OPTION = 'translatewp_job_cleanup_pending';
 	public const TRANSLATED_MARKS_OPTION = 'translatewp_translated_marks_backfilled';
 	public const LEXICON_PRIVATE_CACHE_PURGED_OPTION = 'translatewp_lexicon_private_cache_purged';
 
@@ -33,6 +34,7 @@ class Migrations {
 	public static function maybe_run(): void {
 		$stored = (string) get_option( self::VERSION_OPTION, '' );
 
+		self::seed_job_cleanup_once();
 		self::backfill_translated_marks();
 		if ( '' === $stored ) {
 			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
@@ -52,6 +54,13 @@ class Migrations {
 
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 		ActionLog::record( '' === $stored ? 'Plugin installed at ' . TRANSLATEWP_VERSION : 'Plugin updated from ' . $stored . ' to ' . TRANSLATEWP_VERSION );
+	}
+
+	private static function seed_job_cleanup_once(): void {
+		if ( false !== get_option( self::JOB_CLEANUP_OPTION, false ) ) {
+			return;
+		}
+		update_option( self::JOB_CLEANUP_OPTION, array_keys( ( new IndexQueue() )->remembered_jobs() ), false );
 	}
 
 	/**
@@ -98,6 +107,7 @@ class Migrations {
 	public static function seed_for_fresh_install(): void {
 		if ( '' === (string) get_option( self::VERSION_OPTION, '' ) ) {
 			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
+			update_option( self::JOB_CLEANUP_OPTION, [], false );
 		}
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 	}

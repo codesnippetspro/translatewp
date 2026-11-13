@@ -10,7 +10,6 @@ import { getCountryFlagFromLocale, getLanguageNameFromLocale } from '@/shared/li
 import type { Language } from '@/shared/components/languageTable';
 import { Card, Section } from '@/shared/components/adminSurface';
 import { ManagedByNetwork } from '@/shared/components/managedByNetwork';
-import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 
 const nameOf = (locale: string) => getLanguageNameFromLocale(locale, true) || getLanguageNameFromLocale(locale) || locale;
 
@@ -152,9 +151,8 @@ export const TranslationCard = () =>
     );
 };
 
-export const IndexingSummary = () =>
+export const IndexingSummary = ({ liveStatus }: { liveStatus?: IndexStatus }) =>
 {
-    const liveStatus = useTranslationReadiness();
     const [status, setStatus] = useState<IndexStatus | null>(null);
     useEffect(() => { if (liveStatus) setStatus(liveStatus); }, [liveStatus]);
     const [failed, setFailed] = useState(false);
