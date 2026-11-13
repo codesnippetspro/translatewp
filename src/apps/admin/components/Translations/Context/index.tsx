@@ -1,9 +1,8 @@
-import { useEffect, useState } from '@wordpress/element';
+import { useEffect, useId, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { RefreshCcw, ListPlus } from "lucide-react";
-import { Button, CheckboxControl, TextareaControl } from "@wordpress/components";
+import { RefreshCcw } from "lucide-react";
+import { Button } from "@wordpress/components";
 
-import { ProBadge } from "@/shared/components/pro/ProBadge";
 import { useAdminSettingsStore, type TranslationsContext as TranslationsContextType } from '@/apps/admin/stores/settingsStore';
 import type { ScanContextResponse } from '@/shared/api/setup';
 import { scanDoneMessage, scanProgressMessage, useContextScan } from '@/shared/hooks/useContextScan';
@@ -101,14 +100,15 @@ export const TranslationsContext = () =>
     const [lexiconNotice, setLexiconNotice] = useState<string | null>(null);
     const suggestions = scanState.phase === 'done' ? scanState.lexiconSuggestions : [];
     const [omittedTerms, setOmittedTerms] = useState<string[]>([]);
+    const suggestionId = useId();
     const suggestionKey = JSON.stringify(suggestions.map(suggestion => suggestion.term));
     useEffect(() => { setOmittedTerms([]); }, [suggestionKey]);
     const selectedTerms = suggestions.filter(suggestion => !omittedTerms.includes(suggestion.term)).map(suggestion => suggestion.term);
     const applyLexicon = useMutation({
         mutationFn: applyScanLexicon,
-        onSuccess: async (result) =>
+        onSuccess: async (result, terms) =>
         {
-            setLexiconNotice(sprintf(
+            setLexiconNotice(terms?.length === 0 ? __('Suggested terms were dismissed.', 'translate') : sprintf(
                 /* translators: %d: number of terms added. */
                 __('%d suggested terms were added to the lexicon.', 'translate'),
                 result.added,
@@ -191,44 +191,85 @@ export const TranslationsContext = () =>
                 ) }
 
                 { suggestions.length > 0 && !applyLexicon.isSuccess && (
-                    <div className="flex flex-col gap-3 rounded-sm border border-translatewp-border p-4">
-                        <p className="text-sm text-translatewp-neutral! m-0">
-                            { sprintf(
-                                /* translators: %d: number of suggested terms. */
-                                _n('The scan suggests %d lexicon term.', 'The scan suggests %d lexicon terms.', suggestions.length, 'translate'),
-                                suggestions.length
-                            ) }
-                        </p>
-                        <p className="text-sm text-translatewp-muted! m-0">
-                            { __('Nothing is added until you say so. Terms do not translate anything again by themselves.', 'translate') }
-                        </p>
-                        <p className="text-sm text-translatewp-muted! m-0">
-                            { __('Choose the terms to add. Unchecked terms are dismissed.', 'translate') }
-                        </p>
-                        <div className="flex flex-col gap-3">
-                            {suggestions.map(suggestion => (
-                                <CheckboxControl
-                                    key={suggestion.term}
-                                    __nextHasNoMarginBottom
-                                    label={suggestion.term}
-                                    help={suggestion.description}
-                                    checked={!omittedTerms.includes(suggestion.term)}
-                                    disabled={applyLexicon.isPending}
-                                    onChange={checked => setOmittedTerms(previous => checked
-                                        ? previous.filter(term => term !== suggestion.term)
-                                        : [...previous, suggestion.term])}
-                                />
-                            ))}
+                    <div className="flex min-w-0 flex-col gap-3" data-lexicon-suggestions>
+                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <p className="text-sm font-medium text-translatewp-neutral! m-0">
+                                    {sprintf(
+                                        /* translators: %d: number of suggested terms. */
+                                        _n('The scan suggests %d term', 'The scan suggests %d terms', suggestions.length, 'translate'),
+                                        suggestions.length
+                                    )}
+                                </p>
+                                <span className="text-sm text-translatewp-muted!" aria-live="polite" aria-atomic="true">
+                                    {sprintf(
+                                        /* translators: %d: number of selected terms. */
+                                        __('%d selected', 'translate'), selectedTerms.length
+                                    )}
+                                </span>
+                            </div>
+                            <div className="ms-auto flex items-center gap-2">
+                                <button type="button" className="min-h-9 border-0 bg-transparent p-0 text-sm text-translatewp-primary! underline cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2" disabled={applyLexicon.isPending} onClick={() => setOmittedTerms([])}>
+                                    {__('Select all', 'translate')}
+                                </button>
+                                <span className="text-translatewp-muted!" aria-hidden="true">/</span>
+                                <button type="button" className="min-h-9 border-0 bg-transparent p-0 text-sm text-translatewp-primary! underline cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2" disabled={applyLexicon.isPending} onClick={() => setOmittedTerms(suggestions.map(suggestion => suggestion.term))}>
+                                    {__('Select none', 'translate')}
+                                </button>
+                            </div>
                         </div>
-                        <Button
-                            variant="secondary"
-                            className="rounded-sm! w-fit"
-                            disabled={applyLexicon.isPending}
-                            isBusy={applyLexicon.isPending}
-                            onClick={() => applyLexicon.mutate(selectedTerms)}
+                        <p className="text-sm text-translatewp-muted! m-0">
+                            {__('Nothing is added until you choose. Unchecked terms are dismissed.', 'translate')}
+                        </p>
+                        <ul
+                            className={`m-0! list-none border-y border-translatewp-border p-0! ${suggestions.length > 8 ? 'max-h-80 overflow-y-auto overscroll-contain' : ''}`}
+                            aria-label={__('Suggested Lexicon terms', 'translate')}
                         >
-                            { __('Add selected terms', 'translate') }
-                        </Button>
+                            {suggestions.map((suggestion, index) => (
+                                <li key={suggestion.term} className="m-0! grid grid-cols-[20px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 border-b border-translatewp-border px-1 py-3 last:border-b-0 md:grid-cols-[20px_minmax(8rem,2fr)_minmax(0,3fr)]">
+                                    <input
+                                        id={`${suggestionId}-term-${index}`}
+                                        type="checkbox"
+                                        aria-labelledby={`${suggestionId}-label-${index}`}
+                                        aria-describedby={`${suggestionId}-reason-${index}`}
+                                        className="m-0! mt-0.5! h-4! w-4! cursor-pointer"
+                                        checked={!omittedTerms.includes(suggestion.term)}
+                                        disabled={applyLexicon.isPending}
+                                        onChange={event =>
+                                        {
+                                            const checked = event.target.checked;
+                                            setOmittedTerms(previous => checked
+                                                ? previous.filter(term => term !== suggestion.term)
+                                                : [...previous, suggestion.term]);
+                                        }}
+                                    />
+                                    <label id={`${suggestionId}-label-${index}`} htmlFor={`${suggestionId}-term-${index}`} className="m-0 text-sm font-medium text-translatewp-neutral! cursor-pointer break-words">
+                                        {suggestion.term}
+                                    </label>
+                                    <p id={`${suggestionId}-reason-${index}`} className="col-start-2 m-0 text-sm text-translatewp-muted! break-words md:col-start-auto">
+                                        {suggestion.description}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                                variant="primary"
+                                className="rounded-sm! w-fit"
+                                disabled={applyLexicon.isPending || selectedTerms.length === 0}
+                                isBusy={applyLexicon.isPending}
+                                onClick={() => applyLexicon.mutate(selectedTerms)}
+                            >
+                                {sprintf(
+                                    /* translators: %d: number of selected terms. */
+                                    _n('Add %d selected term', 'Add %d selected terms', selectedTerms.length, 'translate'),
+                                    selectedTerms.length
+                                )}
+                            </Button>
+                            <Button variant="tertiary" className="rounded-sm!" disabled={applyLexicon.isPending} onClick={() => applyLexicon.mutate([])}>
+                                {__('Dismiss all', 'translate')}
+                            </Button>
+                        </div>
                     </div>
                 ) }
 
