@@ -12,6 +12,7 @@ final class ScanningFollowupTest extends TestCase {
 
 	protected function setUp(): void {
 		wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture-token' ] ] );
+		scan_test_reset_boundaries();
 		$GLOBALS['scan_test_schedule_false'] = false;
 		$GLOBALS['scan_test_queries'] = [];
 		$GLOBALS['scan_test_before_response'] = null;
@@ -177,6 +178,7 @@ final class ScanningFollowupTest extends TestCase {
 		$GLOBALS['wp_test_inserted_posts'][] = [ 'ID' => 3, 'post_type' => 'page', 'post_title' => 'Private page',
 			'post_content' => 'Private material', 'post_status' => 'private' ];
 		$GLOBALS['wp_test_posts']['page'][] = 3;
+		update_option( 'page_on_front', 3 );
 		$GLOBALS['scan_test_queries'] = [];
 		$GLOBALS['scan_test_before_response'] = null;
 		$GLOBALS['scan_test_self_checks'] = [];
@@ -295,6 +297,73 @@ final class ScanningFollowupTest extends TestCase {
 			self::assertSame( 'pending', $this->state() );
 			self::assertFalse( get_transient( 'translatewp_context_scan_lock' ) );
 		}
+	}
+
+	public function test_status_flags_schedule_only_when_requested_and_never_on_read_only(): void {
+		foreach ( [ false, true ] as $followup ) {
+			foreach ( [ false, true ] as $read_only ) {
+				Options::update( 'translations.context.pro_followup', null );
+				$GLOBALS['wp_test_scheduled'] = [];
+				$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => $read_only ? '1' : '0', 'followup' => $followup ? '1' : '0' ] ) );
+				self::assertSame( $followup && ! $read_only, $response['followupPending'] );
+				self::assertSame( $followup && ! $read_only, false !== wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) );
+				self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
+			}
+		}
+		self::assertSame( 'done', $this->scanner->scan_status( null )['status'] );
+	}
+
+	public function test_followup_schedule_spawns_once_and_reports_overdue_completion(): void {
+		$GLOBALS['wp_test_spawn_cron'] = 0;
+		$before = time();
+		$this->scanner->schedule_pro_followup();
+		self::assertSame( 1, $GLOBALS['wp_test_spawn_cron'] );
+		self::assertGreaterThanOrEqual( $before, wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) );
+		self::assertLessThanOrEqual( time(), wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) );
+		self::assertSame( [ 'pending' => true ], $this->scanner->resume_pro_followup() );
+		$GLOBALS['wp_test_scheduled'][ Scanning::PRO_FOLLOWUP_HOOK ] = time() - 120;
+		self::assertSame( [ 'pending' => false ], $this->scanner->resume_pro_followup() );
+		self::assertCount( 1, $GLOBALS['wp_test_remote_posts'] );
+		self::assertSame( 'done', $this->state() );
+		self::assertSame( [ 'pending' => false ], $this->scanner->resume_pro_followup() );
+	}
+
+	public function test_a_throwing_service_releases_the_followup_lock(): void {
+		$this->scanner->schedule_pro_followup();
+		$GLOBALS['scan_test_before_response'] = static function () {
+			self::assertTrue( (bool) get_transient( 'translatewp_context_scan_lock' ) );
+			throw new RuntimeException( 'Fixture followup failure' );
+		};
+		try {
+			$this->scanner->run_pro_followup();
+			self::fail( 'The fixture service must throw' );
+		} catch ( RuntimeException $error ) {
+			self::assertSame( 'Fixture followup failure', $error->getMessage() );
+		}
+		self::assertFalse( get_transient( 'translatewp_context_scan_lock' ) );
+	}
+
+	public function test_stored_context_and_suggestions_keep_their_public_fields(): void {
+		$stored = $this->stored;
+		$stored['context'] = 'Stored context';
+		$stored['language'] = 'lv';
+		$stored['style'] = 'medical';
+		$stored['tone'] = 'casual';
+		$stored['formality'] = 2;
+		$stored['creativity'] = 9;
+		$stored['lexicon'] = [ [ 'term' => 'Medical term', 'description' => 'Definition', 'category' => 'Speciality' ] ];
+		Options::update( 'translations.context.scan_result', $stored );
+		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		foreach ( [ 'context', 'language', 'style', 'tone', 'formality', 'creativity' ] as $field ) {
+			self::assertSame( $stored[$field], $response[$field] );
+		}
+		self::assertSame( $stored['lexicon'], $response['lexiconSuggestions'] );
+		unset( $stored['applied'], $stored['formality'], $stored['creativity'] );
+		Options::update( 'translations.context.scan_result', $stored );
+		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		self::assertTrue( $response['applied'] );
+		self::assertSame( 5, $response['formality'] );
+		self::assertSame( 5, $response['creativity'] );
 	}
 
 }

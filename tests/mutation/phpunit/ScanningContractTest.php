@@ -11,6 +11,7 @@ final class ScanningContractTest extends TestCase {
 
 	protected function setUp(): void {
 		wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture-token' ] ] );
+		scan_test_reset_boundaries();
 		$GLOBALS['scan_test_schedule_false'] = false;
 		$GLOBALS['scan_test_queries'] = [];
 		$GLOBALS['scan_test_before_response'] = null;
@@ -30,7 +31,17 @@ final class ScanningContractTest extends TestCase {
 	}
 
 	public function test_full_scan_schedules_without_sending_and_applies_sanitized_initial_settings(): void {
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', [ 'old' => 'result' ] );
 		self::assertSame( [ 'status' => 'pending' ], $this->scanner->scan_context( null ) );
+		self::assertSame( 'pending', Options::get( 'translations.context.scan_status' ) );
+		self::assertNull( Options::get( 'translations.context.scan_result' ) );
+		$progress = Options::get( 'translations.context.scan_progress' );
+		self::assertSame( 'collecting', $progress['phase'] );
+		self::assertSame( 0, $progress['sampled'] );
+		self::assertSame( 0, $progress['total'] );
+		self::assertEqualsWithDelta( time(), $progress['started'], 1 );
+		self::assertSame( 1, $GLOBALS['wp_test_spawn_cron'] );
 		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
 		self::assertNotFalse( wp_next_scheduled( Scanning::SCAN_HOOK ) );
 		self::assertFalse( Options::get( 'translations.context.scan_retried' ) );
@@ -63,6 +74,7 @@ final class ScanningContractTest extends TestCase {
 		$response = $this->scanner->scan_context( null );
 		self::assertInstanceOf( WP_Error::class, $response );
 		self::assertSame( 'no_scannable_content', $response->get_error_code() );
+		self::assertSame( [ 'status' => 422 ], $response->get_error_data() );
 		self::assertFalse( wp_next_scheduled( Scanning::SCAN_HOOK ) );
 		$this->scanner->run_scan();
 		self::assertSame( 'failed', Options::get( 'translations.context.scan_status' ) );
@@ -134,7 +146,7 @@ final class ScanningContractTest extends TestCase {
 		foreach ( [
 			[ 0, '', 'context_scan_unreachable' ], [ 504, '', 'context_scan_timeout' ],
 			[ 422, 'scan_timeout', 'context_scan_timeout' ], [ 422, 'scan_output_unusable', 'invalid_scan_response' ],
-			[ 503, '', 'context_scan_service_unavailable' ], [ 422, 'scan_service_unavailable', 'context_scan_service_unavailable' ],
+			[ 500, '', 'context_scan_service_unavailable' ], [ 503, '', 'context_scan_service_unavailable' ], [ 422, 'scan_service_unavailable', 'context_scan_service_unavailable' ],
 			[ 400, '', 'invalid_scan_response' ],
 		] as [ $status, $code, $reason ] ) {
 			Options::update( 'translations.context.scan_retried', true );
@@ -159,6 +171,7 @@ final class ScanningContractTest extends TestCase {
 		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
 		self::assertSame( 'pending', Options::get( 'translations.context.scan_status' ) );
 		self::assertSame( 1, get_transient( 'translatewp_context_scan_lock' ) );
+		self::assertEqualsWithDelta( time() + 60, wp_next_scheduled( Scanning::SCAN_HOOK ), 1 );
 	}
 
 	public function test_pro_suggestions_require_entitlement_and_explicit_application(): void {
@@ -171,6 +184,7 @@ final class ScanningContractTest extends TestCase {
 		$denied = $this->scanner->apply_scan_lexicon( null );
 		self::assertInstanceOf( WP_Error::class, $denied );
 		self::assertSame( 'pro_required', $denied->get_error_code() );
+		self::assertSame( [ 'status' => 403 ], $denied->get_error_data() );
 		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
 		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'fr', 'fr', [ 'locale' => '' ], '' ] );
 		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
@@ -209,6 +223,150 @@ final class ScanningContractTest extends TestCase {
 		$this->scanner->run_scan();
 		self::assertTrue( $GLOBALS['wp_test_remote_posts'][0]['body']['site_private'] );
 		self::assertSame( [ [ 'url' => home_url( '/' ), 'args' => [ 'blocking' => true, 'timeout' => 5, 'redirection' => 0 ] ] ], $GLOBALS['scan_test_self_checks'] );
+	}
+
+	public function test_all_routes_keep_their_methods_permissions_and_cors_contract(): void {
+		$routes = $this->scanner->define_endpoints();
+		self::assertSame( [ 'context', 'context/status', 'context/apply-lexicon', 'context/followup' ], array_map( static fn( $route ) => $route->getPath(), $routes ) );
+		foreach ( $routes as $index => $route ) {
+			self::assertSame( 'translatewp/v1/scanning', $route->getNamespace() );
+			self::assertSame( 1 === $index ? 'GET' : 'POST', $route->getMethod() );
+			self::assertSame( [ $this->scanner, $index < 2 ? 'admin_permissions_check' : 'admin_write_permissions_check' ], $route->getPermissionCallback() );
+			$stack = $route->getMiddlewareStack();
+			self::assertCount( 1, $stack );
+			$cors = $stack[0];
+			foreach ( [ 'allowedOrigins' => [ '*' ], 'allowedMethods' => [ 'GET', 'POST', 'OPTIONS' ], 'allowedHeaders' => [ 'content-type', 'authorization', 'x-requested-with' ] ] as $property => $expected ) {
+				self::assertSame( $expected, ( new ReflectionProperty( $cors, $property ) )->getValue( $cors ) );
+			}
+		}
+	}
+
+	public function test_progress_survives_collection_and_retries_spawn_after_unlock(): void {
+		Options::update( 'translations.context.scan_progress', [ 'started' => time() - 50 ] );
+		$before = [];
+		$GLOBALS['scan_test_before_response'] = static function () use ( &$before ) {
+			$before = Options::get( 'translations.context.scan_progress' );
+			self::assertTrue( (bool) get_transient( 'translatewp_context_scan_lock' ) );
+		};
+		$this->respond( [] );
+		$this->scanner->run_scan();
+		self::assertSame( 'analysing', $before['phase'] );
+		self::assertSame( 1, $before['sampled'] );
+		self::assertSame( 1, $before['total'] );
+		self::assertEqualsWithDelta( time() - 50, $before['started'], 1 );
+		self::assertSame( [ false ], $GLOBALS['scan_test_spawn_locks'] );
+		self::assertSame( 1, $GLOBALS['wp_test_spawn_cron'] );
+		self::assertNotFalse( wp_next_scheduled( Scanning::SCAN_HOOK ) );
+		$this->scanner->run_scan();
+		self::assertSame( 1, $GLOBALS['wp_test_spawn_cron'] );
+		$this->respond( $this->scanResult() );
+		$this->scanner->run_scan();
+		self::assertSame( '', Options::get( 'translations.context.scan_reason' ) );
+	}
+
+	public function test_a_throwing_service_releases_the_full_scan_lock(): void {
+		$GLOBALS['scan_test_before_response'] = static function () { throw new RuntimeException( 'Fixture service failure' ); };
+		try {
+			$this->scanner->run_scan();
+			self::fail( 'The fixture service must throw' );
+		} catch ( RuntimeException $error ) {
+			self::assertSame( 'Fixture service failure', $error->getMessage() );
+		}
+		self::assertFalse( get_transient( 'translatewp_context_scan_lock' ) );
+	}
+
+	public function test_explicit_lexicon_application_preserves_metadata_categories_and_duplicates(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		Options::update( 'languages.list', [ [ 'locale' => 'de' ], 'fr', 'fr', [ 'locale' => '' ], '', null ] );
+		Options::update( 'translations.context.scan_result', [ 'lexicon' => [
+			[ 'term' => 'First', 'description' => 'First description', 'category' => 'Brand' ],
+			[ 'term' => ' first ', 'description' => 'Duplicate', 'category' => 'Brand' ],
+			[ 'term' => 'Second', 'description' => 'Second description', 'category' => 'Technical' ],
+		] ] );
+		$GLOBALS['scan_test_term_insert_result'] = [ 'term_id' => 42 ];
+		self::assertSame( [ 'added' => 2 ], $this->scanner->apply_scan_lexicon( null ) );
+		$posts = array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn( $post ) => 'lexicon' === $post['post_type'] ) );
+		self::assertSame( [ 'First', 'Second' ], array_column( $posts, 'post_title' ) );
+		self::assertSame( [ 'First description', 'Second description' ], array_column( $posts, 'post_content' ) );
+		foreach ( $posts as $post ) {
+			self::assertSame( [ 'de', 'fr' ], $post['meta_input'][ \TranslateWP\Entities\CPTs\Lexicon::LANGUAGES_META_KEY ] );
+		}
+		self::assertSame( [ [ $posts[0]['ID'], [ 42 ], 'lexicon_category', false ], [ $posts[1]['ID'], [ 42 ], 'lexicon_category', false ] ], $GLOBALS['scan_test_term_assignments'] );
+		self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+	}
+
+	public function test_only_normal_pending_status_reads_kick_an_overdue_full_scan(): void {
+		$this->respond( $this->scanResult() );
+		foreach ( [ 'pending', 'done', 'failed' ] as $status ) {
+			foreach ( [ false, true ] as $followup ) {
+				foreach ( [ false, true ] as $read_only ) {
+					Options::update( 'translations.context.scan_status', $status );
+					Options::update( 'translations.context.scan_result', $this->scanResult() );
+					$GLOBALS['wp_test_remote_posts'] = [];
+					$GLOBALS['wp_test_scheduled'][ Scanning::SCAN_HOOK ] = time() - 120;
+					delete_transient( 'translatewp_cron_kick_' . md5( Scanning::SCAN_HOOK ) );
+					$this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => $read_only ? '1' : '0', 'followup' => $followup ? '1' : '0' ] ) );
+					self::assertCount( 'pending' === $status && ! $followup && ! $read_only ? 1 : 0, $GLOBALS['wp_test_remote_posts'] );
+				}
+			}
+		}
+	}
+
+	public function test_samples_cover_the_front_newest_oldest_and_enabled_private_pages(): void {
+		$GLOBALS['wp_test_inserted_posts'] = [];
+		foreach ( [ 2 => 'Newest', 3 => 'Front', 4 => 'Oldest', 5 => 'Private', 6 => 'Excluded' ] as $id => $title ) {
+			$GLOBALS['wp_test_inserted_posts'][] = [ 'ID' => $id, 'post_type' => 'page', 'post_title' => $title, 'post_excerpt' => '', 'post_content' => $title . ' body', 'post_status' => 5 === $id ? 'private' : 'publish' ];
+		}
+		update_post_meta( 6, \TranslateWP\Components\PageExclusion::META_KEY, true );
+		update_option( 'page_on_front', 3 );
+		$GLOBALS['scan_test_post_query'] = static fn( $args ) => array_map( 'get_post', 'DESC' === $args['order'] ? [ 2, 5, 6 ] : [ 4, 3 ] );
+		foreach ( [ false, true ] as $protected ) {
+			Options::update( 'translations.settings.translate_protected_pages', $protected );
+			$GLOBALS['scan_test_queries'] = [];
+			$GLOBALS['scan_test_sample_progress'] = [];
+			$this->respond( $this->scanResult() );
+			$this->scanner->run_scan();
+			self::assertSame( $protected ? [ 3, 2, 5, 4 ] : [ 3, 2, 4 ], Options::get( 'translations.context.scan_result' )['scanned_ids'] );
+			self::assertSame( [ 'DESC', 'ASC' ], array_column( $GLOBALS['scan_test_queries'], 'order' ) );
+			foreach ( $GLOBALS['scan_test_queries'] as $query ) {
+				self::assertSame( $protected ? [ 'publish', 'private' ] : [ 'publish' ], $query['post_status'] );
+				self::assertSame( [ 'post', 'page' ], $query['post_type'] );
+				self::assertSame( ! $protected, array_key_exists( 'has_password', $query ) );
+				if ( ! $protected ) self::assertFalse( $query['has_password'] );
+			}
+			$progress = $GLOBALS['scan_test_sample_progress'];
+			self::assertSame( range( 1, $protected ? 4 : 3 ), array_column( $progress, 'sampled' ) );
+			self::assertSame( [ 'collecting' ], array_values( array_unique( array_column( $progress, 'phase' ) ) ) );
+			self::assertSame( [ $protected ? 4 : 3 ], array_values( array_unique( array_column( $progress, 'total' ) ) ) );
+		}
+		foreach ( $GLOBALS['scan_test_post_type_queries'] as $query ) self::assertSame( [ [ 'public' => true ], 'names' ], $query );
+	}
+
+	public function test_lexicon_category_lookup_and_insert_errors_never_lose_the_term(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ [ (object) [ 'term_id' => '7' ], null, 7 ], [ false, [ 'term_id' => '17' ], 17 ],
+			[ new WP_Error( 'lookup_error', 'Fixture error' ), [ 'term_id' => 17 ], 17 ],
+			[ false, new WP_Error( 'insert_error', 'Fixture error' ), 0 ], [ false, [], 0 ] ] as $index => [ $existing, $inserted, $expected ] ) {
+			$GLOBALS['scan_test_term_result'] = $existing;
+			$GLOBALS['scan_test_term_insert_result'] = $inserted;
+			$GLOBALS['scan_test_term_assignments'] = [];
+			$GLOBALS['scan_test_term_inserts'] = [];
+			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Term' . $index, 'description' => 'Meaning', 'category' => 'Brand' ] ] ] );
+			self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+			self::assertCount( $expected ? 1 : 0, $GLOBALS['scan_test_term_assignments'] );
+			if ( $expected ) self::assertSame( [ $expected ], $GLOBALS['scan_test_term_assignments'][0][1] );
+			self::assertCount( is_object( $existing ) && ! is_wp_error( $existing ) ? 0 : 1, $GLOBALS['scan_test_term_inserts'] );
+		}
+	}
+
+	public function test_lexicon_insert_failures_are_not_counted_as_added_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		foreach ( [ false, new WP_Error( 'insert_error', 'Fixture error' ) ] as $error ) {
+			$GLOBALS['scan_test_insert_result'] = $error;
+			Options::update( 'translations.context.scan_result', [ 'lexicon' => [ [ 'term' => 'Not inserted', 'category' => 'Brand' ] ] ] );
+			self::assertSame( [ 'added' => 0 ], $this->scanner->apply_scan_lexicon( null ) );
+		}
+		self::assertSame( [], $GLOBALS['scan_test_term_assignments'] );
 	}
 
 }
