@@ -240,10 +240,16 @@ describe('CacheFirstTranslator', () =>
         }
 
         const { impl, log } = createFetch([new Map()]);
+        const beaconsSent: RequestInit[] = [];
+        const transport = ((input: RequestInfo | URL, init?: RequestInit) =>
+        {
+            if (String(input).endsWith('/hit-local')) beaconsSent.push(init!);
+            return impl(input, init);
+        }) as typeof fetch;
         const translator = new CacheFirstTranslator({
             sourceLang: 'en', targetLang: 'es',
             store: new HydrationStore(backend),
-            fetchImpl: impl,
+            fetchImpl: transport,
             delay: async () => {},
         });
         translator._createCacheClient = () => new TranslationCacheClient({
@@ -260,6 +266,7 @@ describe('CacheFirstTranslator', () =>
         assert(beacons.length === 1, 'exactly one hit-local beacon');
         assert(beacons[0].body.siteId === 'site-1' && beacons[0].body.language === 'es');
         assert(hashes.length > 0);
+        expect(beaconsSent).toEqual([expect.objectContaining({ method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' } })]);
     });
 
     it('looks up a local entry that is identical to the source instead of applying it', async () =>
@@ -1454,10 +1461,14 @@ it('waits for a direct cache lookup before returning the translated group result
     jest.spyOn(cache, 'lookup').mockResolvedValue({ status: 'available', entries: new Map(plan.groupsForCache.map(group => [
         group.hash, group.markerPayload.replace('Hello world', 'Hola mundo'),
     ])) });
-    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store: new HydrationStore(new InMemoryBackend()) });
+    const store = new HydrationStore(new InMemoryBackend());
+    store.recordLanguageUse('de');
+    const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang: 'es', store });
     await expect(translator._translateContextGroups(plan, cache)).resolves.toEqual({
         translatedById: new Map([[entries[0].id, 'Hola mundo']]), failures: [],
     });
+    expect(store.recentLanguages().slice(0, 2)).toEqual(['es', 'de']);
+    expect(store.activeLanguage()).toBe('es');
 });
 
 it('returns an empty cache plan without a lookup or miss report', async () =>
