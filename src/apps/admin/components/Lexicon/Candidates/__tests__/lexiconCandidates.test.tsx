@@ -75,8 +75,8 @@ describe('lexicon candidates', () =>
     {
         expect(scanLine(null)).toBe('No scan has run yet.');
         expect(scanLine(scan('running', { progress: { stage: 'judging', records: 120, candidates: 7 } }))).toBe('Reviewing 7 terms found in 120 translations.');
-        expect(scanLine(scan('done', { summary: { records: 120, proposed: 3 } }))).toBe('The scan read 120 translations and proposed 3 terms.');
-        expect(scanLine(scan('done', { summary: { records: 5, proposed: 0 } }))).toMatch(/found nothing to propose/);
+        expect(scanLine(scan('done', { summary: { records: 120, proposed: 3 } }))).toBe('The scan read 120 translations.');
+        expect(scanLine(scan('done', { summary: { records: 5, proposed: 0 } }))).toBe('The scan read 5 translations.');
         expect(scanLine(scan('failed'))).toMatch(/could not finish/);
     });
 
@@ -117,7 +117,7 @@ describe('lexicon candidates', () =>
 
         const row = container.querySelector('[data-candidate]') as HTMLElement;
         expect(row.textContent).toContain('Hall');
-        expect(row.textContent).toContain('inconsistent. sense: room');
+        expect(row.textContent).toContain('Translations use different terms. sense: room');
         expect(row.textContent).toContain('82% sure');
         expect(row.textContent).toContain('German:');
         expect(row.textContent).toContain('Gras');
@@ -148,7 +148,7 @@ describe('lexicon candidates', () =>
         expect(details).not.toBeNull();
         expect(details.open).toBe(false);
         expect(details.querySelector('summary')?.textContent).toBe('Details');
-        expect(details.textContent).toContain(candidate().reason);
+        expect(details.textContent).toContain('Translations use different terms. sense: room');
         expect(details.textContent).toContain('proposed Saal');
         expect(details.textContent).toContain('The hall seats forty.');
         expect(buttonNamed(row, 'Add to Lexicon')?.closest('details')).toBeNull();

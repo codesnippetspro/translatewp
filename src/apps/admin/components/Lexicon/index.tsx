@@ -229,7 +229,7 @@ export const Lexicon = () =>
                 <p className={`-mt-2 text-sm text-translatewp-muted ${PAGE_INSET}`} role="status">{applyNotice}</p>
             )}
 
-            <PageBody>
+            <PageBody className="gap-8 pt-4">
                 <SiteScanSuggestions framed />
                 <LexiconCandidates onAdd={(proposal: CandidatePrefill) => {
                     setPrefill(proposal);

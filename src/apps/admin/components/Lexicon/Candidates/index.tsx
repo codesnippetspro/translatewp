@@ -32,11 +32,8 @@ export const scanLine = (scan: LexiconScan | null | undefined): string =>
             if (progress.stage === 'mining') return sprintf(__('Reading %d stored translations for repeated terms and names.', 'translate'), progress.records ?? 0);
             return __('Reading your stored translations.', 'translate');
         case 'done':
-            return summary.proposed
-                /* translators: 1: Number of stored translations, 2: Number of proposed terms. */
-                ? sprintf(__('The scan read %1$d translations and proposed %2$d terms.', 'translate'), summary.records ?? 0, summary.proposed)
-                /* translators: %d: Number of stored translations. */
-                : sprintf(__('The scan read %d translations and found nothing to propose. Translate more of your site, then scan again.', 'translate'), summary.records ?? 0);
+            /* translators: %d: number of stored translations read by the scan. */
+            return sprintf(__('The scan read %d translations.', 'translate'), summary.records ?? 0);
         case 'failed': return __('The scan could not finish. Scan again in a minute.', 'translate');
         default: return '';
     }
@@ -56,6 +53,19 @@ type CandidateDecision = { id: string; action: CandidateAction; language?: strin
 
 const percent = (confidence: number): string => `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`;
 
+const candidateReason = (reason: string): string => reason.replace(/^(wrong|inconsistent|untranslated|ambiguous|fine)(?=\.|$)/, code =>
+{
+    switch (code)
+    {
+        case 'wrong': return __('A translation may need correcting', 'translate');
+        case 'inconsistent': return __('Translations use different terms', 'translate');
+        case 'untranslated': return __('The term was left untranslated', 'translate');
+        case 'ambiguous': return __('The translation needs more context', 'translate');
+        case 'fine': return __('The term is translated consistently', 'translate');
+        default: return code;
+    }
+});
+
 const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate: LexiconCandidate; dismissed: boolean; onAct: (action: CandidateAction, language?: string) => void; onAdd: () => void; busy: boolean }) =>
 {
     const [showAll, setShowAll] = useState(false);
@@ -66,7 +76,7 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <div className="flex min-w-0 flex-1 basis-40 flex-col gap-x-4 gap-y-1 min-[783px]:grid min-[783px]:grid-cols-[minmax(8rem,2fr)_minmax(0,3fr)]">
                     <p className={suggestionTermClass}>{candidate.sourceText}</p>
-                    <p className={suggestionReasonClass} title={candidate.reason}>{candidate.reason}</p>
+                    <p className={suggestionReasonClass} title={candidateReason(candidate.reason)}>{candidateReason(candidate.reason)}</p>
                 </div>
                 <span className="shrink-0 rounded-sm bg-translatewp-selection px-2 py-1 text-sm font-medium text-translatewp-neutral" title={__('How sure the review is that this term needs your decision', 'translate')}>
                     {
@@ -104,7 +114,7 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
                     )}
                 >{__('Details', 'translate')}</summary>
                 <div className="flex flex-col gap-2 py-2">
-                    <p className="m-0 text-sm text-translatewp-muted">{candidate.reason}</p>
+                    <p className="m-0 text-sm text-translatewp-muted">{candidateReason(candidate.reason)}</p>
                     {Object.values(candidate.languages).every(language => !language.rendering && !language.proposed) ? (
                         <p className="m-0 text-sm text-translatewp-muted" data-not-seen>{__('Not seen in any translation yet.', 'translate')}</p>
                     ) : (
