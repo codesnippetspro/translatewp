@@ -93,6 +93,10 @@ final class ScanningContractTest extends TestCase {
 			Options::update( 'translations.context.text_context', 'Owner settings' );
 			$this->respond( $body );
 			$this->scanner->run_scan();
+			$logs = \TranslateWP\Components\ActionLog::entries();
+			self::assertNotEmpty( $logs );
+			self::assertSame( 'Site context scan failed: invalid_scan_response', end( $logs )['message'] );
+			self::assertSame( 'error', end( $logs )['level'] );
 			self::assertSame( 'pending', Options::get( 'translations.context.scan_status' ) );
 			self::assertTrue( Options::get( 'translations.context.scan_retried' ) );
 			$this->scanner->run_scan();
@@ -159,6 +163,10 @@ final class ScanningContractTest extends TestCase {
 			$this->scanner->run_scan();
 			self::assertSame( 'failed', Options::get( 'translations.context.scan_status' ) );
 			self::assertSame( $reason, Options::get( 'translations.context.scan_reason' ) );
+			$logs = \TranslateWP\Components\ActionLog::entries();
+			self::assertNotEmpty( $logs );
+			$logged_status = 0 === $status ? 502 : $status;
+			self::assertSame( 'Site context scan failed: ' . $reason . ' (HTTP ' . $logged_status . ')', end( $logs )['message'] );
 			$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
 			self::assertSame( [ 'status' => 'failed', 'reason' => $reason ], $response );
 			self::assertFalse( get_transient( 'translatewp_context_scan_lock' ) );
