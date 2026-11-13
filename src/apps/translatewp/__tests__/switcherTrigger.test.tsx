@@ -104,6 +104,18 @@ describe('the closed switcher trigger', () =>
         expect(button.getAttribute('aria-label')).toContain('English');
     });
 
+    it.each(['name_flag', 'flag'] as const)('hides the selected flag when Show flag icon is off for %s', kind =>
+    {
+        const button = trigger({ ...PHP_DEFAULTS, trigger: kind, show_flag: false });
+        expect(button.querySelector('.twp-flag-wrap')).toBeNull();
+        if (kind === 'flag') {
+            expect(button.getAttribute('aria-label')).toContain('English');
+            expect(button.querySelector('svg[data-twp-mark="current"]')).not.toBeNull();
+        } else {
+            expect(button.textContent).toContain('English');
+        }
+    });
+
     it('keeps the TranslateWP icon for Icon only', () =>
     {
         const button = trigger({ ...PHP_DEFAULTS, trigger: 'icon' });
