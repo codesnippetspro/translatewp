@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { jest } from '@jest/globals';
 
 jest.mock('@tanstack/react-query', () => ({
+    queryOptions: (options: unknown) => options,
+    useQuery: () => ({ data: { lexiconSuggestions: [] } }),
     useMutation: () => ({ mutate: () => {}, isPending: false }),
-    useQueryClient: () => ({ invalidateQueries: () => {} }),
+    useQueryClient: () => ({ invalidateQueries: () => {}, setQueryData: () => {} }),
 }));
 
 const mockScan = {

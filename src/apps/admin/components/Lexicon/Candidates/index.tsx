@@ -12,7 +12,8 @@ import { ProMarker } from '@/shared/components/pro/ProMarker';
 import { ProUnlockButton } from '@/shared/components/pro/ProUnlockButton';
 import { getLanguageNameFromLocale } from '@/shared/lib/languages';
 import { isScanOpen, type CandidateAction, type LexiconCandidate, type LexiconScan } from '@/shared/lib/lexiconCandidates';
-import { Card } from '@/apps/admin/components/Dashboard/cards';
+import { Card } from '@/shared/components/adminSurface';
+import { suggestionListClass, suggestionRowClass, suggestionTermClass, suggestionReasonClass } from '@/shared/components/siteScanSuggestions/style';
 
 export type CandidatePrefill = { term: string; description: string; languages: string[]; candidateId: string };
 
@@ -61,13 +62,13 @@ const CandidateRow = ({ candidate, dismissed, onAct, onAdd, busy }: { candidate:
     const evidence = showAll ? candidate.evidence : candidate.evidence.slice(0, 2);
 
     return (
-        <li className="m-0! flex min-w-0 flex-col gap-1 py-2" data-candidate={candidate.id}>
+        <li className={`${suggestionRowClass} flex flex-col gap-2`} data-candidate={candidate.id}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <div className="flex min-w-0 flex-1 basis-40 flex-col gap-1">
-                    <p className="m-0 break-words text-sm font-semibold text-translatewp-neutral">{candidate.sourceText}</p>
-                    <p className="m-0 truncate text-xs text-translatewp-muted" title={candidate.reason}>{candidate.reason}</p>
+                <div className="flex min-w-0 flex-1 basis-40 flex-col gap-x-4 gap-y-1 min-[783px]:grid min-[783px]:grid-cols-[minmax(8rem,2fr)_minmax(0,3fr)]">
+                    <p className={suggestionTermClass}>{candidate.sourceText}</p>
+                    <p className={suggestionReasonClass} title={candidate.reason}>{candidate.reason}</p>
                 </div>
-                <span className="shrink-0 rounded-sm bg-translatewp-selection px-2 py-1 text-xs font-semibold text-translatewp-neutral" title={__('How sure the review is that this term needs your decision', 'translate')}>
+                <span className="shrink-0 rounded-sm bg-translatewp-selection px-2 py-1 text-sm font-medium text-translatewp-neutral" title={__('How sure the review is that this term needs your decision', 'translate')}>
                     {
                         /* translators: %s: Confidence percentage, including the percent sign. */
                         sprintf(__('%s sure', 'translate'), percent(candidate.confidence))
@@ -188,7 +189,7 @@ const CandidateList = ({ candidates, dismissed, busy, onAct, onAdd }: {
     return (
         <div className="flex min-w-0 flex-col gap-3">
             <ol id={resultsId} tabIndex={-1} aria-busy={busy}
-                className="m-0! list-none divide-y divide-translatewp-border p-0!">
+                className={suggestionListClass}>
                 {candidates.slice(start, start + CANDIDATES_PER_PAGE).map(candidate => (
                     <CandidateRow
                         key={candidate.id}
