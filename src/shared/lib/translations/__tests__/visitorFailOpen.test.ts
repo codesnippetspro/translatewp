@@ -90,6 +90,7 @@ describe('TranslationEngine loading state', () =>
 
         const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         const runPromise = engine.run(document.body);
+        void runPromise.catch(() => {});
 
         await new Promise(resolve => window.setTimeout(resolve, 0));
         expect(loadingElements()).toHaveLength(0);
@@ -112,6 +113,7 @@ describe('TranslationEngine loading state', () =>
 
         const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         const runPromise = engine.run(document.body);
+        void runPromise.catch(() => {});
 
         await new Promise(resolve => window.setTimeout(resolve, 0));
         expect(loadingElements().map(element => element.textContent)).toEqual(['Hello world']);
@@ -442,6 +444,7 @@ describe('bounded loading state', () =>
         const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         const result = engine.run(document.body, { includeAlt: true, includeAttributes: true }, { signal: controller.signal });
         const assertion = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+        void assertion.catch(() => {});
         expect(loadingElements().map(element => element.tagName)).toEqual(['P']);
         expect(document.querySelector('p')?.getAttribute('data-translatewp-loading-count')).toBe('1');
         expect(document.querySelector('img')?.hasAttribute('aria-busy')).toBe(false);
@@ -471,6 +474,7 @@ describe('bounded loading state', () =>
         const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         const result = engine.run(document.body, undefined, { signal: controller.signal });
         const assertion = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+        void assertion.catch(() => {});
         const parent = document.querySelector('p')!;
         expect(parent.getAttribute('aria-busy')).toBe('true');
         parent.textContent = 'Theme replacement';
@@ -503,6 +507,7 @@ describe('bounded loading state', () =>
             const result = engine.run(document.body);
             void result.then(settled, settled);
             const assertion = expect(result).rejects.toMatchObject({ name: 'TimeoutError' });
+            void assertion.catch(() => {});
             await jest.advanceTimersByTimeAsync(179999);
             expect(settled).not.toHaveBeenCalled();
             expect(document.querySelector('p')?.textContent).toBe('Hola mundo');
@@ -537,6 +542,7 @@ describe('bounded loading state', () =>
         const controller = new AbortController();
         const engine = new TranslationEngine({ sourceLang: 'en', targetLang: 'es', translator });
         const result = engine.run(document.body, undefined, { signal: controller.signal, onGroupServeFailed: failed });
+        void result.catch(() => {});
         const paragraph = document.querySelector('p')!;
         expect(paragraph.getAttribute('data-translatewp-loading-count')).toBe('2');
         first();

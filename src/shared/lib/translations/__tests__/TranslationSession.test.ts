@@ -837,6 +837,7 @@ describe('TranslationSession', () =>
         const sentBatches = (): string[][] => batches.map(batch => batch.values).filter(values => values.length > 0);
 
         const switching = session.switchTo('it');
+        void switching.catch(() => {});
         await Promise.resolve();
         await Promise.resolve();
         expect(sentBatches()).toEqual([['Original content', '20:46:03']]);
@@ -893,6 +894,7 @@ describe('TranslationSession', () =>
         const sentBatches = (): string[][] => batches.map(batch => batch.values).filter(values => values.length > 0);
 
         const switching = session.switchTo('de');
+        void switching.catch(() => {});
         await Promise.resolve();
         await Promise.resolve();
         batches[0].resolve();

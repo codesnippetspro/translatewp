@@ -82,8 +82,8 @@ it('runs an unsampled view without timing callbacks or timing timers', async () 
 	try
 	{
 		const switching = session.switchTo('fr');
-		await started;
-		random.mockRestore();
+		void switching.catch(() => {});
+		await expect(Promise.race([started, switching]).finally(() => random.mockRestore())).resolves.toBeUndefined();
 		await switching;
 		expect(document.body.textContent).toBe('Bonjour');
 		expect(appliedConsumer).toBeUndefined();
