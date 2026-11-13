@@ -434,4 +434,17 @@ final class ScanningContractTest extends TestCase {
 		}
 	}
 
+	public function test_malformed_suggestions_do_not_drop_later_valid_terms(): void {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		$result = $this->scanResult();
+		$result['lexicon'] = [ null, [], [ 'term' => ' ' ], [ 'term' => 'Valid term', 'description' => 'Definition', 'category' => 'Brand' ] ];
+		Options::update( 'translations.context.scan_status', 'done' );
+		Options::update( 'translations.context.scan_result', $result );
+		$response = $this->scanner->scan_status( new WP_REST_Request( 'GET', '/context/status', [ 'read_only' => '1' ] ) );
+		self::assertSame( [ [ 'term' => 'Valid term', 'description' => 'Definition', 'category' => 'Brand' ] ], $response['lexiconSuggestions'] );
+		self::assertSame( [ 'added' => 1 ], $this->scanner->apply_scan_lexicon( null ) );
+		self::assertSame( 'Valid term', end( $GLOBALS['wp_test_inserted_posts'] )['post_title'] );
+		self::assertSame( [], $GLOBALS['wp_test_remote_posts'] );
+	}
+
 }
