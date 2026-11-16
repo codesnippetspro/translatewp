@@ -485,98 +485,39 @@ describe('translation cache roundtrip', () =>
         expect(result.translatedById.get(betaEntry!.id)).toBe(betaEntry!.value);
     });
 
-    it('applies exact-id-only translations to a synthetic Elementor shop fixture', async () =>
+    it('keeps bare prices out of exact-id translation on a synthetic Elementor shop fixture', async () =>
     {
-        const fixtureHtml = readFileSync(
-            resolve(__dirname, '../../../../../tests/fixtures/elementor-shop-capture.html'),
-            'utf8',
+        document.body.innerHTML = readFileSync(
+            resolve(__dirname, '../../../../../tests/fixtures/elementor-shop-capture.html'), 'utf8',
         );
-        document.body.innerHTML = fixtureHtml;
         installTranslateWP(basicFixture!.settings);
         const entries = new DOMExtractor().extract(document.body);
         const client = new TranslationCacheClient({
-            sourceLang: 'en',
-            targetLang: 'nl',
-            siteId: 'site-1',
-            apiBaseUrl: API_BASE,
+            sourceLang: 'en', targetLang: 'nl', siteId: 'site-1', apiBaseUrl: API_BASE,
             aiSettings: basicFixture!.settings,
         });
         const plan = await client.prepare(entries);
-
-        // Pin fixture identity: exact entry count and specific fixture strings
-        expect(entries.length).toBe(13);
-        const entryValues = entries.map(e => e.value);
-        expect(entryValues).toContain('€');
-        expect(entryValues).toContain('\u00A00,00');
-        expect(entryValues).toContain('home');
-        expect(entryValues).toContain('Main Site');
-        expect(entryValues).toContain('Shop');
-        expect(entryValues).toContain('My account');
-        expect(entryValues).toContain('Sample hero heading for the demo shop template');
-        expect(entryValues).toContain('Everyday mugs, tote bags, and notebook sets for the demo storefront. Simple designs, sturdy materials, sample copy only.');
-        expect(plan.groupsForCache.length).toBeGreaterThan(0);
-
-        // Sample returned payload for the amount group:
-        // ⟪item_0001⟫€⟪item_0002⟫ 14,50, the amount translation (" 14,50") DIFFERS from the
-        // fixture source ("\u00A00,00"), so application is observable on the DOM node.
-        const cartGroup = plan.groupsForCache.find(g =>
-            g.canonicalEntries.some(e => e.value === '€')
-        );
-        expect(cartGroup).toBeDefined();
-
-        const sampleReturnedPayload = `⟪${cartGroup!.canonicalEntries[0].id}⟫€⟪${cartGroup!.canonicalEntries[1].id}⟫ 14,50`;
-        // Partial derived from the sample payload: drop the first marker, keep the differing one.
-        const partialPayload = sampleReturnedPayload.slice(sampleReturnedPayload.indexOf('⟪', 1));
-        expect(partialPayload).toBe(`⟪${cartGroup!.canonicalEntries[1].id}⟫ 14,50`);
-
-        globalThis.fetch = jest.fn(async (url: string, init?: RequestInit) =>
-        {
-            if (url.startsWith(`${API_BASE}/v1/translation/cache/lookup`))
-            {
-                const items: Record<string, string> = {};
-                for (const hash of requestHashes(url, init))
-                {
-                    if (hash === cartGroup!.hash) items[hash] = partialPayload;
-                    else items[hash] = '';
-                }
-                return { ok: true, json: async () => ({ items }) };
-            }
-            if (url.startsWith(`${PROXY_BASE}/create-job`))
-            {
-                return { ok: true, json: async () => ({ jobId: 'job-elem', sourceLang: 'en', targetLang: 'nl' }) };
-            }
-            if (url.startsWith(`${PROXY_BASE}/push-batch`))
-            {
-                return { ok: true, json: async () => ({ ok: true }) };
-            }
-            if (url.startsWith(`${PROXY_BASE}/status`))
-            {
-                return { ok: true, json: async () => ({ state: 'done', jobId: 'job-elem' }) };
-            }
-            throw new Error(`Unexpected fetch URL: ${url}`);
-        }) as unknown as typeof fetch;
-
-        const amountNode = [...document.querySelectorAll('*')]
-            .find(el => el.childNodes.length && [...el.childNodes].some(n => n.nodeType === 3 && n.textContent === '\u00A00,00'));
-        const heroNode = document.querySelector('h1');
-        expect(amountNode).toBeDefined();
-        expect(heroNode?.textContent).toBe('Sample hero heading for the demo shop template');
-
+        expect(entries).toHaveLength(10);
+        const values = entries.map(entry => entry.value);
+        expect(values).not.toContain('€');
+        expect(values).not.toContain('\u00A00,00');
+        expect(values).not.toContain('0');
+        expect(values).toEqual(expect.arrayContaining(['home', 'Main Site', 'Shop', 'My account']));
+        const originalHero = 'Sample hero heading for the demo shop template';
+        const stored = new Map(plan.groupsForCache.map(group => [
+            group.hash, group.markerPayload.replace(originalHero, 'Voorbeeld kop'),
+        ]));
+        globalThis.fetch = createLookupFetch(stored);
+        const amountNode = document.querySelector('.woocommerce-Price-amount')!;
+        const originalPrice = amountNode.innerHTML;
         const session = new TranslationSession({
-            root: document.body,
-            sourceLang: 'en',
+            root: document.body, sourceLang: 'en',
             extractionOptions: { includeAlt: false, includeAttributes: false },
         });
         await session.switchTo('nl');
-
-        // Applied: the amount node text changed to the captured translated value.
-        expect(amountNode!.textContent).toContain(' 14,50');
-        // Omitted sibling marker: the currency symbol node keeps source.
-        expect([...document.querySelectorAll('*')].some(el =>
-            [...el.childNodes].some(n => n.nodeType === 3 && n.textContent === '€'))).toBe(true);
-        // Unrelated group: hero stays source.
-        expect(heroNode?.textContent).toBe('Sample hero heading for the demo shop template');
-
+        expect(amountNode.innerHTML).toBe(originalPrice);
+        expect(amountNode.textContent).toBe('€\u00A00,00');
+        expect(document.querySelector('h1')?.textContent).toBe('Voorbeeld kop');
         session.dispose();
     });
 });

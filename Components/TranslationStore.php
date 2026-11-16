@@ -243,7 +243,7 @@ class TranslationStore {
 			$map = array_merge( $map, $post_entry['map'] );
 		}
 
-		return $map;
+		return array_filter( $map, static fn( $source ) => PlainText::has_letters( (string) $source ), ARRAY_FILTER_USE_KEY );
 	}
 
 	/**

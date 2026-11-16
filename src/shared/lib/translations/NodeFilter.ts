@@ -1,3 +1,4 @@
+import { hasTranslationLetters } from '@/shared/lib/translations/hasTranslationLetters';
 import { isPrintedPhpDiagnostic } from '@/shared/lib/translations/printedPhpDiagnostics';
 import { SKIP_TAGS, TRANSLATABLE_VALUE_INPUT_TYPES } from '@/shared/lib/translations/constants';
 
@@ -24,7 +25,7 @@ export class NodeFilter
      */
     static isTranslatableTextNode(textNode: Text, noTranslateClasses: string[], noTranslateIds: string[]): boolean
     {
-        if (!textNode.nodeValue?.trim()) return false;
+        if (!textNode.nodeValue || !hasTranslationLetters(textNode.nodeValue)) return false;
         if (isPrintedPhpDiagnostic(textNode.nodeValue)) return false;
 
         const parent = textNode.parentElement;

@@ -1,3 +1,4 @@
+import { hasTranslationLetters } from '@/shared/lib/translations/hasTranslationLetters';
 import { runTranslationTask } from '@/shared/lib/translations/runTranslationTask';
 import {
     DEFAULT_EXTRACTION_OPTIONS,
@@ -374,7 +375,7 @@ class DOMWriter
     static setLoading(entry: TranslatableEntry, isLoading: boolean): void
     {
         if (entry.type !== EntryType.TEXT) return;
-        if (!/\p{L}/u.test(entry.value)) return;
+        if (!hasTranslationLetters(entry.value)) return;
 
         const element = isLoading
             ? DOMWriter.#getLoadingElement(entry)
