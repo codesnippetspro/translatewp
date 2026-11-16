@@ -5,7 +5,7 @@ Tags: translation, multilingual, language switcher, localization, ai translation
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -149,6 +149,10 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 == Upgrade Notice ==
 
+= 1.1.1 =
+
+Fixed: on translated pages, prices with a decimal comma could be shown with the wrong value (for example 14,50 shown as 1.450). Prices and other number-only text are no longer sent for translation, and earlier wrong results are no longer shown.
+
 = 1.1.0 =
 
 Refreshed settings, adjustable switcher text size and smoother language changes. Includes clearer connection errors, progress notices that follow visible text, and improved first visits to translated shop and checkout pages.
@@ -170,6 +174,10 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 == Changelog ==
+
+= 1.1.1 =
+
+* Fixed: on translated pages, prices with a decimal comma could be shown with the wrong value (for example 14,50 shown as 1.450). Prices and other number-only text are no longer sent for translation, and earlier wrong results are no longer shown.
 
 = 1.1.0 =
 
