@@ -167,7 +167,7 @@ describe('MissReportCoalescer', () =>
         });
     });
 
-    it('returns no subscription when any covering chunk is rejected', async () =>
+    it('keeps accepted subscriptions when a later covering chunk is rejected', async () =>
     {
         const first = { url: `${API_URL}/v1/translation/cache/events?token=first`, expiresAt: new Date(Date.now() + 300_000).toISOString() };
         const { impl } = createFetch([
@@ -186,7 +186,24 @@ describe('MissReportCoalescer', () =>
             groups,
         });
 
-        expect(outcome).toEqual({ outcome: 'rejected', subscriptions: [] });
+        expect(outcome).toEqual({ outcome: 'accepted', acceptedHashes: groups.slice(0, 40).map(group => group.hash), subscriptions: [{ ...first, hashes: groups.slice(0, 40).map(group => group.hash) }] });
+        expect(console).toHaveWarned();
+    });
+
+    it('keeps a partial admission and retries only its refused groups', async () =>
+    {
+        const first = { url: `${API_URL}/v1/translation/cache/events?token=partial`, expiresAt: new Date(Date.now() + 300_000).toISOString() };
+        const groups = [makeGroup('first'), makeGroup('second')];
+        const { impl, log } = createFetch([
+            { ok: true, status: 200, body: { acceptedHashes: [groups[0].hash], retryHashes: [groups[1].hash], retryAfter: 1, subscription: first } },
+            { ok: false, status: 429, headers: { 'Retry-After': '600' } },
+        ]);
+        const delays: number[] = [];
+        const coalescer = new MissReportCoalescer({ fetchImpl: impl, random: () => 0, delay: async ms => { delays.push(ms); } });
+        const result = await coalescer.report({ translationProxyBaseUrl: BASE_URL, remoteApiBaseUrl: API_URL, targetLang: 'es', pageUrl: 'https://example.test/', pageTitle: '', groups });
+        expect(log.map(call => call.body.items.map(item => item.groupId))).toEqual([['first', 'second'], ['second']]);
+        expect(delays).toContain(1000);
+        expect(result).toEqual({ outcome: 'accepted', acceptedHashes: [groups[0].hash], subscriptions: [{ ...first, hashes: [groups[0].hash] }] });
         expect(console).toHaveWarned();
     });
 

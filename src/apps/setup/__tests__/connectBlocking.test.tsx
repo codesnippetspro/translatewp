@@ -59,6 +59,8 @@ describe('Setup connect step blocking', () =>
 
         const buttons = Array.from(container.querySelectorAll('button'));
         expect(buttons.map(button => button.textContent).filter(Boolean)).toEqual(['Connect your site']);
+        expect(container.querySelector('[data-connect-steps] li')?.textContent).toContain('Click “Connect your site”, then sign in or create an account');
+        expect(container.textContent).not.toContain('Sign in to TranslateWP, or create an account');
     });
 
     it('keeps continue disabled on read-site until the site is read', async () =>

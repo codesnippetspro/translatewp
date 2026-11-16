@@ -18,13 +18,13 @@ describe('useNavigate route resolution', () =>
         setLocation('?page=translatewp-seo');
         expect(useNavigate().route).toBe('/seo');
         setLocation('?page=translatewp-settings', '#advanced');
-        expect(useNavigate()).toMatchObject({ route: '/settings', tab: 'advanced' });
+        expect(useNavigate()).toMatchObject({ route: '/settings', pageName: 'advanced' });
     });
 
-    it('reads the tab from the hash, lower-cased', () =>
+    it('reads the page name from the hash, lower-cased', () =>
     {
         setLocation('?page=translatewp', '#Indexing');
-        expect(useNavigate().tab).toBe('indexing');
+        expect(useNavigate().pageName).toBe('indexing');
     });
 });
 
@@ -32,7 +32,7 @@ describe('admin URLs', () =>
 {
     afterEach(() => setLocation('?page=translatewp'));
 
-    it('builds a same-origin admin.php URL for a page and tab', () =>
+    it('builds a same-origin admin.php URL for a route and page', () =>
     {
         setLocation('?page=translatewp');
         const target = new URL(buildAdminUrl('settings', 'languages'));
@@ -42,7 +42,7 @@ describe('admin URLs', () =>
         expect(target.hash).toBe('#languages');
     });
 
-    it('clears the hash when no tab is given and names the dashboard for the empty route', () =>
+    it('clears the hash when no page is given and names the dashboard for the empty route', () =>
     {
         setLocation('?page=translatewp-settings', '#languages');
         const target = new URL(buildAdminUrl(''));

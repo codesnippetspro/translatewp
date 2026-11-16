@@ -10,6 +10,7 @@ interface ProInstallActionProps
     step: 'install' | 'activate';
     label: string;
     className?: string;
+    actionLabel?: string;
     onDone?: () => void;
 }
 
@@ -21,7 +22,7 @@ const DEFAULT_CLASS = TWP_BUTTON_PRIMARY;
  * run reloads the page, so the server-rendered menu and the page-load Pro
  * state catch up.
  */
-export const ProInstallAction = ({ step, label, className, onDone }: ProInstallActionProps) =>
+export const ProInstallAction = ({ step, label, className, actionLabel, onDone }: ProInstallActionProps) =>
 {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -49,9 +50,11 @@ export const ProInstallAction = ({ step, label, className, onDone }: ProInstallA
     };
 
     return (
-        <span className="inline-flex flex-col items-stretch gap-1">
+        <span className="inline-flex shrink-0 flex-col items-stretch gap-1">
             <button
                 type="button"
+                title={actionLabel}
+                aria-label={actionLabel}
                 disabled={busy}
                 aria-busy={busy}
                 onClick={() => { void run(); }}

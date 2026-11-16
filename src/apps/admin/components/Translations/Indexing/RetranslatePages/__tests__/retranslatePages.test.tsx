@@ -6,45 +6,47 @@ import type { IndexPageEntry } from '@/shared/api/admin';
 
 const roomPage: IndexPageEntry = {
     objectType: 'page',
-    objectId: 42,
+    objectId: '42',
     url: 'https://example.test/room',
     title: 'Room name',
     languages: {
-        de: { id: 10, status: 'indexed', segments: 5, reason: '', updated: 1731000000, title: 'stored' },
-        fr: { id: 11, status: 'indexed', segments: 7, reason: '', updated: 1731000000, title: 'stored' },
+        de: { id: '10', status: 'indexed', segments: 5, reason: '', updated: 1731000000, title: 'stored' },
+        fr: { id: '11', status: 'indexed', segments: 7, reason: '', updated: 1731000000, title: 'stored' },
     },
 };
 
 // An indexed body whose title has not caught up: the defect this surfaces.
 const titleLaggingPage: IndexPageEntry = {
     objectType: 'page',
-    objectId: 44,
+    objectId: '44',
     url: 'https://example.test/about',
     title: 'About us',
     languages: {
-        de: { id: 40, status: 'indexed', segments: 9, reason: '', updated: 1731000000, title: 'pending' },
+        de: { id: '40', status: 'indexed', segments: 9, reason: '', updated: 1731000000, title: 'pending' },
     },
 };
 
 const kitchenPage: IndexPageEntry = {
     objectType: 'page',
-    objectId: 43,
+    objectId: '43',
     url: 'https://example.test/kitchen',
     title: 'Kitchen name',
     languages: {
-        de: { id: 20, status: 'failed', segments: 0, reason: 'page_fetch_403', updated: 0, title: 'missing' },
+        de: { id: '20', status: 'failed', segments: 0, reason: 'page_fetch_403', updated: 0, title: 'missing' },
     },
 };
 
 const untitledPage: IndexPageEntry = {
     objectType: 'miss',
-    objectId: 0,
+    objectId: '0',
     url: 'https://example.test/hall/back-rooms?foo=bar',
     title: '',
     languages: {
-        de: { id: 30, status: 'pending', segments: 2, reason: '', updated: 0, title: 'missing' },
+        de: { id: '30', status: 'pending', segments: 2, reason: '', updated: 0, title: 'missing' },
     },
 };
+
+let mockMutationOptions: { onError: (error: unknown, input: { url: string }) => void };
 
 let mockPages: IndexPageEntry[] = [roomPage, kitchenPage];
 
@@ -63,7 +65,7 @@ jest.mock('@tanstack/react-query', () =>
             isPending: false,
             isError: false,
         }),
-        useMutation: () => ({ mutate, isPending: false, isError: false }),
+        useMutation: (options) => { mockMutationOptions = options; return { mutate, isPending: false, isError: false }; },
         useQueryClient: () => ({ invalidateQueries: async () => {} }),
     };
 });
@@ -218,7 +220,7 @@ describe('RetranslatePages', () =>
     {
         mockPages = [{
             ...roomPage,
-            languages: { de: { id: 50, status: 'retranslating', segments: 5, reason: '', updated: 1731000000, title: 'stored' } },
+            languages: { de: { id: '50', status: 'retranslating', segments: 5, reason: '', updated: 1731000000, title: 'stored' } },
         }];
         const container = await renderComponent();
 
@@ -289,10 +291,10 @@ describe('RetranslatePages', () =>
         const frenchPending: IndexPageEntry = {
             ...untitledPage,
             objectType: 'page',
-            objectId: 45,
+            objectId: '45',
             url: 'https://example.test/contact',
             title: 'Contact',
-            languages: { fr: { id: 50, status: 'pending', segments: 3, reason: '', updated: 0, title: 'missing' } },
+            languages: { fr: { id: '50', status: 'pending', segments: 3, reason: '', updated: 0, title: 'missing' } },
         };
         mockPages = [roomPage, frenchPending];
         window.location.hash = '#indexing/pending-pages';
@@ -314,10 +316,10 @@ describe('RetranslatePages', () =>
         const frenchPending: IndexPageEntry = {
             ...untitledPage,
             objectType: 'page',
-            objectId: 46,
+            objectId: '46',
             url: 'https://example.test/contact',
             title: 'Contact',
-            languages: { fr: { id: 51, status: 'pending', segments: 3, reason: '', updated: 0, title: 'missing' } },
+            languages: { fr: { id: '51', status: 'pending', segments: 3, reason: '', updated: 0, title: 'missing' } },
         };
         mockPages = [roomPage, frenchPending];
         window.location.hash = '#indexing/pending-pages';
@@ -339,9 +341,9 @@ describe('RetranslatePages', () =>
     {
         const now = Math.floor(Date.now() / 1000);
         mockPages = [
-            { ...roomPage, languages: { de: { id: 60, status: 'pending', queueStatus: 'claimed', segments: 0, reason: '', updated: 0, title: 'missing', translatingSince: now - 12 * 60 } } },
-            { ...kitchenPage, languages: { de: { id: 61, status: 'retranslating', queueStatus: 'done', segments: 4, reason: '', updated: now - 2 * 3600 - 5 * 60, title: 'stored', translatingSince: now - 2 * 3600 - 5 * 60 } } },
-            { ...titleLaggingPage, languages: { de: { id: 62, status: 'pending', queueStatus: 'pending', segments: 0, reason: '', updated: 0, title: 'missing', translatingSince: 0 } } },
+            { ...roomPage, languages: { de: { id: '60', status: 'pending', queueStatus: 'claimed', segments: 0, reason: '', updated: 0, title: 'missing', translatingSince: now - 12 * 60 } } },
+            { ...kitchenPage, languages: { de: { id: '61', status: 'retranslating', queueStatus: 'done', segments: 4, reason: '', updated: now - 2 * 3600 - 5 * 60, title: 'stored', translatingSince: now - 2 * 3600 - 5 * 60 } } },
+            { ...titleLaggingPage, languages: { de: { id: '62', status: 'pending', queueStatus: 'pending', segments: 0, reason: '', updated: 0, title: 'missing', translatingSince: 0 } } },
         ] as IndexPageEntry[];
         const container = await renderComponent(['de']);
         const rowText = (title: string) => dataRows(container).find(row => (row.textContent ?? '').includes(title))?.textContent ?? '';
@@ -362,10 +364,41 @@ describe('RetranslatePages', () =>
 
         expect(mockMutate).toHaveBeenCalledWith({
             objectType: 'page',
-            objectId: 42,
+            objectId: '42',
             url: 'https://example.test/room',
             language: 'de',
         });
+    });
+
+    it('keeps a visitor-page identifier above the safe integer limit intact', async () =>
+    {
+        mockPages = [{ ...roomPage, objectType: 'miss', objectId: '347772355023158088' }];
+        const container = await renderComponent();
+        await openRowMenu(container, 'Room name');
+        await act(async () => { menuItemByText(container, `Retranslate in ${germanName}`).click(); });
+        await act(async () => { dialogButtonByText('Retranslate').click(); });
+        expect(mockMutate).toHaveBeenCalledWith({ objectType: 'miss', objectId: '347772355023158088', url: roomPage.url, language: 'de' });
+    });
+
+    it.each([
+        [{ code: 'unknown_page', message: 'This page is not indexed' }, 'This page is not indexed'],
+        [new Error('The connection failed'), 'The connection failed'],
+        [{}, 'Retranslation failed. Try again.'],
+    ])('shows a retranslation error on its own row and clears it on retry %#', async (error, message) =>
+    {
+        const container = await renderComponent();
+        await openRowMenu(container, 'Room name');
+        await act(async () => { menuItemByText(container, `Retranslate in ${germanName}`).click(); });
+        await act(async () => { dialogButtonByText('Retranslate').click(); });
+        await act(async () => { mockMutationOptions.onError(error, { url: roomPage.url }); });
+        const failed = [...container.querySelectorAll('tr')].find(row => row.textContent?.includes('Room name'))!;
+        const other = [...container.querySelectorAll('tr')].find(row => row.textContent?.includes('Kitchen name'))!;
+        expect(failed.querySelector('[role="alert"]')?.textContent).toContain(message);
+        expect(other.querySelector('[role="alert"]')).toBeNull();
+        await openRowMenu(container, 'Room name');
+        await act(async () => { menuItemByText(container, `Retranslate in ${germanName}`).click(); });
+        await act(async () => { dialogButtonByText('Retranslate').click(); });
+        expect(failed.querySelector('[role="alert"]')).toBeNull();
     });
 
     it('retranslates one page in every language without a language scope', async () =>
@@ -378,7 +411,7 @@ describe('RetranslatePages', () =>
 
         expect(mockMutate).toHaveBeenCalledWith({
             objectType: 'page',
-            objectId: 42,
+            objectId: '42',
             url: 'https://example.test/room',
         });
     });
@@ -411,7 +444,7 @@ describe('RetranslatePages', () =>
 
         expect(mockMutate).toHaveBeenCalledWith({
             objectType: 'page',
-            objectId: 42,
+            objectId: '42',
             url: 'https://example.test/room',
         });
     });
@@ -450,7 +483,7 @@ describe('RetranslatePages', () =>
 
         expect(apiFetchMock).toHaveBeenCalledWith(expect.objectContaining({
             path: '/translatewp/v1/indexing/reextract-page',
-            data: { id: 20 },
+            data: { id: '20' },
         }));
     });
 

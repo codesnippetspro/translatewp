@@ -1,3 +1,4 @@
+import { observePendingTextEntries } from '@/shared/lib/translations/viewportText';
 import {
     ServedTranslationTiming,
     type ServedTimingEvent,
@@ -35,6 +36,10 @@ type TranslationSessionOptions = {
     onTiming?: (event: ServedTimingEvent) => void;
     onRehydrated?: VoidFunction;
     createTranslator?: (sourceLang: string, targetLang: string) => Translator;
+};
+
+export type TranslationSwitchOptions = {
+    onViewportPendingChange?: (pending: number) => void;
 };
 
 export type TranslationSessionResult = Awaited<ReturnType<TranslationEngine['run']>>;
@@ -101,7 +106,7 @@ export class TranslationSession
         this.#observeMutations();
     }
 
-    switchTo(targetLang: string): Promise<TranslationSessionResult>
+    switchTo(targetLang: string, options: TranslationSwitchOptions = {}): Promise<TranslationSessionResult>
     {
         this.#finishTiming('cancelled');
         const generation = ++this.#generation;
@@ -110,7 +115,7 @@ export class TranslationSession
 
         const operation = this.#operation
             .catch(() => {})
-            .then(() => this.#performSwitch(targetLang, generation));
+            .then(() => this.#performSwitch({ ...options, targetLang, generation }));
 
         this.#operation = operation.then(() => undefined, () => undefined);
         return operation;
@@ -129,10 +134,6 @@ export class TranslationSession
         this.#pendingEntries.clear();
     }
 
-    // How many translation operations still hold unserved
-    // groups on this page: the switch and every re-hydration flush together.
-    // The pending line is bound to this page-wide count, not to a single
-    // operation, so a clean flush clears the line only when it is the last work.
     pendingTranslationCount(): number
     {
         return this.#inFlightTranslations;
@@ -156,7 +157,10 @@ export class TranslationSession
         this.#settleTimers.clear();
     }
 
-    async #performSwitch(targetLang: string, generation: number): Promise<TranslationSessionResult>
+    async #performSwitch({ targetLang, generation, onViewportPendingChange }: TranslationSwitchOptions & {
+        targetLang: string;
+        generation: number;
+    }): Promise<TranslationSessionResult>
     {
         if (this.#disposed || generation !== this.#generation)
         {
@@ -183,6 +187,16 @@ export class TranslationSession
         this.#inFlightTranslations += 1;
         const engine = this.#createEngine(targetLang);
         const timing = this.#startTiming('switch', engine.translator);
+        let viewportProgress: ReturnType<typeof observePendingTextEntries> | undefined;
+        const reportViewportPending = (pending: number) =>
+        {
+            if (!this.#disposed && generation === this.#generation)
+                onViewportPendingChange?.(pending);
+        };
+        const retireViewportEntry = (entry: TranslatableEntry) =>
+        {
+            viewportProgress?.settle(entry);
+        };
 
         try
         {
@@ -192,10 +206,23 @@ export class TranslationSession
                 entry => !this.#volatility.record(entry.node, this.#volatilityValue(targetLang, entry))
             );
 
+            if (onViewportPendingChange)
+            {
+                viewportProgress = observePendingTextEntries(
+                    translatable.filter(entry => entry.type === EntryType.TEXT), reportViewportPending,
+                );
+                controller.signal.addEventListener('abort', () => viewportProgress?.disconnect(), { once: true });
+            }
+
             timing.observe(translatable);
             const result = await engine.runEntries(translatable, {
                 signal: controller.signal,
-                onEntryApplied: entry => this.#rememberExpectedWrite(entry),
+                onEntryApplied: entry =>
+                {
+                    this.#rememberExpectedWrite(entry);
+                },
+                onEntrySettled: retireViewportEntry,
+                onGroupServeFailed: entries => entries.forEach(retireViewportEntry),
                 ...this.#timingRunOptions(timing),
             });
             timing.settled(result);
@@ -220,6 +247,8 @@ export class TranslationSession
         }
         finally
         {
+            viewportProgress?.disconnect();
+            reportViewportPending(0);
             this.#inFlightTranslations -= 1;
             this.#settleTiming();
             if (this.#activeController === controller)

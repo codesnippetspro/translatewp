@@ -1,3 +1,4 @@
+import { isPrintedPhpDiagnostic } from '@/shared/lib/translations/printedPhpDiagnostics';
 import { SKIP_TAGS, TRANSLATABLE_VALUE_INPUT_TYPES } from '@/shared/lib/translations/constants';
 
 /**
@@ -5,6 +6,7 @@ import { SKIP_TAGS, TRANSLATABLE_VALUE_INPUT_TYPES } from '@/shared/lib/translat
  * 
  * Every public method accepts configurable class/id opt-out lists without making NodeFilter stateful
  */
+
 export class NodeFilter
 {
     /**
@@ -23,6 +25,7 @@ export class NodeFilter
     static isTranslatableTextNode(textNode: Text, noTranslateClasses: string[], noTranslateIds: string[]): boolean
     {
         if (!textNode.nodeValue?.trim()) return false;
+        if (isPrintedPhpDiagnostic(textNode.nodeValue)) return false;
 
         const parent = textNode.parentElement;
         if (!parent) return false;

@@ -1,3 +1,4 @@
+import { DEFAULT_SWITCHER_FONT_SIZE, resolveSwitcherFontSize } from '@/shared/lib/switcherFontSize';
 import type { SwitcherBackgroundStyle } from '@/apps/translatewp/types';
 import { withToneFormality } from '@/apps/admin/stores/toneFormality';
 import { create } from 'zustand';
@@ -43,6 +44,7 @@ export type SwitcherSettings = {
     loading_border_color: string;
     offset: number;
     icon_size: number;
+    font_size: number;
     padding: number;
 };
 
@@ -140,6 +142,7 @@ const DEFAULT_SETTINGS: AdminSettingsMap = {
         loading_border_color: '#0e3ecd',
         offset: DEFAULT_SWITCHER_OFFSET,
         icon_size: DEFAULT_SWITCHER_ICON_SIZE,
+        font_size: DEFAULT_SWITCHER_FONT_SIZE,
         padding: DEFAULT_SWITCHER_PADDING,
     },
     'languages.seo': {
@@ -270,6 +273,7 @@ const normalizeSwitcherSettings = (value: unknown): SwitcherSettings =>
                 : legacyHighlightColor ?? DEFAULT_SETTINGS['languages.switcher'].loading_border_color),
         offset: normalizeNonNegativeInt(incomingSettings.offset, DEFAULT_SWITCHER_OFFSET),
         icon_size: normalizeNonNegativeInt(incomingSettings.icon_size, DEFAULT_SWITCHER_ICON_SIZE),
+        font_size: resolveSwitcherFontSize(incomingSettings.font_size),
         padding: normalizeNonNegativeInt(incomingSettings.padding, DEFAULT_SWITCHER_PADDING),
         regional_names: incomingSettings.regional_names === 'short' ? 'short' : 'full',
         background_style: incomingSettings.background_style === 'transparent' || incomingSettings.background_style === 'glass' ? incomingSettings.background_style : 'solid',

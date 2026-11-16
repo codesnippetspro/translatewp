@@ -85,8 +85,14 @@ const installAdminBar = () =>
 
 describe('TranslateWP switcher surfaces', () =>
 {
+    const originalTextRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
+
     beforeEach(() =>
     {
+        Object.defineProperty(Range.prototype, 'getClientRects', {
+            configurable: true,
+            value: () => [{ top: 10, left: 10, right: 110, bottom: 30, width: 100, height: 20 }],
+        });
         jest.spyOn(CacheFirstTranslator.prototype, 'translateBatch').mockResolvedValue({
             translated: [],
             failures: [],
@@ -112,8 +118,63 @@ describe('TranslateWP switcher surfaces', () =>
         jest.clearAllMocks();
         document.body.innerHTML = '';
         document.cookie = 'translatewp_last_choice=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'other_cookie=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.history.replaceState(null, '', '/');
         delete (window as { TranslateWP?: unknown }).TranslateWP;
+        if (originalTextRects) Object.defineProperty(Range.prototype, 'getClientRects', originalTextRects);
+        else delete (Range.prototype as Partial<Range>).getClientRects;
+    });
+
+    it.each([
+        [false, undefined, null, false],
+        [true, undefined, 30, false],
+        [true, 7, 7, false],
+        [undefined, undefined, 30, false],
+    ])('persists a choice with remember=%s and lifetime=%s', async (remember, ttl, days, secure) =>
+    {
+        installContext(true, 'dropdown', { remember_last_choice: remember, cookie_ttl: ttl });
+        document.cookie = 'other_cookie=es; path=/';
+        document.body.innerHTML = '<span data-twp-switcher></span>';
+        const cookie = jest.spyOn(Document.prototype, 'cookie', 'set');
+        const before = Date.now();
+        await renderApp();
+        await act(async () => { (document.querySelector('.twp-trigger') as HTMLElement).click(); });
+        const option = Array.from(document.querySelectorAll('.twp-dropdown-item'))
+            .find(element => element.textContent?.includes('Español')) as HTMLElement;
+        await act(async () => { option.click(); });
+        const write = cookie.mock.calls.map(([value]) => value)
+            .find(value => value.startsWith('translatewp_last_choice=es;'))!;
+        expect(write).toBeDefined();
+        expect(write).toContain('; path=/; SameSite=Lax');
+        expect(write).not.toMatch(/max-age=/i);
+        if (days === null) expect(write).toBe(
+            'translatewp_last_choice=es; path=/; SameSite=Lax' + (secure ? '; Secure' : ''),
+        );
+        else
+        {
+            const expiry = Date.parse(write.split('expires=')[1]);
+            expect(expiry).toBeGreaterThanOrEqual(before + days! * 86400000 - 1000);
+            expect(expiry).toBeLessThanOrEqual(Date.now() + days! * 86400000);
+        }
+        expect(document.cookie).toContain('translatewp_last_choice=es');
+        expect(document.querySelector('[data-twp-switcher] [data-trigger]')).toBeNull();
+        expect(document.querySelector('[data-twp-trigger]')).not.toBeNull();
+        cookie.mockRestore();
+    });
+
+    it('keeps an existing persistent choice unchanged when Remember is switched off', async () =>
+    {
+        installContext(true, 'dropdown', { remember_last_choice: false });
+        window.TranslateWP.context.home_url = window.location.origin;
+        document.cookie = 'other_cookie=unrelated; path=/';
+        document.cookie = 'translatewp_last_choice=es; path=/; expires=Wed, 01 Jan 2031 00:00:00 GMT';
+        document.body.innerHTML = '<span data-twp-switcher></span>';
+        const cookie = jest.spyOn(Document.prototype, 'cookie', 'set');
+        await renderApp();
+        expect(cookie.mock.calls.some(([value]) => value.startsWith('translatewp_last_choice=es;'))).toBe(false);
+        expect(window.location.pathname).toBe('/es/');
+        cookie.mockRestore();
+        document.cookie = 'other_cookie=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     });
 
     it('mounts an inline switcher into every data-twp-switcher placeholder', async () =>
@@ -261,6 +322,7 @@ describe('TranslateWP switcher surfaces', () =>
 
         expect(window.location.search).toBe('');
         expect(document.documentElement.lang).toBe('en');
+        expect(document.cookie).not.toContain('translatewp_last_choice=');
         expect(pushState).not.toHaveBeenCalled();
     });
 
@@ -379,6 +441,36 @@ describe('TranslateWP switcher surfaces', () =>
         }
     });
 
+    it('lets the visitor choose a language when the page holds a hidden copy of the switcher', async () =>
+    {
+        // Menus and page builder headers print a desktop copy and a hidden mobile copy.
+        installContext(true, 'dropdown');
+        window.TranslateWP.context.home_url = window.location.origin;
+        document.body.innerHTML = `
+            <nav class="desktop"><span data-twp-switcher></span></nav>
+            <nav class="mobile" hidden><span data-twp-switcher></span></nav>
+        `;
+        window.history.replaceState(null, '', '/about/');
+        pendingBatch();
+
+        await renderApp();
+
+        const desktop = document.querySelector('.desktop') as HTMLElement;
+        const mobile = document.querySelector('.mobile') as HTMLElement;
+        await act(async () => { (desktop.querySelector('.twp-trigger') as HTMLButtonElement).click(); });
+        expect(mobile.querySelector('.twp-dropdown-item')).toBeNull();
+
+        const option = Array.from(desktop.querySelectorAll('.twp-dropdown-item'))
+            .find((item) => item.textContent?.includes('Español')) as HTMLButtonElement;
+        expect(option).toBeDefined();
+        // A real click presses the mouse first; every other copy sees that press as outside itself.
+        await act(async () => { option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+        await act(async () => { option.click(); });
+
+        expect(window.location.pathname).toBe('/es/about/');
+        expect(document.documentElement.lang).toBe('es');
+    });
+
     it('translates an address in a language folder into that language and leaves the address alone', async () =>
     {
         installContext(true, 'dropdown');
@@ -457,6 +549,121 @@ describe('TranslateWP switcher surfaces', () =>
         expect(window.location.search).toBe('?ref=9');
     });
 
+    it.each([[false, false], [true, false], [false, true]] as const)('follows current visible text and preserves dismissal for manager=%s, starts offscreen=%s', async (manager, initiallyOffscreen) =>
+    {
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+        const message = manager ? 'Translating this page for you' : 'Custom translation message';
+        installContext(true, 'dropdown', {}, false, manager,
+            manager ? {} : { pending_message: message });
+        document.body.innerHTML = '<main><p id="first">First visible text</p><p id="early">Early visible text</p><p id="later">Later text</p></main><span data-twp-switcher></span>';
+        let laterVisible = false;
+        let firstVisible = !initiallyOffscreen;
+        Object.defineProperty(Range.prototype, 'getClientRects', {
+            configurable: true,
+            value: function (this: Range)
+            {
+                const visible = this.startContainer.parentElement?.id === 'later' ? laterVisible : firstVisible;
+                return [{ top: visible ? 10 : 2000, left: 10, right: 110,
+                    bottom: visible ? 30 : 2020, width: 100, height: 20 }];
+            },
+        });
+        const apply = new Map<string, () => void>();
+        const finish: Array<(result: { translated: []; failures: []; totalGroups: number }) => void> = [];
+        jest.spyOn(CacheFirstTranslator.prototype, 'translateBatch').mockImplementation((entries, options) =>
+            new Promise(resolve =>
+            {
+                finish.push(resolve);
+                for (const entry of entries) apply.set(entry.value,
+                    () => options.onEntryTranslated?.(entry.withTranslation('Translated ' + entry.value)));
+            }));
+        const tick = async (ms: number) =>
+        {
+            await act(async () => { await jest.advanceTimersByTimeAsync(ms); });
+        };
+        const notice = () => document.querySelector('[role="status"]')?.textContent ?? '';
+        try
+        {
+            await renderApp();
+            await act(async () => { (document.querySelector('.twp-trigger') as HTMLElement).click(); });
+            const spanish = Array.from(document.querySelectorAll('.twp-dropdown-item'))
+                .find(option => option.textContent?.includes('Español')) as HTMLElement;
+            await act(async () => { spanish.click(); });
+            expect(document.querySelector('.twp-trigger')?.getAttribute('aria-busy')).toBe('true');
+            await tick(4000);
+            await act(async () => { apply.get('Early visible text')!(); });
+            await tick(3999);
+            expect(notice()).not.toContain(message);
+            await tick(17);
+            if (initiallyOffscreen)
+            {
+                expect(notice()).not.toContain(message);
+                firstVisible = true;
+                window.dispatchEvent(new Event('scroll'));
+                await tick(17);
+            }
+            expect(notice()).toContain(message);
+            await act(async () => { apply.get('First visible text')!(); });
+            await tick(17);
+            expect(notice()).not.toContain(message);
+            expect(document.getElementById('later')?.textContent).toBe('Later text');
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).toContain(message);
+            laterVisible = false;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).toContain(message);
+            const dismiss = document.querySelector('button[aria-label="Dismiss message"]') as HTMLElement;
+            await act(async () => { dismiss.click(); });
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
+            laterVisible = false;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            laterVisible = true;
+            window.dispatchEvent(new Event('scroll'));
+            await tick(17);
+            expect(notice()).not.toContain(message);
+        }
+        finally
+        {
+            await act(async () => { finish.forEach(resolve => resolve({ translated: [], failures: [], totalGroups: 0 })); });
+            expect(document.querySelector('.twp-trigger')?.hasAttribute('aria-busy')).toBe(false);
+            jest.useRealTimers();
+        }
+    });
+
+    it('translates the browser tab title on a choice and restores it for the default language', async () =>
+    {
+        const originalTitle = document.title;
+        document.title = 'Shop hours';
+        const seo = jest.spyOn(CacheFirstTranslator.prototype, 'translateSeoString').mockResolvedValue('Horario de tienda');
+        try
+        {
+            installContext(true, 'dropdown', {}, false, false);
+            document.body.innerHTML = '<span data-twp-switcher></span>';
+            await renderApp();
+            await chooseLanguage('Español');
+            await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+            expect(seo).toHaveBeenCalledWith('Shop hours', 'seo:title', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+            expect(document.title).toBe('Horario de tienda');
+            await chooseLanguage('English');
+            await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+            expect(document.title).toBe('Shop hours');
+        }
+        finally
+        {
+            seo.mockRestore();
+            document.title = originalTitle;
+        }
+    });
+
     it('keeps the pending notice through the first translation and dismisses it on the last', async () =>
     {
         installContext(true);
@@ -529,7 +736,7 @@ describe('TranslateWP switcher surfaces', () =>
     it('dismisses the pending notice when the visitor resets to the default language', async () =>
     {
         installContext(true);
-        document.body.innerHTML = '<span data-twp-switcher></span>';
+        document.body.innerHTML = '<main><p>Visible text waiting for translation.</p></main><span data-twp-switcher></span>';
         installAdminBar();
         const timers: Array<{ callback: () => void; delay: number }> = [];
         const setTimeout = jest.spyOn(window, 'setTimeout').mockImplementation(((callback: TimerHandler, delay?: number) =>
@@ -553,9 +760,11 @@ describe('TranslateWP switcher surfaces', () =>
             });
             const spanish = Array.from(document.querySelectorAll('.twp-inline .twp-dropdown-item'))
                 .find((option) => option.textContent?.includes('Español')) as HTMLButtonElement;
-            act(() =>
+            await act(async () =>
             {
                 spanish.click();
+                await Promise.resolve();
+                await Promise.resolve();
             });
             act(() =>
             {
@@ -650,7 +859,7 @@ describe('TranslateWP switcher surfaces', () =>
     it('dismisses the pending notice when the active translation aborts', async () =>
     {
         installContext(true);
-        document.body.innerHTML = '<span data-twp-switcher></span>';
+        document.body.innerHTML = '<main><p>Visible text waiting for translation.</p></main><span data-twp-switcher></span>';
         installAdminBar();
         let rejectTranslation: (error: Error) => void = () => {};
         const timers: Array<{ callback: () => void; delay: number }> = [];

@@ -62,7 +62,7 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
         <Drawer
             isOpen={isDrawerOpen}
             onClose={() => setIsDrawerOpen(false)}
-            title={isNewLanguage ? 'Add Language' : 'Edit Language'}
+            title={isNewLanguage ? __('Add Language', 'translate') : __('Edit Language', 'translate')}
         >
             <div className='flex flex-col justify-between h-[calc(100%-8rem)] min-h-0'>
                 <div className={multiAdd ? 'flex flex-col gap-4 flex-1 min-h-0' : 'flex flex-col gap-8'}>
@@ -73,13 +73,13 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
                             excludeLocales={existingLocales}
                         />
                     ) : isNewLanguage && !draft ? (
-                        <LanguageSelect onChange={handleLocalePick} placeholder='Select a language' />
+                        <LanguageSelect onChange={handleLocalePick} placeholder={__('Select a language', 'translate')} />
                     ) : draft ? (
                         <>
                             <LanguageSelect defaultValue={draft.locale} onChange={(locale) => handleLanguageChange(languageWithLocale(draft, locale))} />
 
                             <div className='flex items-center justify-between'>
-                                <span className='text-sm font-bold text-translatewp-neutral'>Locale</span>
+                                <span className='text-sm font-bold text-translatewp-neutral'>{__('Locale', 'translate')}</span>
 
                                 <TextControl
                                     __next40pxDefaultSize
@@ -92,7 +92,7 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
                             </div>
 
                             <div className='flex items-center justify-between'>
-                                <span className='text-sm font-bold text-translatewp-neutral'>Slug</span>
+                                <span className='text-sm font-bold text-translatewp-neutral'>{__('Slug', 'translate')}</span>
 
                                 <TextControl
                                     __next40pxDefaultSize
@@ -106,9 +106,9 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
 
                             <ToggleControl label={
                                 <div className='flex flex-col gap-1'>
-                                    <p className='font-bold text-sm! text-translatewp-neutral!'>Is active</p>
+                                    <p className='font-bold text-sm! text-translatewp-neutral!'>{__('Is active', 'translate')}</p>
                                     <span className='text-sm text-translatewp-muted!'>
-                                        {draft.default ? 'This is the default language; choose another default to switch it off.' : 'Enable or disable this language'}
+                                        {draft.default ? __('This is the default language; choose another default to switch it off.', 'translate') : __('Enable or disable this language', 'translate')}
                                     </span>
                                 </div>
                             } checked={draft.active} disabled={draft.default} onChange={() => handleLanguageChange({ ...draft, active: !draft.active })} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
@@ -116,7 +116,7 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
 {/* The default language is chosen with the Default language control, not here. */}
 
                             <div className='flex flex-col gap-6'>
-                                <span className='text-sm font-bold text-translatewp-neutral'>Switcher label</span>
+                                <span className='text-sm font-bold text-translatewp-neutral'>{__('Switcher label', 'translate')}</span>
 
                                 <div>
                                     <RadioControl
@@ -129,19 +129,19 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
                                                 handleLanguageChange({ ...draft, switcher_label: getLanguageNameFromLocale(draft.locale, true) || '' });
                                             }
                                         }}
-                                        options={[{ label: 'Native', value: 'native' }, { label: 'Custom', value: 'custom' }]}
+                                        options={[{ label: __('Native', 'translate'), value: 'native' }, { label: __('Custom', 'translate'), value: 'custom' }]}
                                         selected={draft.switcher_label ? 'custom' : 'native'}
                                         className='[&_legend]:hidden! [&_div[data-wp-component=VStack]]:gap-6! [&_label]:text-sm! [&_label]:text-translatewp-neutral! [&_label]:font-bold!'
                                     />
 
                                     {draft.switcher_label && (
                                         <>
-                                            <span className='text-translatewp-muted text-sm ps-6 mb-2 block'>Add a custom label</span>
+                                            <span className='text-translatewp-muted text-sm ps-6 mb-2 block'>{__('Add a custom label', 'translate')}</span>
                                             <TextControl
                                                 __next40pxDefaultSize
                                                 __nextHasNoMarginBottom
                                                 className='[&_input]:border-translatewp-border! [&_input]:rounded-sm! ps-6'
-                                                placeholder={'My label'}
+                                                placeholder={__('My label', 'translate')}
                                                 value={draft.switcher_label || ''}
                                                 onChange={(switcherLabel) => handleLanguageChange({ ...draft, switcher_label: switcherLabel })}
                                             />
@@ -154,10 +154,10 @@ export const AddLanguageDrawer = ({ isDrawerOpen, setIsDrawerOpen, language, isN
                 </div>
 
                 <div className='flex items-center gap-1'>
-                    <Button variant='secondary' className='rounded-sm! text-base! px-9! py-3!' onClick={onCancel}>Cancel</Button>
+                    <Button variant='secondary' className='rounded-sm! text-base! px-9! py-3!' onClick={onCancel}>{__('Cancel', 'translate')}</Button>
                     <Button variant='primary' className='rounded-sm! text-base! py-3! flex-1 justify-center!' disabled={!canSave} onClick={multiAdd ? handleAddSelected : onDone}>
                         {!isNewLanguage
-                            ? 'Update language'
+                            ? __('Update language', 'translate')
                             : selectedLocales.length > 1
                                 ? sprintf(
                                     /* translators: %d: number of selected languages. */

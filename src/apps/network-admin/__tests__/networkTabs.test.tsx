@@ -51,7 +51,7 @@ describe('the network page tabs', () =>
         expect(container.textContent).toContain('Network at a glance');
         expect(container.textContent).toContain('setup complete');
         expect(container.querySelector('[data-language-counts]')).not.toBeNull();
-        expect(container.textContent).toContain('Translations quota');
+        expect(container.textContent).toContain('Translation usage');
         expect(container.textContent).toContain('Send feedback');
         expect(container.textContent).not.toContain('Connect a subsite');
         expect(container.querySelector('a[href="/site-2/dashboard"]')).toBeNull();

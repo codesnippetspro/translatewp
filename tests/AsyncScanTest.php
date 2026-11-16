@@ -424,6 +424,38 @@ $scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
 $status = $scanning->scan_status( make_request( 'GET' ) );
 assert_true( 'neutral' === ( $status['tone'] ?? '' ) && 9 === ( $status['formality'] ?? null ), 'A stored scan proposing Formal must read as Neutral with its own formality, got ' . wp_json_encode( $status ) );
 
+foreach ( [ false, true ] as $pro_active ) {
+	wp_test_reset( scan_site_options() );
+	seed_published_posts();
+	\TranslateWP\Components\Options::update( 'setup.ended', true );
+	\TranslateWP\Components\Options::update( 'translations.context.pro_followup', 'done' );
+	if ( $pro_active ) {
+		set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+		wp_test_set_filter( 'translatewp_pro_installed_version', static fn() => '1.0.3' );
+		wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => true );
+	}
+	$scanning = new Scanning( 'translatewp', TRANSLATEWP_VERSION );
+	$scanning->run_scan();
+	assert_true(
+		( $pro_active ? 'done' : null ) === \TranslateWP\Components\Options::get( 'translations.context.pro_followup' ),
+		'A full scan must reset upgrade eligibility only while Free'
+	);
+	assert_true( 1 === count( $GLOBALS['wp_test_remote_posts'] ), 'The full scan makes one service call' );
+	set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+	wp_test_set_filter( 'translatewp_pro_installed_version', static fn() => '1.0.3' );
+	wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => true );
+	$scanning->schedule_pro_followup();
+	assert_true(
+		( $pro_active ? 'done' : 'pending' ) === \TranslateWP\Components\Options::get( 'translations.context.pro_followup' ),
+		'Only a scan made while Free can schedule the automatic upgrade follow-up'
+	);
+	assert_true(
+		$pro_active === ( false === wp_next_scheduled( Scanning::PRO_FOLLOWUP_HOOK ) ),
+		'A Pro rescan must not schedule another model call'
+	);
+	assert_true( 1 === count( $GLOBALS['wp_test_remote_posts'] ), 'Scheduling never calls the model inline' );
+}
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "AsyncScanTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

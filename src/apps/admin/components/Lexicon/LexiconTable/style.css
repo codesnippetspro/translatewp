@@ -1,0 +1,39 @@
+@media (width < 640px) {
+
+	.twp-lexicon-table,
+	.twp-lexicon-table tbody {
+		display: block;
+	}
+
+	.twp-lexicon-table tbody tr {
+		display: grid;
+		gap: 0.625rem;
+		padding: 1rem;
+		border-bottom: 1px solid var(--color-translatewp-border);
+	}
+
+	.twp-lexicon-table tbody tr:last-child {
+		border-bottom: 0;
+	}
+
+	.twp-lexicon-table tbody td {
+		display: block;
+		max-width: none;
+		padding: 0;
+		border: 0;
+		overflow-wrap: normal;
+		word-break: normal;
+	}
+
+	.twp-lexicon-table tbody td:nth-child(2) {
+		order: 3;
+	}
+
+	.twp-lexicon-table tbody td:nth-child(3) {
+		order: 2;
+	}
+
+	.twp-lexicon-table tbody td:nth-child(4) {
+		order: 4;
+	}
+}

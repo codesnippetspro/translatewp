@@ -30,6 +30,7 @@ export const DefaultLanguageControl = ({ compact = false }: { compact?: boolean 
     const setSetting = useAdminSettingsStore(state => state.setSetting);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
     const current = languages.find(language => language.default)?.locale ?? '';
+    const Container = compact ? 'div' : 'section';
     const nameOf = (locale: string) => getLanguageNameFromLocale(locale, true) || getLanguageNameFromLocale(locale) || locale;
 
     const handleChange = async (nextLocale: string) =>
@@ -55,17 +56,24 @@ export const DefaultLanguageControl = ({ compact = false }: { compact?: boolean 
     };
 
     return (
-        <div className={compact ? 'flex flex-col gap-1' : 'flex flex-col gap-2'}>
+        <Container
+            className={compact ? 'flex flex-col gap-1' : 'flex flex-col gap-2'}
+            aria-labelledby={compact ? undefined : 'twp-default-language'}
+        >
             <SelectControl
                 __next40pxDefaultSize
                 __nextHasNoMarginBottom
-                label={__('Default language', 'translate')}
+                label={compact ? __('Default language', 'translate') : (
+                    <span id="twp-default-language" role="heading" aria-level={3}>
+                        {__('Default language', 'translate')}
+                    </span>
+                )}
                 help={__('The language your content is written in.', 'translate')}
                 value={current}
                 options={languages.map(language => ({ value: language.locale, label: nameOf(language.locale) }))}
                 onChange={(value) => void handleChange(String(value))}
             />
             <ConfirmDialog {...confirmDialogProps} />
-        </div>
+        </Container>
     );
 };

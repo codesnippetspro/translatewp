@@ -10,11 +10,12 @@ interface LanguageSelectProps {
     defaultValue?: string;
     onChange: ( value: string ) => void;
     placeholder?: string;
+    inputLabel?: string;
     // One row: the current language chip inside the box, the filter beside it.
     compact?: boolean;
 }
 
-export const LanguageSelect = ({ defaultValue, onChange, placeholder, compact = false }: LanguageSelectProps) =>
+export const LanguageSelect = ({ defaultValue, onChange, placeholder, inputLabel, compact = false }: LanguageSelectProps) =>
 {
     const [ isOpen, setIsOpen ] = useState( false );
     const [ selectedCountryCode, setSelectedCountryCode ] = useState( defaultValue ?? '' );
@@ -104,7 +105,7 @@ export const LanguageSelect = ({ defaultValue, onChange, placeholder, compact = 
                     type='text'
                     value={filterValue}
                     placeholder={placeholder ?? __('Filter languages', 'translate')}
-                    aria-label={__('Filter languages', 'translate')}
+                    aria-label={inputLabel ?? __('Filter languages', 'translate')}
                     className={`min-w-0 flex-1 m-0! p-0! h-auto! min-h-0! bg-transparent text-translatewp-neutral! text-sm! leading-normal! border-none! shadow-none! focus:ring-0! focus:outline-none! focus:shadow-none!${compact ? ' text-end! placeholder:text-end' : ''}`}
                     onChange={( event ) => setFilterValue( event.target.value )}
                     onFocus={() => setIsOpen( true )}

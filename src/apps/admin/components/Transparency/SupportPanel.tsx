@@ -17,7 +17,12 @@ export const SUPPORT_ADDRESS = 'team@translatewp.ai';
 
 export const mailtoFallback = (name: string, message: string, subject: string, debug: string, replyTo = ''): string =>
 {
-    const body = `${message}\n\n${name}${replyTo !== '' ? `\nReply to: ${replyTo}` : ''}\n\n\n${debug}`;
+    const replyLine = replyTo !== '' ? '\n' + sprintf(
+        /* translators: %s: reply email address. */
+        __('Reply to: %s', 'translate'),
+        replyTo
+    ) : '';
+    const body = `${message}\n\n${name}${replyLine}\n\n\n${debug}`;
 
     return `mailto:${SUPPORT_ADDRESS}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 };
@@ -81,7 +86,11 @@ const TicketModal = ({ debug, onClose }: { debug: string; onClose: () => void })
 
     const send = async () =>
     {
-        const subject = `[TranslateWP] Support request from ${window.location.hostname}`;
+        const subject = sprintf(
+            /* translators: %s: site host. */
+            __('[TranslateWP] Support request from %s', 'translate'),
+            window.location.hostname
+        );
         try
         {
             const result = await mutation.mutateAsync({ name, message, email: replyTo });

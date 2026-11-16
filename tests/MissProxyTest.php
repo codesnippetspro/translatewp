@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use function TranslateWP\Components\class_exists;
+
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\TranslationFingerprint;
 use TranslateWP\Components\TranslationProxyRateLimit;
@@ -9,6 +11,7 @@ use TranslateWP\Components\TranslationProxySettings;
 use TranslateWP\Functionality\Endpoints\TranslationJobs;
 use TranslateWP\Functionality\Indexer;
 
+require_once __DIR__ . '/fixtures/formatting-runtime.php';
 require dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/wp-test-stubs.php';
 
@@ -439,6 +442,7 @@ assert_wp_error_code( $too_long, 'invalid_parameter' );
 
 // --- One client's items are budgeted: 400 in ten minutes, then the report is refused ---
 wp_test_reset( $connected_options );
+update_option( 'translatewp_index_reported_languages', [ 'es' ] );
 $jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
 $fill = [];
 for ( $i = 0; $i < 40; $i++ ) {
@@ -466,6 +470,66 @@ $retry_after = $over_budget instanceof WP_REST_Response ? (int) ( $over_budget->
 assert_true( $retry_after > 0 && $retry_after <= TranslationProxyRateLimit::MISS_ITEMS_WINDOW_SECONDS, 'The refusal must say when to retry, got Retry-After ' . $retry_after );
 assert_true( 'rate_limited' === ( $over_budget instanceof WP_REST_Response ? ( $over_budget->get_data()['code'] ?? '' ) : '' ), 'The refusal keeps the rate_limited code' );
 
+wp_test_reset( $connected_options );
+update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+$site_id = $connected_options['site']['id'];
+TranslationProxyRateLimit::charge_miss_items( $site_id, '203.0.113.10', 398 );
+$partial_items = array_slice( $fill, 0, 4 );
+$partial = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => $partial_items ] ) );
+assert_true( is_array( $partial ) && 2 === ( $partial['accepted'] ?? 0 ), 'A report accepts the two items that fit instead of refusing all four' );
+assert_true( is_array( $partial ) && 2 === count( $partial['acceptedHashes'] ?? [] ) && 2 === count( $partial['retryHashes'] ?? [] ), 'A partial response identifies accepted and refused hashes' );
+assert_true( is_array( $partial ) && ( $partial['retryAfter'] ?? 0 ) > 0, 'A partial response names the existing fixed-window retry delay' );
+$partial_subscription = end( $GLOBALS['wp_test_remote_posts'] );
+assert_true( is_array( $partial ) && ( $partial['acceptedHashes'] ?? [] ) === ( $partial_subscription['body']['hashes'] ?? null ), 'Partial subscriptions cover only admitted hashes' );
+if ( is_array( $partial ) ) {
+    foreach ( $partial['retryHashes'] ?? [] as $hash ) {
+        $claim = \TranslateWP\Components\TranslationProxyDedupe::claim_segment( $site_id, 'es', $hash );
+        assert_true( ! is_wp_error( $claim ), 'A refused hash releases its claim for a later retry' );
+    }
+}
+
+wp_test_reset( $connected_options );
+update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+TranslationProxyRateLimit::charge_miss_items( $site_id, '203.0.113.10', 400 );
+$free_item = $valid_item;
+$free_item['markerPayload'] = '⟪item_0001⟫€⟪item_0002⟫ 14.50';
+if ( ! class_exists( '\NumberFormatter' ) ) {
+    $free_item['markerPayload'] = '⟪item_0001⟫50%';
+}
+$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+$free_result = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item, $free_item ] ] ) );
+assert_true( is_array( $free_result ) && 1 === ( $free_result['accepted'] ?? 0 ), 'A formatting-rule group is admitted even when paid groups exhaust the item budget' );
+assert_true( is_array( $free_result ) && 1 === count( $free_result['retryHashes'] ?? [] ), 'Only the paid group is refused at the limit' );
+
+if ( ! class_exists( '\NumberFormatter' ) ) {
+    wp_test_reset( $connected_options );
+    update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+    $jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+    $separator_items = [];
+    foreach ( [ '14.50', '14,50', '1,234.56', '1.234,56' ] as $index => $amount ) {
+        $separator_items[] = array_merge( $valid_item, [ 'groupId' => 'separator-' . $index, 'markerPayload' => '⟪item_0001⟫' . $amount ] );
+    }
+    $separator_result = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => $separator_items ] ) );
+    $counter_key = \TranslateWP\Components\TranslationProxyStorage::rate_limit_key( TranslationProxyRateLimit::BUCKET_MISS_ITEMS, $site_id, '203.0.113.10', 600 );
+    assert_true( is_array( $separator_result ) && 4 === get_transient( $counter_key ), 'Without Intl every separator-dependent item is counted' );
+}
+
+wp_test_reset( $connected_options );
+$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+for ( $round = 0; $round < 50; $round++ ) {
+    $items = array_map( static function ( array $item ) use ( $round ): array {
+        $item['markerPayload'] .= ' first pass ' . $round;
+        return $item;
+    }, $fill );
+    $first_pass_report = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => $items ] ) );
+    assert_true( is_array( $first_pass_report ) && 40 === ( $first_pass_report['accepted'] ?? 0 ), 'First-pass report fits its 2000-item window: ' . $round );
+}
+$first_pass_over = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
+assert_true( $first_pass_over instanceof WP_REST_Response && 429 === $first_pass_over->get_status(), 'A first-pass window still refuses paid item 2001' );
+$item_key = \TranslateWP\Components\TranslationProxyStorage::rate_limit_key( TranslationProxyRateLimit::BUCKET_MISS_ITEMS, $site_id, '203.0.113.10', 600 );
+assert_true( 2000 === get_transient( $item_key ), 'The first-pass item counter is capped at 2000 for the unchanged 600-second key' );
+
 // --- Re-reporting text that is already queued costs no item budget ---
 wp_test_reset( $connected_options );
 $jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
@@ -477,6 +541,29 @@ for ( $round = 0; $round < 20; $round++ ) {
 }
 $fresh = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
 assert_true( is_array( $fresh ) && 1 === ( $fresh['accepted'] ?? 0 ), 'New text after repeated reports must still be accepted, got ' . wp_json_encode( $fresh ) );
+
+$enqueue_results = [];
+foreach ( [ 'report_misses', 'enqueue_misses' ] as $method ) {
+	wp_test_reset( $connected_options );
+	$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+	assert_wp_error_code( $jobs->$method( make_request( 'POST', [ 'language' => 'de', 'items' => [ $valid_item ] ] ) ), 'language_not_configured' );
+	assert_wp_error_code( $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [] ] ) ), 'invalid_parameter' );
+	wp_test_reset( $connected_options );
+	$result = $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ], 'subscribe' => false ] ) );
+	assert_true( 1 === ( $result['accepted'] ?? 0 ), $method . ' must accept the same valid item' );
+	$subscriptions = array_values( array_filter( $GLOBALS['wp_test_remote_posts'], static fn( $call ) => '/v1/translation/cache/subscriptions' === $call['path'] ) );
+	assert_true( ( 'report_misses' === $method ? 1 : 0 ) === count( $subscriptions ), $method . ' must mint only for public reports; a body flag cannot disable it' );
+	assert_true( ( 'report_misses' === $method ) === isset( $result['subscription'] ), $method . ' subscription response must match ticket minting' );
+	unset( $result['subscription'] );
+	$enqueue_results[ $method ] = [ $result, $GLOBALS['wp_test_inserted_posts'] ];
+	wp_test_reset( $connected_options );
+	update_option( 'translatewp_index_reported_languages', [ 'es' ] );
+	TranslationProxyRateLimit::charge_miss_items( $connected_options['site']['id'], '203.0.113.10', 400 );
+	$refused = $jobs->$method( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
+	assert_true( $refused instanceof WP_REST_Response && 429 === $refused->get_status(), $method . ' must enforce the same item throttle' );
+	assert_true( [] === $GLOBALS['wp_test_inserted_posts'], $method . ' must not queue refused work' );
+}
+assert_true( $enqueue_results['report_misses'] === $enqueue_results['enqueue_misses'], 'Both methods must queue identical work and return identical counts' );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "MissProxyTest: {$failures} assertion(s) failed\n" );

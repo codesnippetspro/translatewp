@@ -27,6 +27,8 @@ class Menus {
         add_action( 'admin_menu', [ $this, 'redirect_to_setup' ], 1 );
         add_action( 'admin_init', [ $this, 'redirect_to_setup' ] );
         add_action( 'admin_menu', [ $this, 'add_admin_menu' ] );
+        // Resolve page permissions and screen IDs before removing the submenu entries.
+        add_action( 'admin_head', [ $this, 'remove_admin_submenus' ] );
         add_action( 'admin_head', [ $this, 'render_upgrade_menu_styles' ] );
         add_action( 'admin_print_footer_scripts', [ $this, 'render_upgrade_menu_script' ] );
     }
@@ -51,11 +53,7 @@ class Menus {
         }
 
         if ( $delegate ) {
-            // The same screens under the same menu, so each keeps the screen id
-            // its scripts and styles load for. The menu's own entry is the
-            // Dashboard, which is not theirs: it is taken out of the menu and
-            // refused when opened by address.
-            // The menu opens on its first entry, the page Access::admin_page() names.
+            // Register the screens before removing their menu entries so their screen IDs remain available.
             if ( Access::can( Access::SETTINGS ) ) {
                 add_submenu_page( 'translatewp', esc_html__( 'Settings', 'translate' ), esc_html__( 'Settings', 'translate' ), Access::SETTINGS, 'translatewp-settings', [ $this, 'render_dashboard_page' ] );
             }
@@ -63,13 +61,10 @@ class Menus {
                 add_submenu_page( 'translatewp', esc_html__( 'Lexicon', 'translate' ), esc_html__( 'Lexicon', 'translate' ), Access::LEXICON, 'translatewp-lexicon', [ $this, 'render_dashboard_page' ] );
             }
             remove_submenu_page( 'translatewp', 'translatewp' );
-            // Before any output, so the refusal carries its status.
-            add_action( 'load-toplevel_page_translatewp', [ $this, 'refuse_non_administrator' ] );
+            add_action( 'load-toplevel_page_translatewp', [ $this, 'redirect_to_permitted_page' ] );
             return;
         }
 
-        // Five entries. Dashboard, SEO Tools, Lexicon, Settings and,
-        // on Free, Upgrade.
         add_submenu_page(
             'translatewp',
             esc_html__( 'Dashboard', 'translate' ),
@@ -112,6 +107,23 @@ class Menus {
         );
 
 		$this->add_upgrade_menu_link();
+    }
+
+    public function remove_admin_submenus() {
+        remove_submenu_page( 'translatewp', 'translatewp-seo' );
+        remove_submenu_page( 'translatewp', 'translatewp-lexicon' );
+        remove_submenu_page( 'translatewp', 'translatewp-settings' );
+    }
+
+    public function redirect_to_permitted_page() {
+        $page = Access::admin_page();
+
+        if ( null !== $page && 'translatewp' !== $page ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=' . $page ) );
+            exit;
+        }
+
+        $this->refuse_non_administrator();
     }
 
     public function redirect_to_setup() {

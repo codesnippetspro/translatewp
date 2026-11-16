@@ -1,0 +1,156 @@
+[
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "en",
+    "target": "pl",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14,50",
+    "source": "pl",
+    "target": "en",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫1,234.56",
+    "source": "en",
+    "target": "de",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫1.234,56",
+    "source": "de",
+    "target": "en",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫100",
+    "source": "en",
+    "target": "de",
+    "free": true,
+    "withoutIntl": true
+  },
+  {
+    "payload": "⟪item_0001⟫€⟪item_0002⟫ 14,50",
+    "source": "pl",
+    "target": "en",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫50%",
+    "source": "en",
+    "target": "pl",
+    "free": true,
+    "withoutIntl": true
+  },
+  {
+    "payload": "⟪item_0001⟫-14.50",
+    "source": "en",
+    "target": "de",
+    "free": true,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫12 345",
+    "source": "en",
+    "target": "de",
+    "free": true,
+    "withoutIntl": true
+  },
+  {
+    "payload": "⟪item_0001⟫999999999999999",
+    "source": "en",
+    "target": "de",
+    "free": true,
+    "withoutIntl": true
+  },
+  {
+    "payload": "⟪item_0001⟫12345678901234567",
+    "source": "en",
+    "target": "de",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫1.2.3.4",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫1,2,3",
+    "source": "pl",
+    "target": "en",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫Price: 14.50",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50⟪item_0002⟫Add to cart",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫€",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14:30",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫12/25",
+    "source": "en",
+    "target": "de",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫1/2",
+    "source": "en",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "auto",
+    "target": "pl",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "en_US",
+    "target": "de",
+    "free": false,
+    "withoutIntl": false
+  },
+  {
+    "payload": "⟪item_0001⟫14.50",
+    "source": "en",
+    "target": "de_DE",
+    "free": false,
+    "withoutIntl": false
+  }
+]

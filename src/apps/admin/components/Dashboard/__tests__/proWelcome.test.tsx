@@ -146,7 +146,7 @@ describe('the Dashboard welcomes a site to Pro once', () =>
         expect(links(container)).toEqual([
             ['SEO Tools', 'admin.php?page=translatewp-seo'],
             ['Custom style and tone', 'admin.php?page=translatewp-settings#translation'],
-            ['Lexicon scan', 'admin.php?page=translatewp-lexicon'],
+            ['Lexicon scan', 'admin.php?page=translatewp-settings#translation'],
             ['Edit translations and placement on the page', 'https://example.com'],
             ['Your own AI key', 'admin.php?page=translatewp-settings#ai-model'],
         ]);

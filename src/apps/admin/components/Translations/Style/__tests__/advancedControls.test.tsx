@@ -57,6 +57,16 @@ describe('advanced style controls', () =>
             expect(advanced.textContent).toContain(title);
         }
         expect(advanced.querySelectorAll('button[aria-label^="Unlock"]').length).toBe(3);
+        const group = advanced.closest('section[aria-label="Pro style controls"]')!;
+        expect(group.querySelectorAll('button[aria-label="Upgrade to PRO"]')).toHaveLength(1);
+        expect(group.querySelector('button[aria-label="Upgrade to PRO"]')?.closest('[data-advanced-style]')).toBeNull();
+        expect(group.querySelectorAll('button.is-primary')).toHaveLength(0);
+        for (const card of Array.from(advanced.children)) {
+            const lock = card.querySelector('button[aria-label^="Unlock"]')!;
+            expect(lock.textContent).toBe('');
+            expect(card.querySelectorAll('[data-pro-lock-badge]')).toHaveLength(0);
+        }
+
     });
 
     it('with Pro the controls are live and store their values', async () =>
@@ -69,9 +79,9 @@ describe('advanced style controls', () =>
         expect(advanced.children[0].querySelector('svg.lucide-sparkles')).not.toBeNull();
         expect(advanced.querySelectorAll('svg.lucide-sparkles')).toHaveLength(1);
 
-        const input = advanced.querySelector('[data-audience-field] input') as HTMLInputElement;
+        const input = advanced.querySelector('[data-audience-field] textarea') as HTMLTextAreaElement;
         expect(input.maxLength).toBe(200);
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
         act(() =>
         {
             setter.call(input, 'Small business owners');

@@ -25,8 +25,8 @@ export const RetranslateEverything = () =>
     });
 
     return (
-        <div className="flex flex-col gap-4">
-            <h3 className="font-semibold text-lg text-translatewp-neutral! m-0">
+        <section className="flex flex-col gap-4" aria-labelledby="twp-retranslate-everything">
+            <h3 id="twp-retranslate-everything" className="font-semibold text-lg text-translatewp-neutral! m-0">
                 {__('Retranslate everything', 'translate')}
             </h3>
             <p className="text-sm text-translatewp-muted! m-0">
@@ -66,6 +66,6 @@ export const RetranslateEverything = () =>
                     {__('The retranslation could not be started. Try again.', 'translate')}
                 </p>
             )}
-        </div>
+        </section>
     );
 };

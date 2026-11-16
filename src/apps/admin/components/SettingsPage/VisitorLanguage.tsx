@@ -30,7 +30,7 @@ export const VisitorLanguage = () =>
     return (
         <section className="flex flex-col gap-6" aria-labelledby="twp-visitor-language">
             <div className="flex flex-col gap-2">
-                <h4 id="twp-visitor-language" className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Visitor language', 'translate')}</h4>
+                <h3 id="twp-visitor-language" className="font-semibold text-lg text-translatewp-neutral! m-0">{__('Visitor language', 'translate')}</h3>
                 <p className="text-sm text-translatewp-muted! m-0">{__('How the site picks a language for each visitor.', 'translate')}</p>
             </div>
 

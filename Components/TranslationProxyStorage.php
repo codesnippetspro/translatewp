@@ -82,7 +82,7 @@ class TranslationProxyStorage {
 		}
 	}
 
-	public static function increment_rate_limit( string $bucket, string $site_id, string $client_ip, int $max, int $window_seconds, int $amount = 1 ) {
+	public static function increment_rate_limit( string $bucket, string $site_id, string $client_ip, int $max, int $window_seconds, int $amount = 1, bool $allow_partial = false ) {
 		if ( '' === $bucket || '' === $client_ip || $max < 1 || $window_seconds < 1 || $amount < 1 ) {
 			return new \WP_Error(
 				'invalid_parameter',
@@ -107,8 +107,9 @@ class TranslationProxyStorage {
 			}
 		}
 
-		$count = (int) $current + $amount;
-		if ( $count > $max ) {
+		$admitted = $allow_partial ? min( $amount, max( 0, $max - (int) $current ) ) : $amount;
+		$count = (int) $current + $admitted;
+		if ( $admitted < 1 || $count > $max ) {
 			return new \WP_Error(
 				'rate_limited',
 				'Too many translation requests',
@@ -121,6 +122,13 @@ class TranslationProxyStorage {
 
 		if ( ! set_transient( $key, $count, max( 1, $ends_at - $now ) ) ) {
 			return self::storage_error( 'Rate limit storage failed' );
+		}
+
+		if ( $allow_partial ) {
+			return [
+				'accepted' => $admitted,
+				'retry_after' => max( 1, $ends_at - $now ),
+			];
 		}
 
 		return true;

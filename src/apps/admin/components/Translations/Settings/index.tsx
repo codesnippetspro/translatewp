@@ -102,8 +102,13 @@ export const TranslationsSettings = () =>
     return (
         <div className="flex flex-col gap-6" data-translation-settings>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-content-behaviour>
-            <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Content', 'translate')}</h4>
+            <section
+                className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5"
+                aria-labelledby="twp-translation-content"
+            >
+            <h3 id="twp-translation-content" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                {__('Content', 'translate')}
+            </h3>
 
             <ToggleControl label={
                 <ToggleLabel title={__('Translate all public content', 'translate')} description={__('Every public page is translated. Turn it off to exclude post types or categories, for example your shop products.', 'translate')} />} checked={settings.translate_all_content} onChange={(value) => updateSetting('translate_all_content', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
@@ -119,23 +124,36 @@ export const TranslationsSettings = () =>
             <ManagedByNetwork group="content_areas">
             <div className="flex flex-col gap-5" data-page-areas>
             <ToggleControl label={
-                <ToggleLabel title={__('Translate comments', 'translate')} description={__('Off: visitor comments and the comment form stay as written.', 'translate')} />} checked={settings.translate_comments !== false} onChange={(value) => updateSetting('translate_comments', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate comments', 'translate')} description={settings.translate_comments !== false
+                    ? __('On: visitor comments and the comment form are translated.', 'translate')
+                    : __('Off: visitor comments and the comment form stay as written.', 'translate')} />} checked={settings.translate_comments !== false} onChange={(value) => updateSetting('translate_comments', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             <ToggleControl label={
-                <ToggleLabel title={__('Translate menus', 'translate')} description={__('Off: navigation menus keep their original labels.', 'translate')} />} checked={settings.translate_menus !== false} onChange={(value) => updateSetting('translate_menus', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate menus', 'translate')} description={settings.translate_menus !== false
+                    ? __('On: navigation menu labels are translated.', 'translate')
+                    : __('Off: navigation menus keep their original labels.', 'translate')} />} checked={settings.translate_menus !== false} onChange={(value) => updateSetting('translate_menus', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             <ToggleControl label={
-                <ToggleLabel title={__('Translate widgets', 'translate')} description={__('Off: sidebar and footer widgets stay as written.', 'translate')} />} checked={settings.translate_widgets !== false} onChange={(value) => updateSetting('translate_widgets', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate widgets', 'translate')} description={settings.translate_widgets !== false
+                    ? __('On: sidebar and footer widgets are translated.', 'translate')
+                    : __('Off: sidebar and footer widgets stay as written.', 'translate')} />} checked={settings.translate_widgets !== false} onChange={(value) => updateSetting('translate_widgets', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             </div>
             </ManagedByNetwork>
 
             <ToggleControl label={
-                <ToggleLabel title={__('Translate password-protected and private pages', 'translate')} description={__('Off: these pages stay in their original language and their text is never sent to the translation service. A single page can also be excluded in its editor.', 'translate')} />} checked={settings.translate_protected_pages === true} onChange={(value) => updateSetting('translate_protected_pages', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                <ToggleLabel title={__('Translate password-protected and private pages', 'translate')} description={settings.translate_protected_pages === true
+                    ? __('On: password-protected and private pages are translated unless excluded in their editor. Their text is sent to the translation service.', 'translate')
+                    : __('Off: these pages stay in their original language and their text is never sent to the translation service. A single page can also be excluded in its editor.', 'translate')} />} checked={settings.translate_protected_pages === true} onChange={(value) => updateSetting('translate_protected_pages', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
 
 {/* Browser detection lives in Settings > Languages > Visitor language. */}
 
-            </div>
+            </section>
 
-            <div className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5">
-            <h4 className="text-sm! font-bold! text-translatewp-neutral! m-0!">{__('Behaviour', 'translate')}</h4>
+            <section
+                className="rounded-lg border border-translatewp-border p-5 flex flex-col gap-5"
+                aria-labelledby="twp-translation-behaviour"
+            >
+            <h3 id="twp-translation-behaviour" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                {__('Behaviour', 'translate')}
+            </h3>
 
             <ManagedByNetwork group="translation_behaviour">
             <ToggleControl label={
@@ -146,10 +164,13 @@ export const TranslationsSettings = () =>
                     <ToggleControl label={
                         <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={settings.translate_image_alt_tags} onChange={(value) => updateSetting('translate_image_alt_tags', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
                 ) : (
-                    <ProLock feature={__('image alt text translation', 'translate')} badge={<ProMarker />}>
-                        <ToggleControl label={
-                            <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
-                    </ProLock>
+                    <div className="flex items-start gap-2 [&_p]:m-0!">
+                        <ProLock feature={__('image alt text translation', 'translate')} className="min-w-0 flex-1">
+                            <ToggleControl label={
+                                <ToggleLabel title={__('Translate image alt tags', 'translate')} description={__("Image descriptions are translated, for example 'Red bicycle' becomes 'Rotes Fahrrad' in German.", 'translate')} />} checked={false} disabled onChange={() => undefined} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
+                        </ProLock>
+                        <ProMarker />
+                    </div>
                 )}
             </div>
 
@@ -163,7 +184,7 @@ export const TranslationsSettings = () =>
                 <ToggleLabel title={__('Enable units conversion', 'translate')} description={__('Measurements are recalculated for the reader: 5 miles becomes 8 km. Prices are never converted.', 'translate')} />} checked={settings.enable_units_conversion} onChange={(value) => updateSetting('enable_units_conversion', value as boolean)} className='[&_.components-flex]:gap-4! [&_.components-flex]:items-start! mb-0! text-sm!' />
             </ManagedByNetwork>
 
-            </div>
+            </section>
             </div>
 
             <WhoCanManage />

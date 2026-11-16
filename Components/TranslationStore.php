@@ -717,7 +717,7 @@ class TranslationStore {
 	 *
 	 * @return array<string,?string>|\WP_Error
 	 */
-	public static function remote_lookup_result( string $locale, array $hashes ) {
+	public static function remote_lookup_result( string $locale, array $hashes, int|float $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS ) {
 		$site_id = Sites::registered_id();
 		if ( '' === $site_id || ! $hashes ) {
 			return [];
@@ -730,7 +730,8 @@ class TranslationStore {
 				'language'  => $locale,
 				'hashes'    => array_values( $hashes ),
 				'hydration' => true,
-			]
+			],
+			$timeout_seconds
 		);
 
 		if ( is_wp_error( $response ) ) {

@@ -11,9 +11,11 @@ use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\RemoteApi;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\SwitcherPlacement;
+use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\Sites;
 use TranslateWP\Components\TranslationAiSettings;
 use TranslateWP\Components\TranslationStore;
+use TranslateWP\Components\TranslationUrl;
 use TranslateWP\Entities\Script;
 
 class TranslateWP extends Script {
@@ -73,6 +75,11 @@ class TranslateWP extends Script {
      * can say why visitors see nothing and link to the fix.
      */
     public static function loads_on_front_end(): bool {
+        $request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+        if ( TranslationUrl::is_builder_canvas_url( $request_uri ) ) {
+            return false;
+        }
+
         // A page left out of translation is sent no runtime at all, so its
         // text is neither translated nor reported, for a manager either.
         if ( PageExclusion::is_current_page_excluded() ) {
@@ -194,7 +201,7 @@ class TranslateWP extends Script {
      * The single post or page on screen, for a user who may retranslate it
      * from edit mode; null anywhere else.
      *
-     * @return array{type: string, id: int, url: string}|null
+     * @return array{type: string, id: string, url: string}|null
      */
     public static function page_object(): ?array {
         $access = \TranslateWP\Components\Access::class;
@@ -209,7 +216,7 @@ class TranslateWP extends Script {
 
         return [
             'type' => $type,
-            'id'   => $id,
+            'id'   => (string) $id,
             'url'  => (string) get_permalink( $id ),
         ];
     }
@@ -283,6 +290,7 @@ class TranslateWP extends Script {
             'highlight_bg'     => \TranslateWP\Functionality\Endpoints\Management::DEFAULT_SWITCHER_HIGHLIGHT_BG,
             'offset'           => 24,
             'icon_size'        => 24,
+            'font_size'        => SwitcherFontSize::DEFAULT_SIZE,
             'padding'          => 12,
         ];
         $default_seo = [

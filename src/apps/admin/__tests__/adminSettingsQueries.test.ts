@@ -1,5 +1,7 @@
 import { adminSettingsQueries } from '@/apps/admin/Admin';
 
+jest.mock('@/apps/admin/components/Sidebar', () => ({ Sidebar: () => null }));
+
 const mockGet = jest.fn(async (option: string) => ({ option }));
 jest.mock('@/shared/api/admin', () => ({
     ...jest.requireActual('@/shared/api/admin'),

@@ -15,7 +15,7 @@ export const SiteLanguagePicker = () =>
 
     return (
         <div className='ms-auto w-72 shrink-0' data-site-language-picker title={__('The language your content is written in. Every translation is made from it.', 'translate')}>
-            <LanguageSelect compact defaultValue={defaultLanguage} onChange={setDefaultLanguage} placeholder={__('Change', 'translate')} />
+            <LanguageSelect compact defaultValue={defaultLanguage} onChange={setDefaultLanguage} placeholder={__('Change', 'translate')} inputLabel={__('Default language', 'translate')} />
         </div>
     );
 };

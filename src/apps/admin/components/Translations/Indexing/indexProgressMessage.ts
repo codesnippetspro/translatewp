@@ -167,9 +167,9 @@ export function indexFailureReason(code: string | null | undefined): string
             return __('The stored copy of this page was unreadable. Retranslate to read it again.', 'translate');
         case 'quota_exceeded':
         case 'plan_limit':
-            return __('The plan\'s translation quota is used up for this period.', 'translate');
+            return __('The plan\'s translation usage limit has been reached for this period.', 'translate');
         case 'own_providers_missing':
-            return __('The plan\'s translation quota is used up and none of your own providers has a usable key. Check Settings > AI models, then retranslate.', 'translate');
+            return __('The plan\'s translation usage limit has been reached and none of your own providers has a usable key. Check Settings > AI models, then retranslate.', 'translate');
         case 'rate_limited':
             return __('The translation service asked the site to slow down. It retries on its own.', 'translate');
         case 'timeout':

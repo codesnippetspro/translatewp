@@ -246,7 +246,7 @@ export type IndexQueueStatus = 'pending' | 'claimed' | 'done' | 'dead';
 export type IndexTitleState = 'stored' | 'pending' | 'missing';
 
 export type IndexPageLanguage = {
-    id: number;
+    id: string;
     status: IndexPageStatus;
     queueStatus: IndexQueueStatus;
     segments: number;
@@ -259,7 +259,7 @@ export type IndexPageLanguage = {
 
 export type IndexPageEntry = {
     objectType: string;
-    objectId: number;
+    objectId: string;
     url: string;
     title: string;
     /** False for a page only a visitor opened; indexing does not cover it. */
@@ -282,7 +282,7 @@ export const getIndexPages = async (): Promise<IndexPagesResponse> =>
 
 export type RetranslatePageInput = {
     objectType: string;
-    objectId: number;
+    objectId: string;
     url: string;
     // Omitted to retranslate the page in every active target language.
     language?: string;

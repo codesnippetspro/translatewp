@@ -189,6 +189,21 @@ assert_true( TranslationUrl::is_indexable_url( 'https://example.com/wp-admin-not
 // --- is_indexable_url: an unparseable URL is not indexable ---
 assert_true( ! TranslationUrl::is_indexable_url( 'http:///bad' ), 'An unparseable URL must not be indexable' );
 
+foreach ( [
+	'elementor-preview=123', 'elementor-preview=', 'bricks=run', 'ct_builder=true',
+	'breakdance=builder', 'breakdance=iframe', 'breakdance_iframe=1', 'et_fb=1',
+	'fl_builder', 'vc_editable=true', 'foo=bar&bricks=run',
+] as $query ) {
+	assert_true( TranslationUrl::is_builder_canvas_url( 'https://example.test/page?' . $query ), 'Builder canvas must be gated: ' . $query );
+}
+foreach ( [
+	'', 'preview=true', 'preview_id=12&preview_nonce=nonce', 'wp_customize=on',
+	'customize_changeset_uuid=abc', 'bricks=view', 'breakdance=public', 'et_fb=0',
+	'vc_editable=false', 'bricks[]=run', 'unrelated=1',
+] as $query ) {
+	assert_true( ! TranslationUrl::is_builder_canvas_url( 'https://example.test/page?' . $query ), 'Visitor and Customizer previews must remain available: ' . $query );
+}
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "TranslationUrlTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

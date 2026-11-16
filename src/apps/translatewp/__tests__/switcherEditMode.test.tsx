@@ -79,9 +79,11 @@ it('uses the same icon column for language flags and administrator actions', asy
 	expect(adminItemRule).toMatch(/white-space:\s*nowrap !important/);
 	for (const rule of [languageItemRule, adminItemRule]) {
 		expect(rule).toMatch(/padding:\s*0\.625rem 0\.75rem !important/);
-		expect(rule).toMatch(/font-size:\s*0\.875rem !important/);
-		expect(rule).toMatch(/line-height:\s*1\.25rem !important/);
 	}
+	expect(languageItemRule).toMatch(/font-size:\s*14px !important/);
+	expect(languageItemRule).toMatch(/line-height:\s*20px !important/);
+	expect(adminItemRule).toMatch(/font-size:\s*0\.875rem !important/);
+	expect(adminItemRule).toMatch(/line-height:\s*1\.25rem !important/);
 	expect(proTagRule).toMatch(/line-height:\s*1rem !important/);
 	await act(async () => { (container.querySelector('[data-twp-edit-mode]') as HTMLButtonElement).click(); });
 	expect(container.querySelector('.twp-dropdown')?.getAttribute('data-editing')).toBe('true');

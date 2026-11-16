@@ -274,6 +274,7 @@ class ProEligibility {
 		$record = array_merge( $fresh, [ 'shape' => self::CACHE_SHAPE ] );
 		set_transient( self::TRANSIENT_KEY, $record, $ttl );
 		update_option( self::LAST_KNOWN_OPTION, $record, true );
+        self::announce_active_pro();
 
 		return $fresh;
 	}
@@ -402,8 +403,16 @@ class ProEligibility {
 	 * includes Pro and the addon is active, until the owner dismisses it.
 	 */
 	public static function welcome_pending(): bool {
-		return self::is_pro_active() && false === get_option( self::WELCOME_SEEN_OPTION, false );
+		return self::announce_active_pro() && false === get_option( self::WELCOME_SEEN_OPTION, false );
 	}
+
+    private static function announce_active_pro(): bool {
+        $active = self::is_pro_active();
+        if ( $active ) {
+            do_action( 'translatewp_pro_ready' );
+        }
+        return $active;
+    }
 
 	public static function dismiss_welcome(): void {
 		update_option( self::WELCOME_SEEN_OPTION, time(), false );

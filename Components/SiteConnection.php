@@ -1096,6 +1096,26 @@ class SiteConnection {
 		}
 	}
 
+	public static function connect_return_error(): ?array {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return null;
+		}
+		$notice = self::current_notice();
+		$message = in_array( $notice, [ 'connected', 'reconnected' ], true ) ? '' : self::notice_message( $notice );
+		return '' === $message ? null : [
+			'code' => $notice,
+			'message' => $message,
+			'portalSitesUrl' => self::portal_sites_url(),
+			'supportUrl' => RemoteApi::SUPPORT_URL,
+		];
+	}
+
+	private static function current_notice(): string {
+		return isset( $_GET[ self::NOTICE_QUERY_ARG ] )
+			? sanitize_key( wp_unslash( $_GET[ self::NOTICE_QUERY_ARG ] ) )
+			: '';
+	}
+
 	public static function render_admin_notices(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
@@ -1118,9 +1138,7 @@ class SiteConnection {
 			return;
 		}
 
-		$notice = isset( $_GET[ self::NOTICE_QUERY_ARG ] )
-			? sanitize_key( wp_unslash( $_GET[ self::NOTICE_QUERY_ARG ] ) )
-			: '';
+		$notice = self::current_notice();
 		$message = self::notice_message( $notice );
 		if ( '' === $message ) {
 			$address_change = Sites::address_change_state();
@@ -1149,7 +1167,7 @@ class SiteConnection {
 		}
 
 		$class = in_array( $notice, [ 'connected', 'reconnected' ], true ) ? 'notice-success' : 'notice-error';
-		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p>';
+		echo '<div id="translatewp-connect-return-notice" class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p>';
 		if ( 'invalid_state' === $notice ) {
 			printf(
 				'<p><a class="button button-primary" href="%s">%s</a></p>',

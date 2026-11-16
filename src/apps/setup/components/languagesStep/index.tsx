@@ -64,10 +64,18 @@ export const LanguagesStep = () =>
         );
     const estimateLine = targets.length > 0 && spinePages.length > 0
         ? sprintf(
-            /* translators: 1: pages read, 2: languages chosen, 3: the quota sentence */
-            __( 'Translating %1$d pages into %2$d languages. %3$s', 'translate' ),
-            spinePages.length,
-            targets.length,
+            /* translators: 1: number of pages, 2: number of languages, 3: usage sentence */
+            __( 'Translating %1$s into %2$s. %3$s', 'translate' ),
+            sprintf(
+                /* translators: %d: number of pages */
+                _n( '%d page', '%d pages', spinePages.length, 'translate' ),
+                spinePages.length
+            ),
+            sprintf(
+                /* translators: %d: number of languages */
+                _n( '%d language', '%d languages', targets.length, 'translate' ),
+                targets.length
+            ),
             quotaCostSentence( { pages: spinePages.length, languages: targets.length }, quota )
         )
         : '';

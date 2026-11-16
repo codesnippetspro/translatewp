@@ -13,6 +13,7 @@ import { getCountryFlagFromLocale, getLanguageNameFromLocale } from '@/shared/li
 import { LanguageScopeSwitcher, type ScopeOption } from '@/shared/components/LanguageScopeSwitcher';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
+import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 import { clearFailed, extractFailedPageAgain, retryFailed, runExtractionLoop } from '@/apps/admin/components/Translations/Indexing/extractionDriver';
 import { buildAdminUrl, currentHash } from '@/apps/admin/hooks/useNavigate';
 import type { IndexPageEntry, IndexPageLanguage, IndexPageStatus } from '@/shared/api/admin';
@@ -55,9 +56,10 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
     const [statusFilter, setStatusFilter] = useState<StatusFilter>(openedForPending ? 'pending' : ALL_STATUS_FILTER);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [isBusy, setIsBusy] = useState(false);
     const [actionFailed, setActionFailed] = useState(false);
+    const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
     const menuRef = useRef<HTMLDivElement | null>(null);
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
 
@@ -65,7 +67,8 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     const mutation = useMutation({
         ...retranslatePageMutationOptions(),
-        onSuccess: async () =>
+        onError: (error, input) => setRowErrors(previous => ({ ...previous, [input.url]: retranslationError(error) })),
+        onSuccess: async (_result, input) =>
         {
             // The retranslate row is re-queued for extraction: drain the extract
             // stage from this tab so the page is re-extracted with fresh
@@ -77,9 +80,9 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
             {
                 await runExtractionLoop(() => true, () => {});
             }
-            catch
+            catch (error)
             {
-                // The next indexing run re-claims the row; surface nothing here.
+                setRowErrors(previous => ({ ...previous, [input.url]: retranslationError(error) }));
             }
             await queryClient.invalidateQueries({ queryKey: ['indexPages'] });
             await onStatusRefresh?.();
@@ -119,7 +122,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     // The section renders only once the languages and pages are known, so it is brought into view as it mounts.
     const scrolledToPending = useRef(false);
-    const pendingSectionRef = (element: HTMLDivElement | null) =>
+    const pendingSectionRef = (element: HTMLElement | null) =>
     {
         if (!element || !openedForPending || scrolledToPending.current) return;
         scrolledToPending.current = true;
@@ -249,6 +252,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
             return;
         }
 
+        setRowErrors(previous => ({ ...previous, [pageEntry.url]: '' }));
         mutation.mutate({
             objectType: pageEntry.objectType,
             objectId: pageEntry.objectId,
@@ -276,7 +280,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
         }
     };
 
-    const handleExtractAgain = (id: number) =>
+    const handleExtractAgain = (id: string) =>
     {
         setOpenMenuId(null);
         void runBulkAction(() => extractFailedPageAgain(id));
@@ -294,8 +298,8 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     if (!hasTargetLanguage) {
         return (
-            <div className="flex flex-col gap-1">
-                <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+            <section className="flex flex-col gap-1" aria-labelledby="twp-indexed-pages">
+                <h3 id="twp-indexed-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                     {__('Pages', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -303,16 +307,21 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                         {__('Add a target language first', 'translate')}
                     </a>
                 </p>
-            </div>
+            </section>
         );
     }
 
     return (
-        <div className="flex flex-col gap-3" id={PENDING_PAGES_SECTION} ref={pendingSectionRef}>
+        <section
+            className="flex flex-col gap-3"
+            id={PENDING_PAGES_SECTION}
+            ref={pendingSectionRef}
+            aria-labelledby="twp-indexed-pages"
+        >
             <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                     {getCountryFlagFromLocale(activeLanguage)}
-                    <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+                    <h3 id="twp-indexed-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                         {sprintf(
                             /* translators: %s: target language name. */
                             __('Pages in %s', 'translate'),
@@ -396,41 +405,45 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                             {__('No pages match your filters.', 'translate')}
                         </p>
                     ) : (
-                        <>
-                            <table id="retranslation-pages-results" tabIndex={-1} className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
-                                <thead>
-                                    <tr className="text-start text-translatewp-muted">
-                                        <th className="px-3 py-2 font-semibold text-start">{__('Page', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold text-start">{__('Status', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold text-start">{__('Segments', 'translate')}</th>
-                                        <th className="px-3 py-2 font-semibold text-end">{__('Actions', 'translate')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {visibleRows.map(({ page: pageEntry, entry }) =>
-                                    {
-                                        const pageLabel = pageEntry.title || pagePath(pageEntry.url);
-                                        const canExtractAgain = 'failed' === entry.status || 0 === entry.segments;
+                        <Table
+                            id="retranslation-pages-results"
+                            tabIndex={-1}
+                            header={<TableHeaderRow>
+                                <TableCell variant="header">{__('Page', 'translate')}</TableCell>
+                                <TableCell variant="header">{__('Status', 'translate')}</TableCell>
+                                <TableCell variant="header">{__('Segments', 'translate')}</TableCell>
+                                <TableCell variant="header" align="end">{__('Actions', 'translate')}</TableCell>
+                            </TableHeaderRow>}
+                        >
+                            {visibleRows.map(({ page: pageEntry, entry }) =>
+                            {
+                                const pageLabel = pageEntry.title || pagePath(pageEntry.url);
+                                const canExtractAgain = 'failed' === entry.status || 0 === entry.segments;
 
-                                        return (
-                                            <tr key={entry.id} className="border-t border-translatewp-border align-top">
-                                                <td className="px-3 py-2">
-                                                    <a
-                                                        href={pageEntry.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-translatewp-primary break-all font-medium"
-                                                    >
-                                                        {pageLabel}
-                                                    </a>
-                                                    <div className="text-translatewp-muted break-all">{pageEntry.url}</div>
-                                                </td>
-                                                <td className="px-3 py-2">
-                                                    <StatusCell entry={entry} />
-                                                </td>
-                                                <td className="px-3 py-2 text-translatewp-neutral">{entry.segments}</td>
-                                                <td className="px-3 py-2 text-end">
-                                                    <div className="relative inline-block text-start" ref={openMenuId === entry.id ? menuRef : undefined}>
+                                return (
+                                    <TableRow key={entry.id}>
+                                        <TableCell className="align-top">
+                                            <a
+                                                href={pageEntry.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-translatewp-primary font-medium"
+                                            >
+                                                {pageLabel}
+                                            </a>
+                                            <div className="text-translatewp-muted break-all">{pageEntry.url}</div>
+                                        </TableCell>
+                                        <TableCell className="align-top">
+                                            <StatusCell entry={entry} />
+                                            {rowErrors[pageEntry.url] && (
+                                                <p role="alert" className="text-sm text-translatewp-error m-0">
+                                                    {rowErrors[pageEntry.url]}
+                                                </p>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="align-top text-translatewp-neutral">{entry.segments}</TableCell>
+                                        <TableCell align="end" className="align-top">
+                                            <div className="relative inline-block text-start" ref={openMenuId === entry.id ? menuRef : undefined}>
                                                         <Button
                                                             variant="tertiary"
                                                             aria-haspopup="menu"
@@ -486,14 +499,12 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                                                                 )}
                                                             </div>
                                                         )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </Table>
                     )}
                 </>
             )}
@@ -545,15 +556,18 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                 </p>
             )}
 
-            {mutation.isError && (
-                <p className="text-sm text-translatewp-error m-0" role="alert">
-                    {__('That page could not be queued for retranslation. Try again.', 'translate')}
-                </p>
-            )}
-
             <ConfirmDialog {...confirmDialogProps} />
-        </div>
+        </section>
     );
+};
+
+const retranslationError = (error: unknown): string =>
+{
+    const message = error && typeof error === 'object' && 'message' in error
+        && typeof error.message === 'string' ? error.message.trim() : '';
+    return message
+        ? sprintf(__('Retranslation failed: %s', 'translate'), message)
+        : __('Retranslation failed. Try again.', 'translate');
 };
 
 const pagePath = (url: string): string =>

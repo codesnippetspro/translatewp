@@ -1,0 +1,39 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": [
+            "Functionality/Endpoints"
+        ],
+        "excludes": [
+            "AccessGrants.php",
+            "Admin.php",
+            "BaseApiEndpoints.php",
+            "Connect.php",
+            "Indexing.php",
+            "KeepWarmEndpoints.php",
+            "LexiconCandidates.php",
+            "Management.php",
+            "Quota.php",
+            "TranslationJobs.php",
+            "TranslationPageMap.php",
+            "Transparency.php"
+        ]
+    },
+    "testFramework": "phpunit",
+    "phpUnit": {
+        "configDir": "tests/mutation",
+        "customPath": "vendor/bin/phpunit"
+    },
+    "threads": 1,
+    "timeout": 60,
+    "tmpDir": ".infection",
+    "mutators": {
+        "@default": true
+    },
+    "logs": {
+        "json": "reports/mutation/scanning/mutation.json",
+        "html": "reports/mutation/scanning/index.html",
+        "text": "reports/mutation/scanning/mutation.log",
+        "summary": "reports/mutation/scanning/summary.log"
+    }
+}

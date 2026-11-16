@@ -15,17 +15,16 @@ import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
 
 import { LexiconTable, type LexiconRow } from '@/apps/admin/components/Lexicon/LexiconTable';
-import { AddLexiconDrawer, type LexiconDrawerPrefill } from '@/apps/admin/components/Lexicon/AddLexiconDrawer';
-import { LexiconCandidates, type CandidatePrefill } from '@/apps/admin/components/Lexicon/Candidates';
-import { actOnLexiconCandidate } from '@/shared/api/admin';
+import { AddLexiconDrawer } from '@/apps/admin/components/Lexicon/AddLexiconDrawer';
+import { LexiconCandidates } from '@/apps/admin/components/Lexicon/Candidates';
 import { PAGE_INSET, PageBody, PageHeader } from '@/apps/admin/components/PageLayout';
+import { siteScanSuggestionsQueryOptions } from '@/shared/query-options/siteScanSuggestions';
 import { managerCan } from '@/shared/lib/access';
 
 export const Lexicon = () =>
 {
     const queryClient = useQueryClient();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [prefill, setPrefill] = useState<(LexiconDrawerPrefill & { candidateId: string }) | null>(null);
     const [drawerContext, setDrawerContext] = useState<'add' | 'edit'>('add');
     const [selectedTerm, setSelectedTerm] = useState<LexiconTerm | null>(null);
 
@@ -113,6 +112,7 @@ export const Lexicon = () =>
     const { mutate: deleteLexiconTerm, isPending: isDeleting } = useMutation({
         mutationFn: (id: number) => deleteWordPressLexiconTerm(id),
         onSuccess: async (_data, deletedId) => {
+            void queryClient.invalidateQueries({ queryKey: siteScanSuggestionsQueryOptions.queryKey });
             if (selectedTerm?.id === deletedId) {
                 setSelectedTerm(null);
                 setIsDrawerOpen(false);
@@ -187,15 +187,15 @@ export const Lexicon = () =>
     return (
         <div className="flex flex-col">
             <PageHeader
-                title="Lexicon"
-                description="Manage the lexicon of your website"
+                title={__('Lexicon', 'translate')}
+                description={__('Manage the lexicon of your website', 'translate')}
                 actions={(
                     <>
                         <Button variant='primary' className='rounded-sm! w-fit' onClick={() => {
                             setDrawerContext('add');
                             setSelectedTerm(null);
                             setIsDrawerOpen(true);
-                        }}>Add term</Button>
+                        }}>{__('Add term', 'translate')}</Button>
                         {stalePages > 0 && managerCan().retranslate && (
                             <Button
                                 variant='secondary'
@@ -226,13 +226,8 @@ export const Lexicon = () =>
                 <p className={`-mt-2 text-sm text-translatewp-muted ${PAGE_INSET}`} role="status">{applyNotice}</p>
             )}
 
-            <PageBody>
-                <LexiconCandidates onAdd={(proposal: CandidatePrefill) => {
-                    setPrefill(proposal);
-                    setDrawerContext('add');
-                    setSelectedTerm(null);
-                    setIsDrawerOpen(true);
-                }} />
+            <PageBody className="gap-8 pt-4">
+                <LexiconCandidates />
 
                 <section
                     id="lexicon-terms-results"
@@ -311,13 +306,9 @@ export const Lexicon = () =>
 
             <AddLexiconDrawer
                 isDrawerOpen={isDrawerOpen}
-                setIsDrawerOpen={(open) => { setIsDrawerOpen(open); if (!open) setPrefill(null); }}
-                prefill={prefill}
+                setIsDrawerOpen={setIsDrawerOpen}
                 onSaved={() => {
-                    if (!prefill) return;
-                    const candidateId = prefill.candidateId;
-                    setPrefill(null);
-                    void actOnLexiconCandidate(candidateId, 'add').then(() => queryClient.invalidateQueries({ queryKey: ['lexiconCandidates'] }));
+                    void queryClient.invalidateQueries({ queryKey: siteScanSuggestionsQueryOptions.queryKey });
                 }}
                 drawerContext={drawerContext}
                 editingTerm={selectedTerm}

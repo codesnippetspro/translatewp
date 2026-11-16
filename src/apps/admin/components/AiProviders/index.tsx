@@ -24,7 +24,7 @@ export const AiProviders = ({ embedded = false }: { embedded?: boolean }) =>
     const placeholder = addonOutdated ? (
         <div className="flex flex-col gap-2 p-6 border border-translatewp-border rounded-lg">
             <span className="text-sm text-translatewp-muted!">
-                Your TranslateWP Pro addon does not include AI Models yet. Update it from your Plugins screen when a new version is available.
+                {__('Your TranslateWP Pro addon does not include AI Models yet. Update it from your Plugins screen when a new version is available.', 'translate')}
             </span>
         </div>
     ) : (
@@ -34,7 +34,7 @@ export const AiProviders = ({ embedded = false }: { embedded?: boolean }) =>
                     <li key={provider} className="text-sm text-translatewp-neutral!">{provider}</li>
                 ))}
             </ul>
-            <span className="text-xs text-translatewp-muted!">Your key is encrypted by WordPress and is never sent to visitor browsers.</span>
+            <span className="text-xs text-translatewp-muted!">{__('Your key is encrypted by WordPress and is never sent to visitor browsers.', 'translate')}</span>
         </div>
     );
 
@@ -43,7 +43,7 @@ export const AiProviders = ({ embedded = false }: { embedded?: boolean }) =>
             <div className="flex flex-col gap-2">
                 {!embedded && (
                     <div className="flex items-center gap-3">
-                        <h2 className="text-2xl! font-semibold text-translatewp-neutral!">AI models</h2>
+                        <h2 className="text-2xl! font-semibold text-translatewp-neutral!">{__('AI models', 'translate')}</h2>
                         <ProMarker />
                     </div>
                 )}
@@ -53,7 +53,7 @@ export const AiProviders = ({ embedded = false }: { embedded?: boolean }) =>
                 <p className="text-sm text-translatewp-muted!">{__('With Pro, translate with your own key from Anthropic, Google Gemini, OpenAI, or an OpenAI-compatible endpoint, billed by that provider.', 'translate')}</p>
             </div>
 
-            {addonOutdated ? placeholder : <ProLock feature="AI Models">{placeholder}</ProLock>}
+            {addonOutdated ? placeholder : <ProLock feature={__('AI Models', 'translate')}>{placeholder}</ProLock>}
         </div>
     );
 };

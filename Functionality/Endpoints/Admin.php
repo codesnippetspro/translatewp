@@ -12,6 +12,7 @@ use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\SwitcherPlacement;
+use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\SiteLanguageSync;
 use TranslateWP\Components\SiteUsage;
 use TranslateWP\Components\SiteRequests;
@@ -989,6 +990,11 @@ class Admin extends BaseApiEndpoints {
 			if ( null !== $color ) {
 				$patch[ $key ] = $color;
 			}
+		}
+
+		if ( array_key_exists( 'font_size', $data ) && is_numeric( $data['font_size'] )
+			&& is_finite( (float) $data['font_size'] ) ) {
+			$patch['font_size'] = min( SwitcherFontSize::MAX, max( SwitcherFontSize::MIN, (int) $data['font_size'] ) );
 		}
 
 		foreach ( self::SWITCHER_PIXEL_KEYS as $key ) {

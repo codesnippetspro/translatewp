@@ -27,6 +27,7 @@ import { RetranslatePages } from '@/apps/admin/components/Translations/Indexing/
 import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
+import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 
 const STATUS_POLL_MS = 5000;
 const WAITING_READ_RETRY_MS = 30000;
@@ -141,8 +142,8 @@ export const LanguagesIndexing = () =>
 
     const handleAddPin = async (value: string | null | undefined) =>
     {
-        const objectId = Number(value);
-        if (!objectId || pins.some(pin => pin.id === objectId)) return;
+        const objectId = value?.trim();
+        if (!objectId || !/^[1-9]\d*$/.test(objectId) || pins.some(pin => pin.id === objectId)) return;
 
         try
         {
@@ -158,7 +159,7 @@ export const LanguagesIndexing = () =>
         }
     };
 
-    const handleRemovePin = async (objectId: number) =>
+    const handleRemovePin = async (objectId: string) =>
     {
         try
         {
@@ -319,9 +320,9 @@ export const LanguagesIndexing = () =>
     );
 
     return (
-        <div className="flex w-full min-w-0 flex-col gap-6">
+        <section className="flex w-full min-w-0 flex-col gap-6" aria-labelledby="twp-reading-translating">
             <div className="flex flex-col gap-2">
-                <h3 className="font-semibold text-lg text-translatewp-neutral m-0">
+                <h3 id="twp-reading-translating" className="font-semibold text-lg text-translatewp-neutral m-0">
                     {__('Reading and translating', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -392,8 +393,8 @@ export const LanguagesIndexing = () =>
                 </p>
             )}
 
-            <div className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-translatewp-neutral m-0">
+            <section className="flex flex-col gap-2" aria-labelledby="twp-priority-pages">
+                <h3 id="twp-priority-pages" className="text-base font-semibold text-translatewp-neutral m-0">
                     {__('Priority pages', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
@@ -457,7 +458,7 @@ export const LanguagesIndexing = () =>
                         </div>
                     )}
                 </div>
-            </div>
+            </section>
 
             {status !== null && languages.length === 0 && !statusFailed && (
                 <p className="text-sm text-translatewp-muted m-0">
@@ -468,54 +469,51 @@ export const LanguagesIndexing = () =>
             )}
 
             {languages.length > 0 && (
-                <table className="w-full text-sm border border-translatewp-border rounded-lg border-separate border-spacing-0">
-                    <thead>
-                        <tr className="text-start text-translatewp-muted">
-                            <th className="px-3 py-2 font-semibold text-start">{__('Language', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold text-start">{__('Progress', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold text-start">{__('Failed', 'translate')}</th>
-                            <th className="px-3 py-2 font-semibold text-start">{__('State', 'translate')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {languages.map(([language, count]) =>
-                        {
-                            const finished = count.ready ?? 0;
+                <Table
+                    header={<TableHeaderRow>
+                        <TableCell variant="header">{__('Language', 'translate')}</TableCell>
+                        <TableCell variant="header">{__('Progress', 'translate')}</TableCell>
+                        <TableCell variant="header">{__('Failed', 'translate')}</TableCell>
+                        <TableCell variant="header">{__('State', 'translate')}</TableCell>
+                    </TableHeaderRow>}
+                >
+                    {languages.map(([language, count]) =>
+                    {
+                        const finished = count.ready ?? 0;
 
-                            return (
-                                <tr key={language} className="border-t border-translatewp-border">
-                                    <td className="px-3 py-2 font-semibold text-translatewp-neutral">
-                                        <span className="flex items-center gap-2">
-                                            {getCountryFlagFromLocale(language)}
-                                            <span>{getLanguageNameFromLocale(language) || language}</span>
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        {sprintf(
-                                            /* translators: 1: page translations done, 2: page translations in total. */
-                                            __('%1$d of %2$d translated', 'translate'),
-                                            finished,
-                                            count.readyTotal ?? count.total
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2">{count.dead}</td>
-                                    <td className={`px-3 py-2${count.readyComplete ? ' text-translatewp-success' : ''}`}>
-                                        {count.readyComplete
-                                            ? (
-                                                <span className="inline-flex items-center gap-1.5" data-language-done>
-                                                    <CircleCheck size={16} aria-hidden="true" />
-                                                    {__('Done', 'translate')}
-                                                </span>
-                                            )
-                                            : count.pending_extract > 0
-                                                ? __('Waiting for extraction', 'translate')
-                                                : __('Translating', 'translate')}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                        return (
+                            <TableRow key={language}>
+                                <TableCell variant="row-header">
+                                    <span className="flex items-center gap-2">
+                                        {getCountryFlagFromLocale(language)}
+                                        <span>{getLanguageNameFromLocale(language) || language}</span>
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    {sprintf(
+                                        /* translators: 1: page translations done, 2: page translations in total. */
+                                        __('%1$d of %2$d translated', 'translate'),
+                                        finished,
+                                        count.readyTotal ?? count.total
+                                    )}
+                                </TableCell>
+                                <TableCell>{count.dead}</TableCell>
+                                <TableCell className={count.readyComplete ? 'text-translatewp-success' : undefined}>
+                                    {count.readyComplete
+                                        ? (
+                                            <span className="inline-flex items-center gap-1.5" data-language-done>
+                                                <CircleCheck size={16} aria-hidden="true" />
+                                                {__('Done', 'translate')}
+                                            </span>
+                                        )
+                                        : count.pending_extract > 0
+                                            ? __('Waiting for extraction', 'translate')
+                                            : __('Translating', 'translate')}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </Table>
             )}
 
             <RetranslatePages
@@ -525,6 +523,6 @@ export const LanguagesIndexing = () =>
             />
 
             <ConfirmDialog {...confirmDialogProps} />
-        </div>
+        </section>
     );
 };

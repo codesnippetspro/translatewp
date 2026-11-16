@@ -15,7 +15,6 @@ import { getJobEventsQueryOptions } from '@/shared/query-options/admin';
 import { languageReady, readinessFigure, readinessSummary } from '@/shared/lib/setupTranslationProgress';
 import { useAdminSettingsStore } from '@/apps/admin/stores/settingsStore';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
-import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import {
     fetchIndexStatus,
     rereadChanged,
@@ -67,7 +66,7 @@ const PendingPagesLink = ({ className = '' }: { className?: string }) => (
 
 const PREVIEW_NAMES_LIMIT = 5;
 
-export const OverviewNextAction = () =>
+export const OverviewNextAction = ({ liveStatus }: { liveStatus?: IndexStatus }) =>
 {
     const queryClient = useQueryClient();
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
@@ -79,7 +78,6 @@ export const OverviewNextAction = () =>
     const languageList = useAdminSettingsStore(state => state.settings['languages.list']);
     const targetLanguages = languageList.filter(language => !language.default && language.active);
 
-    const liveStatus = useTranslationReadiness();
     const [status, setStatus] = useState<IndexStatus | null>(null);
     useEffect(() => { if (liveStatus) setStatus(liveStatus); }, [liveStatus]);
     const [statusFailed, setStatusFailed] = useState(false);

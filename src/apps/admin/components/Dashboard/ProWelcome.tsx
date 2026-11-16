@@ -33,7 +33,7 @@ export const proWelcomeItems = (capabilities: Partial<ProCapabilities> | undefin
         {
             label: __('Lexicon scan', 'translate'),
             description: __('Find the names and terms your site uses and decide how each one translates.', 'translate'),
-            href: 'admin.php?page=translatewp-lexicon',
+            href: 'admin.php?page=translatewp-settings#translation',
         },
         {
             label: __('Edit translations and placement on the page', 'translate'),

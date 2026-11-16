@@ -11,6 +11,7 @@ use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\SiteLanguageSync;
 use TranslateWP\Components\SiteRequests;
+use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Entities\CPTs\Lexicon;
 use TranslateWP\Functionality\Endpoints\BaseApiEndpoints;
 
@@ -305,6 +306,7 @@ class Management extends BaseApiEndpoints {
 				'loading_border_color' => self::DEFAULT_SWITCHER_HIGHLIGHT_BG,
 				'offset'           => 24,
 				'icon_size'        => 24,
+				'font_size'        => SwitcherFontSize::DEFAULT_SIZE,
 				'padding'          => 12,
             ];
             Options::update( 'languages.switcher', \TranslateWP\Components\SettingsScope::keep_locked( 'languages.switcher', $switcher_seed ) );

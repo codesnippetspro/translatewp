@@ -3,6 +3,7 @@ import { useEffect, useState } from '@wordpress/element';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { assignLocation, isFramed } from '@/shared/lib/connect/framed';
+import { clearConnectReturnError } from '@/shared/lib/connect/connectReturnError';
 
 type StartConnect = () => Promise<{ redirectUrl: string }>;
 
@@ -40,6 +41,7 @@ export const useConnectStart = (mutationFn: StartConnect) =>
 
     const start = () =>
     {
+        clearConnectReturnError();
         setErrorMessage(null);
         setTabState({ kind: 'idle' });
 

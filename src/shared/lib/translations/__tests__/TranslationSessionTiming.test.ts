@@ -5,7 +5,9 @@ import type { ServedTimingEvent } from '@/shared/lib/translations/ServedTranslat
 it('resets timing and ignores aborted writes across language switches and later SPA content', async () =>
 {
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
-	jest.spyOn(Math, 'random').mockReturnValue(0);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+	let markStarted!: () => void;
+	const started = new Promise<void>(resolve => { markStarted = resolve; });
 	document.body.innerHTML = '<p>Hello world</p>';
 	const events: ServedTimingEvent[] = [];
 	let release!: () => void;
@@ -13,7 +15,7 @@ it('resets timing and ignores aborted writes across language switches and later 
 	let calls = 0;
 	jest.spyOn(Translator.prototype, 'translateBatch').mockImplementation(async function (entries, options)
 	{
-		if (++calls === 1) await gate;
+		if (++calls === 1) { markStarted(); await gate; }
 		const translated = entries.map(entry => entry.withTranslation(`${this.targetLang}:${entry.value}`));
 		for (const entry of translated) options?.onEntryTranslated?.(entry);
 		return { translated, failures: [], totalGroups: 1 };
@@ -23,11 +25,14 @@ it('resets timing and ignores aborted writes across language switches and later 
 	try
 	{
 		const first = session.switchTo('fr');
+		void first.catch(() => {});
+		await expect(Promise.race([started, first]).finally(() => random.mockRestore())).resolves.toBeUndefined();
 		await jest.advanceTimersByTimeAsync(10);
 		const second = session.switchTo('de');
+		void second.catch(() => {});
 		expect(events[0]).toMatchObject({ outcome: 'cancelled', firstAppliedMs: null });
 		release();
-		await first;
+		await expect(first).rejects.toMatchObject({ name: 'AbortError' });
 		await second;
 		await jest.advanceTimersByTimeAsync(CHANGE_SETTLE_MS + 1);
 		expect(document.querySelector('p')!.textContent).toBe('de:Hello world');
@@ -49,7 +54,9 @@ it('runs an unsampled view without timing callbacks or timing timers', async () 
 	document.body.innerHTML = '<p>Hello world</p>';
 	let Session: typeof TranslationSession;
 	let Engine: typeof import('../TranslationEngine').TranslationEngine;
-	jest.spyOn(Math, 'random').mockReturnValue(0.9);
+	const random = jest.spyOn(Math, 'random').mockReturnValue(0.9);
+	let markStarted!: () => void;
+	const started = new Promise<void>(resolve => { markStarted = resolve; });
 	jest.isolateModules(() =>
 	{
 		Session = require('../TranslationSession').TranslationSession;
@@ -59,6 +66,7 @@ it('runs an unsampled view without timing callbacks or timing timers', async () 
 	let appliedConsumer: unknown = 'not run';
 	jest.spyOn(translator, 'translateBatch').mockImplementation(async (entries, options) =>
 	{
+		markStarted();
 		const translated = entries.map(entry => entry.withTranslation('Bonjour'));
 		for (const entry of translated) options?.onEntryTranslated?.(entry);
 		return { translated, failures: [], totalGroups: 1 };
@@ -73,7 +81,10 @@ it('runs an unsampled view without timing callbacks or timing timers', async () 
 		createTranslator: () => translator });
 	try
 	{
-		await session.switchTo('fr');
+		const switching = session.switchTo('fr');
+		void switching.catch(() => {});
+		await expect(Promise.race([started, switching]).finally(() => random.mockRestore())).resolves.toBeUndefined();
+		await switching;
 		expect(document.body.textContent).toBe('Bonjour');
 		expect(appliedConsumer).toBeUndefined();
 		expect(jest.getTimerCount()).toBe(0);

@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\IndexQueue;
+use TranslateWP\Components\ReadinessBudget;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationReadiness;
 
@@ -68,7 +69,7 @@ class ReadinessReconcile {
 		add_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
 		add_filter( 'translatewp_readiness_pass_seconds', $seconds );
 		try {
-			$result = $this->reconcile( (int) get_option( self::CURSOR_OPTION, 0 ) );
+			$result = $this->reconcile( (int) get_option( self::CURSOR_OPTION, 0 ), new ReadinessBudget( self::PASS_SECONDS ) );
 		} finally {
 			remove_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
 			remove_filter( 'translatewp_readiness_pass_seconds', $seconds );
@@ -80,9 +81,11 @@ class ReadinessReconcile {
 		return max( 1, (int) ceil( $batches / 6 ) );
 	}
 
-	public function reconcile( int $cursor = 0 ): array {
+	public function reconcile( int $cursor = 0, ?ReadinessBudget $budget = null ): array {
+		$budget = $budget ?? new ReadinessBudget();
+		$jobs = $this->indexer->poll_remembered_jobs( $budget );
 		$rows   = $this->indexer->page_rows();
-		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup );
+		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
 		$now    = (int) call_user_func( $this->clock );
 		$ids    = array_unique( array_merge( $result['rowIds'], $result['legacyRowIds'] ) );
 		$by_id  = [];
@@ -91,7 +94,6 @@ class ReadinessReconcile {
 		}
 		$cold = [];
 		$ready = [];
-		$jobs = [];
 		$translated = [];
 		// A done row counts as translated once its job finished or every one of
 		// its segments is proven; one status call per job per pass.
@@ -101,7 +103,7 @@ class ReadinessReconcile {
 			}
 			// A finished job is evidence; so are proven segments. A cancelled,
 			// forgotten or unrecorded job is not: the proofs decide for those.
-			if ( TranslationReadiness::is_ready( $row ) || 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs ) ) {
+			if ( TranslationReadiness::is_ready( $row ) || 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) ) {
 				$translated[] = (int) $row['id'];
 			}
 		}
@@ -113,7 +115,7 @@ class ReadinessReconcile {
 			}
 			if ( TranslationReadiness::is_ready( $row ) ) {
 				$ready[] = (int) $id;
-			} elseif ( $this->indexer->job_finished_for_row( (int) $id, $jobs )
+			} elseif ( $this->indexer->job_finished_for_row( (int) $id, $jobs, false )
 				&& ! TranslationReadiness::sweep_incomplete( $row ) ) {
 				// A page is cold only once the job that translates it has finished
 				// and the readiness sweep has checked every one of its hashes; under

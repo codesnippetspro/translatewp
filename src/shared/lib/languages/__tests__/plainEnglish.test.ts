@@ -1,4 +1,4 @@
-import { getLanguageNameFromLocale, isPickableLocale, sortedLocales } from '@/shared/lib/languages';
+import { getLanguageNameFromLocale, isPickableLocale, sortedLocales, languages } from '@/shared/lib/languages';
 import { resolveCatalogLocale } from '@/shared/lib/languages/catalogLocale';
 import { getSuggestedTargets } from '@/apps/setup/components/languagesStep/suggestedTargets';
 
@@ -33,4 +33,12 @@ describe('plain English in the language lists', () =>
         expect(resolveCatalogLocale('en_ZA')).toBe('en');
         expect(resolveCatalogLocale('en_GB')).toBe('en-gb');
     });
+    it('names both Ndebele languages correctly in the selectable catalogue', () =>
+    {
+        expect(getLanguageNameFromLocale('nd')).toBe('Ndebele, Northern');
+        expect(getLanguageNameFromLocale('nr')).toBe('South Ndebele');
+        expect(languages.nr.nameNative).toBe('isiNdebele seSewula');
+        expect(sortedLocales).toEqual(expect.arrayContaining(['nd', 'nr']));
+    });
+
 });

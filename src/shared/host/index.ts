@@ -3,6 +3,7 @@ import { addFilter } from '@wordpress/hooks';
 import type { ComponentType } from 'react';
 
 import { useAdminSettingsStore } from '@/apps/admin/stores/settingsStore';
+import { NumberField, numberFieldBounds } from '@/shared/components/form/numberField';
 import { Drawer } from '@/shared/components/drawer';
 import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/form/table';
 import { ProBadge } from '@/shared/components/pro/ProBadge';
@@ -49,6 +50,8 @@ export interface HostBridge
     ProBadge: typeof ProBadge;
     LanguageScopeSwitcher: typeof LanguageScopeSwitcher;
     PresetChoice: typeof PresetChoice;
+    NumberField: typeof NumberField;
+    numberFieldBounds: typeof numberFieldBounds;
     registerSlot: typeof registerSlot;
     confirmLanguageRetranslation: typeof confirmLanguageRetranslation;
 }
@@ -73,6 +76,8 @@ export const host: HostBridge = {
     ProBadge,
     LanguageScopeSwitcher,
     PresetChoice,
+    NumberField,
+    numberFieldBounds,
     registerSlot,
     confirmLanguageRetranslation,
 };

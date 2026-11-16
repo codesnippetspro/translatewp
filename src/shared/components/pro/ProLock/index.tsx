@@ -1,3 +1,4 @@
+import { __, sprintf } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 
 import { ProModal } from '@/shared/components/pro/ProModal';
@@ -46,7 +47,11 @@ export const ProLock = ({ children, feature, className, blur = false, defaultOpe
 
             <button
                 type="button"
-                aria-label={feature ? `Unlock ${feature} with PRO` : 'Unlock with PRO'}
+                aria-label={feature ? sprintf(
+                    /* translators: %s: name of the locked feature. */
+                    __('Unlock %s with PRO', 'translate'),
+                    feature
+                ) : __('Unlock with PRO', 'translate')}
                 onClick={() => setIsOpen(true)}
                 className="absolute inset-0 w-full h-full cursor-pointer bg-transparent border-0 p-0 m-0"
             />

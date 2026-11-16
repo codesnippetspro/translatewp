@@ -14,8 +14,12 @@ class Setup extends Script {
     public function __construct( $plugin_name, $plugin_version ) {
         parent::__construct( $plugin_name, $plugin_version );
 
-        $this->inline_content = [ Admin::class, 'pro_data' ];
+        $this->inline_content = [ self::class, 'setup_data' ];
     }
+
+	public static function setup_data(): string {
+		return Admin::pro_data() . Admin::connect_return_data();
+	}
 
     public function conditions(): bool {
         $screen = get_current_screen();

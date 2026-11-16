@@ -59,6 +59,10 @@ class WP_REST_Request {
 		return $this->body;
 	}
 
+	public function set_param( string $key, $value ): void {
+		$this->params[ $key ] = $value;
+	}
+
 	public function get_route(): string {
 		return $this->route;
 	}
@@ -432,6 +436,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_job_missing']          = [];
 	$GLOBALS['wp_test_job_states']           = [];
 	$GLOBALS['wp_test_job_status_requests']  = [];
+	$GLOBALS['wp_test_remote_get_args'] = [];
 	$GLOBALS['wp_test_transient_set_fail']   = false;
 	$GLOBALS['wp_test_multisite']            = false;
 	$GLOBALS['wp_test_current_blog']         = 1;
@@ -520,6 +525,7 @@ function wp_parse_url( $url, $component = -1 ) {
 }
 
 function home_url( $path = '' ): string {
+	$path = '' !== $path ? '/' . ltrim( $path, '/' ) : '';
 	if ( isset( $GLOBALS['wp_test_home_url'] ) ) {
 		return (string) $GLOBALS['wp_test_home_url'] . $path;
 	}
@@ -528,6 +534,10 @@ function home_url( $path = '' ): string {
 	$host    = $GLOBALS['wp_test_site_hosts'][ $blog_id ] ?? ( 1 === $blog_id ? 'example.com' : 'site' . $blog_id . '.example.com' );
 
 	return 'https://' . $host . $path;
+}
+
+function trailingslashit( string $value ): string {
+	return rtrim( $value, '/' ) . '/';
 }
 
 function untrailingslashit( string $value ): string {
@@ -954,10 +964,13 @@ function update_post_meta( $post_id, $key, $value ) {
 	return false;
 }
 
-function delete_post_meta( $post_id, $key ) {
+function delete_post_meta( $post_id, $key, $value = '' ) {
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) $post_id ) {
+			if ( '' !== $value && ( $store[ $index ]['meta_input'][ $key ] ?? null ) !== $value ) {
+				return false;
+			}
 			unset( $store[ $index ]['meta_input'][ $key ] );
 			$GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] = $store;
 			return true;
@@ -1495,7 +1508,7 @@ function wp_remote_request( string $url, array $args = [] ) {
 }
 
 function wp_remote_get( string $url, array $args = [] ) {
-	unset( $args );
+	$GLOBALS['wp_test_remote_get_args'][] = $args;
 	$path = (string) parse_url( $url, PHP_URL_PATH );
 
 	$GLOBALS['wp_test_remote_get_urls'][] = $url;

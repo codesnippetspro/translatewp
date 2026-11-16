@@ -18,6 +18,8 @@ import {
     activeLanguageLocales,
     defaultLocale,
     extractFailedPageAgain,
+    searchContent,
+    setPins,
     extractionFailureReason,
     extractRowItems,
     readAdminExtractionConfig,
@@ -47,11 +49,11 @@ type GoldenVector = {
 const basicFixture = (golden.vectors as GoldenVector[]).find(vector => vector.id === 'basic-proxy-fixture')!;
 
 const ROW: ExtractRow = {
-    id: 7,
+    id: '7',
     url: 'https://example.com/shop/',
     language: 'es',
     objectType: 'page',
-    objectId: 42,
+    objectId: '42',
 };
 
 const ADMIN_LANGUAGES: Language[] = [
@@ -268,7 +270,7 @@ describe('extractRowItems', () =>
             text: async () => '<html><body><main><h1>Page not found</h1><p>Nothing lives at this address.</p></main></body></html>',
         })) as unknown as typeof fetch;
 
-        const items = await extractRowItems({ ...ROW, objectType: 'not_found', objectId: -1, url: 'https://example.com/translatewp-page-not-found/' });
+        const items = await extractRowItems({ ...ROW, objectType: 'not_found', objectId: '-1', url: 'https://example.com/translatewp-page-not-found/' });
         expect(items.map(item => item.markerPayload).join(' ')).toContain('Nothing lives at this address.');
     });
 
@@ -379,8 +381,8 @@ describe('runExtractionLoop', () =>
     it('claims, extracts, submits, and reports failures per row', async () =>
     {
         const rows: ExtractRow[] = [
-            { ...ROW, id: 1, url: 'https://example.com/shop/' },
-            { ...ROW, id: 2, url: 'https://example.com/about/' },
+            { ...ROW, id: '1', url: 'https://example.com/shop/' },
+            { ...ROW, id: '2', url: 'https://example.com/about/' },
         ];
         let claimCall = 0;
         const submitted: Array<{ id: number; items: IndexPushItem[] }> = [];
@@ -420,15 +422,15 @@ describe('runExtractionLoop', () =>
         const progress = await runExtractionLoop(() => true, () => {}, extract);
 
         expect(progress).toEqual(expect.objectContaining({ processed: 1, failed: 1 }));
-        expect(submitted).toEqual([{ id: 1, items: [item] }]);
-        expect(failed).toEqual([{ id: 2, reason: 'page_fetch_500' }]);
+        expect(submitted).toEqual([{ id: '1', items: [item] }]);
+        expect(failed).toEqual([{ id: '2', reason: 'page_fetch_500' }]);
     });
 
     it('collapses one page claimed for two languages to a single processed page', async () =>
     {
         const rows: ExtractRow[] = [
-            { ...ROW, id: 1, language: 'de' },
-            { ...ROW, id: 2, language: 'it' },
+            { ...ROW, id: '1', language: 'de' },
+            { ...ROW, id: '2', language: 'it' },
         ];
         let claimCall = 0;
 
@@ -463,8 +465,8 @@ describe('runExtractionLoop', () =>
     it('counts a page failed once when every language for it fails', async () =>
     {
         const rows: ExtractRow[] = [
-            { ...ROW, id: 1, language: 'de' },
-            { ...ROW, id: 2, language: 'it' },
+            { ...ROW, id: '1', language: 'de' },
+            { ...ROW, id: '2', language: 'it' },
         ];
         let claimCall = 0;
 
@@ -565,7 +567,7 @@ describe('runExtractionLoop', () =>
 
 describe('extractFailedPageAgain', () =>
 {
-    const revivedRow = { id: 9, url: ROW.url, language: 'de', objectType: 'page', objectId: 42 };
+    const revivedRow = { id: '9', url: ROW.url, language: 'de', objectType: 'page', objectId: '42' };
 
     it('revives the row, extracts and submits it, then reports ok', async () =>
     {
@@ -586,7 +588,7 @@ describe('extractFailedPageAgain', () =>
             cache: { siteId: 'site-1', hash: 'h' },
         };
 
-        const result = await extractFailedPageAgain(9, jest.fn().mockResolvedValue([item]));
+        const result = await extractFailedPageAgain('9', jest.fn().mockResolvedValue([item]));
 
         expect(result).toEqual({ ok: true });
         expect(paths.some(path => path.endsWith('/reextract-page'))).toBe(true);
@@ -607,10 +609,10 @@ describe('extractFailedPageAgain', () =>
             throw new Error(`Unexpected apiFetch path: ${options.path}`);
         });
 
-        const result = await extractFailedPageAgain(9, jest.fn().mockRejectedValue(new Error('page_fetch_500')));
+        const result = await extractFailedPageAgain('9', jest.fn().mockRejectedValue(new Error('page_fetch_500')));
 
         expect(result).toEqual({ ok: false, reason: 'page_fetch_500' });
-        expect(reported).toEqual([{ id: 9, reason: 'page_fetch_500' }]);
+        expect(reported).toEqual([{ id: '9', reason: 'page_fetch_500' }]);
     });
 
     it('returns not_failed when the row cannot be revived', async () =>
@@ -622,7 +624,7 @@ describe('extractFailedPageAgain', () =>
         });
 
         const extract = jest.fn();
-        expect(await extractFailedPageAgain(9, extract)).toEqual({ ok: false, reason: 'not_failed' });
+        expect(await extractFailedPageAgain('9', extract)).toEqual({ ok: false, reason: 'not_failed' });
         expect(extract).not.toHaveBeenCalled();
     });
 });
@@ -711,8 +713,8 @@ describe('runIndexSite', () =>
                 return {
                     rows: claimCall === 1
                         ? [
-                            { ...ROW, id: 1, url: 'https://example.com/shop/' },
-                            { ...ROW, id: 2, url: 'https://example.com/about/' },
+                            { ...ROW, id: '1', url: 'https://example.com/shop/' },
+                            { ...ROW, id: '2', url: 'https://example.com/about/' },
                         ]
                         : [],
                 };
@@ -760,7 +762,7 @@ describe('runIndexSite', () =>
             if (options.path.endsWith('/claim-extract'))
             {
                 claimCall++;
-                return { rows: claimCall === 1 ? [{ ...ROW, id: 1 }, { ...ROW, id: 2 }] : [] };
+                return { rows: claimCall === 1 ? [{ ...ROW, id: '1' }, { ...ROW, id: '2' }] : [] };
             }
             if (options.path.endsWith('/submit-extract')) return { stored: true };
             if (options.path.endsWith('/sync-now')) return { status: statusWith(0) };
@@ -866,5 +868,32 @@ describe('runIndexSite', () =>
 
         expect(total).toBe(40);
         expect(unit).toBe('rows');
+    });
+});
+
+
+describe('identifier round trips', () =>
+{
+    it('keeps search and pinned identifiers as strings', async () =>
+    {
+        const id = '347772355023158088';
+        apiFetchMock.mockResolvedValueOnce([{ id, title: 'Pricing', subtype: 'page' }]);
+        await expect(searchContent('Pricing')).resolves.toEqual([{ id, title: 'Pricing', subtype: 'page' }]);
+        expect(apiFetchMock).toHaveBeenLastCalledWith({ path: '/translatewp/v1/indexing/search?search=Pricing', method: 'GET' });
+        apiFetchMock.mockResolvedValueOnce({ pins: [{ id, title: 'Pricing', type: 'page' }] });
+        await setPins([id]);
+        expect(apiFetchMock).toHaveBeenLastCalledWith({ path: '/translatewp/v1/indexing/pins', method: 'POST', data: { objectIds: [id] } });
+    });
+
+    it('preserves large row and object identifiers through repair and extraction submission', async () =>
+    {
+        const id = '9007199254740993';
+        const row: ExtractRow = { ...ROW, id, objectType: 'miss', objectId: '347772355023158088' };
+        apiFetchMock.mockResolvedValueOnce({ row }).mockResolvedValueOnce({ stored: true });
+        const extract = jest.fn().mockResolvedValue([]);
+        await expect(extractFailedPageAgain(id, extract)).resolves.toEqual({ ok: true });
+        expect(extract).toHaveBeenCalledWith(row);
+        expect(apiFetchMock).toHaveBeenNthCalledWith(1, { path: '/translatewp/v1/indexing/reextract-page', method: 'POST', data: { id } });
+        expect(apiFetchMock).toHaveBeenLastCalledWith({ path: '/translatewp/v1/indexing/submit-extract', method: 'POST', data: { id, items: [] } });
     });
 });

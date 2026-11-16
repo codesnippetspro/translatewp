@@ -139,8 +139,9 @@ wp_test_reset( [ 'site' => [ 'id' => 'site', 'token' => 'secret' ] ] );
 add_filter( 'translatewp_readiness_reconcile_interval', static fn(): int => 30 );
 $reconcile = new ReadinessReconcile( 'translate', '1.0' );
 $reconcile->maybe_schedule();
+$check_expires_in = ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time();
 assert_true(
-	30 === ( ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time() ),
+	$check_expires_in >= 29 && $check_expires_in <= 30,
 	'A site with work outstanding can re-check far sooner than the settled interval'
 );
 remove_filter( 'translatewp_readiness_reconcile_interval' );
@@ -204,7 +205,7 @@ assert_true( TranslationReadiness::is_ready( $steady['row'] ), 'Re-verifying the
 // The stored proof map must outlive the base window too, or a language whose
 // turn comes late in the round-robin loses its whole map to transient expiry.
 $expires_in = ( $GLOBALS['wp_test_transient_expirations'][ pacing_proof_key() ] ?? 0 ) - time();
-assert_true( 1800 === $expires_in, 'The proof map is stored for the grace window, got ' . $expires_in . 's' );
+assert_true( $expires_in >= 1799 && $expires_in <= 1800, 'The proof map is stored for the grace window, got ' . $expires_in . 's' );
 $GLOBALS['wp_test_transient_expirations'][ pacing_proof_key() ] -= 601;
 assert_true( TranslationReadiness::is_ready( $steady['row'] ), 'A page stays ready when its language was last rewritten over 600s ago' );
 

@@ -59,7 +59,7 @@ const editModeUrl = (): string =>
 };
 
 const Row = ({ title, badge, children }: { title: string; badge?: ReactNode; children: ReactNode }) => (
-    <div className="flex flex-col gap-1 border-b border-translatewp-border! py-3 last:border-b-0">
+    <div className="flex flex-col gap-1 border-b border-translatewp-border! py-3 first:pt-0 last:border-b-0 last:pb-0">
         <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-translatewp-neutral!">{title}</span>
             {badge}
@@ -90,26 +90,35 @@ export const WhereItShows = () =>
     const inlineLine = __('Anchor the switcher to any element of the page, on the side where it should sit, from edit mode on your site.', 'translate');
 
     return (
-        <section data-twp-where-it-shows className="flex flex-col gap-2" aria-labelledby="twp-where-it-shows">
-            <span id="twp-where-it-shows" className="text-sm font-bold text-translatewp-neutral">{__('Where it shows', 'translate')}</span>
-            <p className="text-sm text-translatewp-muted! m-0">{__('The floating switcher shows on every page until you place the switcher inside the page.', 'translate')}</p>
+        <section
+            data-twp-where-it-shows
+            className="flex flex-col gap-4"
+            aria-labelledby="twp-switcher-placement"
+        >
+            <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 id="twp-switcher-placement" className="text-sm! font-bold! text-translatewp-neutral! m-0!">
+                        {sideTab ? __('Side tab', 'translate') : __('Floating switcher', 'translate')}
+                    </h3>
+                    {saved && (
+                        <Button variant="secondary" size="small" onClick={resetPosition}>{__('Reset position', 'translate')}</Button>
+                    )}
+                </div>
+                <span className="text-sm text-translatewp-muted!">
+                    {saved
+                        /* translators: %s: a corner of the browser window, such as "Bottom left", or an edge, such as "left edge". */
+                        ? sprintf(__('Current position: %s, where you placed it in edit mode.', 'translate'), place)
+                        /* translators: %s: a corner of the browser window, such as "Top right", or an edge, such as "bottom edge". */
+                        : sprintf(__('Current position: %s, the default.', 'translate'), place)}
+                </span>
+                <span className="text-sm text-translatewp-muted!">
+                    {__('Move the switcher from edit mode on your site, or add it inside the page.', 'translate')}
+                </span>
+            </div>
 
-            <div className="flex flex-col rounded-lg border border-translatewp-border! px-4">
-                <Row title={__('Floating switcher', 'translate')}>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <span>
-                            {saved
-                                /* translators: %s: a corner of the browser window, such as "Bottom left", or an edge, such as "left edge". */
-                                ? sprintf(__('Position: %s, where you dragged it in edit mode on your site.', 'translate'), place)
-                                /* translators: %s: a corner of the browser window, such as "Top right", or an edge, such as "bottom edge". */
-                                : sprintf(__('Position: %s, the default. Drag it in edit mode on your site to move it.', 'translate'), place)}
-                        </span>
-                        {saved && (
-                            <Button variant="secondary" size="small" onClick={resetPosition}>{__('Reset position', 'translate')}</Button>
-                        )}
-                    </div>
-                </Row>
-
+            <details className="group rounded-sm border border-translatewp-border! bg-white px-4" data-twp-placement-details>
+                <summary className="cursor-pointer py-3 text-sm font-bold text-translatewp-neutral!">{__('Add it to your site', 'translate')}</summary>
+                <div className="flex flex-col border-t border-translatewp-border! py-3">
                 <Row title={__('Widget', 'translate')}>
                     {__('Add the TranslateWP widget to a sidebar or footer in', 'translate')}{' '}
                     <a href="widgets.php">{__('Appearance > Widgets', 'translate')}</a>.
@@ -148,7 +157,7 @@ export const WhereItShows = () =>
                 )}
 
                 {!proActive && (
-                    <div data-twp-locked-placements className="py-3">
+                    <div data-twp-locked-placements className="pt-3">
                         <div className="flex items-center gap-2 pb-2">
                             <span className="text-sm font-bold text-translatewp-neutral!">{__('Inline placement', 'translate')}</span>
                             <ProMarker />
@@ -158,7 +167,8 @@ export const WhereItShows = () =>
                         </ProLock>
                     </div>
                 )}
-            </div>
+                </div>
+            </details>
         </section>
     );
 };

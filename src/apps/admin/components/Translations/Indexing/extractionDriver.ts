@@ -74,11 +74,11 @@ export function extractionFailureReason(error: unknown): string
 export const NOT_FOUND_OBJECT_TYPE = 'not_found';
 
 export type ExtractRow = {
-    id: number;
+    id: string;
     url: string;
     language: string;
     objectType: string;
-    objectId: number;
+    objectId: string;
 };
 
 export type IndexPushItem = {
@@ -111,18 +111,18 @@ export type LanguageIndexStatus = {
 };
 
 export type PinnedObject = {
-    id: number;
+    id: string;
     title: string;
     type: string;
 };
 
 export type FailedItem = {
-    id: number;
+    id: string;
     language: string;
     url: string;
     reason: string;
     objectType: string;
-    objectId: number;
+    objectId: string;
     attempts: number;
 };
 
@@ -156,11 +156,11 @@ export type IndexStatus = {
     unconfirmed?: boolean;
 };
 
-export const setPins = async (objectIds: number[]): Promise<{ pins: PinnedObject[] }> =>
+export const setPins = async (objectIds: string[]): Promise<{ pins: PinnedObject[] }> =>
     await apiFetch({ path: '/translatewp/v1/indexing/pins', method: 'POST', data: { objectIds } }) as { pins: PinnedObject[] };
 
 export type SearchResult = {
-    id: number;
+    id: string;
     title: string;
     subtype: string;
 };
@@ -168,7 +168,7 @@ export type SearchResult = {
 export const searchContent = async (term: string): Promise<SearchResult[]> =>
 {
     const results = await apiFetch({
-        path: `/wp/v2/search?search=${encodeURIComponent(term)}&per_page=10&_fields=id,title,subtype`,
+        path: `/translatewp/v1/indexing/search?search=${encodeURIComponent(term)}`,
         method: 'GET',
     }) as SearchResult[];
 
@@ -231,7 +231,7 @@ const chunkPushItems = (items: IndexPushItem[]): IndexPushItem[][] =>
     return chunks;
 };
 
-const submitExtraction = async (id: number, items: IndexPushItem[]): Promise<void> =>
+const submitExtraction = async (id: string, items: IndexPushItem[]): Promise<void> =>
 {
     const chunks = chunkPushItems(items);
 
@@ -254,12 +254,12 @@ const submitExtraction = async (id: number, items: IndexPushItem[]): Promise<voi
     }
 };
 
-const reportExtractionFailure = async (id: number, reason: string): Promise<void> =>
+const reportExtractionFailure = async (id: string, reason: string): Promise<void> =>
 {
     await apiFetch({ path: '/translatewp/v1/indexing/extract-failed', method: 'POST', data: { id, reason } });
 };
 
-export const reextractPage = async (id: number): Promise<ExtractRow | null> =>
+export const reextractPage = async (id: string): Promise<ExtractRow | null> =>
 {
     const response = await apiFetch({
         path: '/translatewp/v1/indexing/reextract-page',
@@ -540,7 +540,7 @@ export type ReextractResult = { ok: true } | { ok: false; reason: string };
  * failure reason if it fails again so the Failed pages list can show it inline.
  */
 export async function extractFailedPageAgain(
-    id: number,
+    id: string,
     extract: typeof extractRowItems = extractRowItems,
 ): Promise<ReextractResult>
 {
