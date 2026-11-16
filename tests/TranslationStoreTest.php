@@ -231,6 +231,16 @@ TranslationStore::resolve_pending( $mix_url, $mix_id, 'de_DE', $en_de( '⟪item_
 $mix_map = TranslationStore::for_url( $mix_url, 'de_DE' );
 assert_true( [ 'Save' => 'Speichern' ] === $mix_map, 'Whitespace-only segments must be dropped, got ' . wp_json_encode( $mix_map ) );
 
+wp_test_reset( connected_options() );
+$price_id = make_post( 'page', 'Shop' );
+$price_url = 'https://example.com/shop/';
+$stored_prices = [ ' 14,50' => ' 1.450', '€ 32,00' => '€ 3.200', '14,50 per month' => '14,50 al mese' ];
+update_post_meta( $price_id, TranslationStore::POST_META_KEY, [ 'it' => [ 'map' => $stored_prices ] ] );
+assert_true( [ '14,50 per month' => '14,50 al mese' ] === TranslationStore::for_url( $price_url, 'it', $price_id ), 'Old stored letterless prices are hidden on read' );
+assert_true( ' 14,50' === TranslationStore::translated_string( ' 14,50', ' 14,50', $price_url, 'it', $price_id ), 'Stored corrupted price must never be returned by the string resolver' );
+assert_true( '14,50 al mese' === TranslationStore::translated_string( '14,50 per month', '14,50 per month', $price_url, 'it', $price_id ), 'Mixed price text still uses its translation' );
+assert_true( $stored_prices === get_post_meta( $price_id, TranslationStore::POST_META_KEY, true )['it']['map'], 'Ignoring corrupted rows does not delete stored data' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "TranslationStoreTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

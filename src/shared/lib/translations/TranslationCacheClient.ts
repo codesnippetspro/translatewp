@@ -1,3 +1,4 @@
+import { hasTranslationLetters } from '@/shared/lib/translations/hasTranslationLetters';
 import { ContextGroup, ContextGrouping } from '@/shared/lib/translations/ContextGrouping';
 import {
     computeFingerprintHash,
@@ -80,7 +81,7 @@ export class TranslationCacheClient
 
     async prepare(entries: TranslatableEntry[]): Promise<TranslationCachePlan>
     {
-        const groups = ContextGrouping.build(entries);
+        const groups = ContextGrouping.build(entries.filter(entry => hasTranslationLetters(entry.value)));
         const groupsForCache: GroupCacheMeta[] = [];
         const metaByHash = new Map<string, GroupCacheMeta>();
 

@@ -20,6 +20,16 @@ function assert_same( $expected, $actual, string $message ): void {
 	}
 }
 
+$letter_vectors = json_decode( file_get_contents( __DIR__ . '/fixtures/translation-letter-eligibility.json' ), true );
+foreach ( $letter_vectors as $vector ) {
+	$text = $vector['text'];
+	assert_same( $vector['hasLetters'], \TranslateWP\Components\PlainText::has_letters( $text ), 'Shared Unicode letter rule: ' . $text );
+	$html = '<p>' . htmlspecialchars( $text, ENT_NOQUOTES | ENT_HTML5, 'UTF-8' ) . '</p>';
+	$price_result = PageTextTranslator::translate( $html, [ $text => 'Translated' ] );
+	assert_same( $vector['hasLetters'] ? '<p>Translated</p>' : $html, $price_result['html'], 'Stored prices stay unchanged; mixed text translates: ' . $text );
+}
+assert_same( '<bdi>&euro;&nbsp;14,50</bdi>', PageTextTranslator::translate( '<bdi>&euro;&nbsp;14,50</bdi>', [ '€ 14,50' => '1.450' ] )['html'], 'HTML entities do not make prices translatable' );
+
 $map = [
 	'Contact'               => 'Kontakt',
 	'Call us on'            => 'Rufen Sie uns an unter',

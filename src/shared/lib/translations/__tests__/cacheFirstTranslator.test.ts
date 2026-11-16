@@ -136,6 +136,24 @@ afterEach(() =>
 
 describe('CacheFirstTranslator', () =>
 {
+    it.each(['it', 'es', 'lv'])('leaves bare Woo prices unchanged without reading or writing hydration or remote cache in %s', async targetLang =>
+    {
+        document.body.innerHTML = '<bdi><span>€</span>&nbsp;14,50</bdi><span>1.234,56</span>';
+        const before = document.body.innerHTML;
+        const store = new HydrationStore(new InMemoryBackend());
+        const read = jest.spyOn(store, 'getMany').mockResolvedValue(new Map([['old-price', '⟪item_0001⟫ 1.450']]));
+        const write = jest.spyOn(store, 'putMany');
+        const fetchImpl = jest.fn();
+        const translator = new CacheFirstTranslator({ sourceLang: 'en', targetLang, store, fetchImpl });
+        const engine = new TranslationEngine({ sourceLang: 'en', targetLang, translator });
+        const result = await engine.run(document.body);
+        expect(result.sourceEntries).toEqual([]);
+        expect(document.body.innerHTML).toBe(before);
+        expect(read).not.toHaveBeenCalled();
+        expect(write).not.toHaveBeenCalled();
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
     it.each([false, true])('serves admitted groups and settles refused groups with coalescing=%s', async coalesced =>
     {
         const seed = new TranslationCacheClient({ sourceLang: 'en', targetLang: 'es', siteId: 'site-1', apiBaseUrl: API_BASE, aiSettings: basicFixture.settings });
