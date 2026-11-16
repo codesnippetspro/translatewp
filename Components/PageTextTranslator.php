@@ -38,7 +38,9 @@ class PageTextTranslator {
 	public static function translate( string $html, array $map, array $attributes = self::TRANSLATED_ATTRIBUTES ): array {
 		$normalized = [];
 		foreach ( $map as $source => $translation ) {
-			$normalized[ self::normalize( (string) $source ) ] = trim( (string) $translation );
+			if ( PlainText::has_letters( (string) $source ) ) {
+				$normalized[ self::normalize( (string) $source ) ] = trim( (string) $translation );
+			}
 		}
 
 		$tokens     = preg_split( self::TOKEN, $html, -1, PREG_SPLIT_DELIM_CAPTURE );
@@ -63,7 +65,7 @@ class PageTextTranslator {
 				continue;
 			}
 
-			if ( null !== $skip_from || ! preg_match( '/\p{L}/u', $token ) || self::needs_no_translation( $token ) ) {
+			if ( null !== $skip_from || ! PlainText::has_letters( PlainText::decode( $token ) ) || self::needs_no_translation( $token ) ) {
 				$output .= $token;
 				continue;
 			}

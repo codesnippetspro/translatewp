@@ -626,7 +626,7 @@ describe('TranslationSession', () =>
 
     it('keeps a clock that rewrites its text node live from its first translation alone', async () =>
     {
-        document.body.innerHTML = '<main><p>Original content</p><span id="clock">20:46:03</span></main>';
+        document.body.innerHTML = '<main><p>Original content</p><span id="clock">Time 20:46:03</span></main>';
         const session = createSession({
             root: document.body,
             sourceLang: 'en',
@@ -636,29 +636,29 @@ describe('TranslationSession', () =>
 
         await session.switchTo('it');
         const clockText = document.querySelector('#clock')?.firstChild as Text;
-        expect(clockText.data).toBe('it:20:46:03');
+        expect(clockText.data).toBe('it:Time 20:46:03');
 
         for (let second = 4; second < 30; second += 1)
         {
-            clockText.data = `20:46:${String(second).padStart(2, '0')}`;
+            clockText.data = `Time 20:46:${String(second).padStart(2, '0')}`;
             await flushMutations();
-            expect(clockText.data).toBe(`it:20:46:${String(second).padStart(2, '0')}`);
+            expect(clockText.data).toBe(`it:Time 20:46:${String(second).padStart(2, '0')}`);
         }
 
         const clockValuesSent = translateBatch.mock.calls
             .flatMap(call => call[0] as Array<{ value: string }>)
-            .filter(entry => /^\d{2}:\d{2}:\d{2}$/.test(entry.value))
+            .filter(entry => /^Time \d{2}:\d{2}:\d{2}$/.test(entry.value))
             .map(entry => entry.value);
-        expect(clockValuesSent).toEqual(['20:46:03']);
+        expect(clockValuesSent).toEqual(['Time 20:46:03']);
 
         await session.switchTo('en');
-        expect(clockText.data).toBe('20:46:29');
+        expect(clockText.data).toBe('Time 20:46:29');
         session.dispose();
     });
 
     it('serves a clock that ticked between switches from its first translation alone', async () =>
     {
-        document.body.innerHTML = '<main><p>Original content</p><span id="clock">00:00:00</span></main>';
+        document.body.innerHTML = '<main><p>Original content</p><span id="clock">Time 00:00:00</span></main>';
         const session = createSession({
             root: document.body,
             sourceLang: 'en',
@@ -670,19 +670,19 @@ describe('TranslationSession', () =>
 
         for (let second = 0; second < switches; second += 1)
         {
-            clock.textContent = `00:00:${String(second).padStart(2, '0')}`;
+            clock.textContent = `Time 00:00:${String(second).padStart(2, '0')}`;
             await session.switchTo('it');
-            expect(clock.textContent).toBe(`it:00:00:${String(second).padStart(2, '0')}`);
+            expect(clock.textContent).toBe(`it:Time 00:00:${String(second).padStart(2, '0')}`);
             await session.switchTo('en');
         }
 
         const clockValuesSent = translateBatch.mock.calls
             .flatMap(call => call[0] as Array<{ value: string }>)
-            .filter(entry => /^\d{2}:\d{2}:\d{2}$/.test(entry.value))
+            .filter(entry => /^Time \d{2}:\d{2}:\d{2}$/.test(entry.value))
             .map(entry => entry.value);
 
-        expect(clockValuesSent).toEqual(['00:00:00']);
-        expect(clock.textContent).toBe(`00:00:${String(switches - 1).padStart(2, '0')}`);
+        expect(clockValuesSent).toEqual(['Time 00:00:00']);
+        expect(clock.textContent).toBe(`Time 00:00:${String(switches - 1).padStart(2, '0')}`);
         session.dispose();
     });
 
@@ -784,7 +784,7 @@ describe('TranslationSession', () =>
 
     it('translates a clock that ticked while the page was in its source language', async () =>
     {
-        document.body.innerHTML = '<main><p>Original content</p><span id="clock">20:46:03</span></main>';
+        document.body.innerHTML = '<main><p>Original content</p><span id="clock">Time 20:46:03</span></main>';
         const session = createSession({
             root: document.body,
             sourceLang: 'en',
@@ -795,13 +795,13 @@ describe('TranslationSession', () =>
         const ticks = VolatilityTracker.DEFAULT_THRESHOLD * 2;
         for (let second = 4; second < 4 + ticks; second += 1)
         {
-            clock.textContent = `20:46:${String(second).padStart(2, '0')}`;
+            clock.textContent = `Time 20:46:${String(second).padStart(2, '0')}`;
             await flushMutations();
         }
 
         await session.switchTo('it');
 
-        expect(clock.textContent).toBe(`it:20:46:${3 + ticks}`);
+        expect(clock.textContent).toBe(`it:Time 20:46:${3 + ticks}`);
         session.dispose();
     });
 
@@ -826,7 +826,7 @@ describe('TranslationSession', () =>
                 });
             });
         });
-        document.body.innerHTML = '<main><p>Original content</p><span id="clock">20:46:03</span></main>';
+        document.body.innerHTML = '<main><p>Original content</p><span id="clock">Time 20:46:03</span></main>';
         const session = createSession({
             root: document.body,
             sourceLang: 'en',
@@ -840,24 +840,24 @@ describe('TranslationSession', () =>
         void switching.catch(() => {});
         await Promise.resolve();
         await Promise.resolve();
-        expect(sentBatches()).toEqual([['Original content', '20:46:03']]);
+        expect(sentBatches()).toEqual([['Original content', 'Time 20:46:03']]);
 
         for (let second = 4; second <= 8; second += 1)
         {
-            clockText.data = `20:46:0${second}`;
+            clockText.data = `Time 20:46:0${second}`;
             await jest.advanceTimersByTimeAsync(1000);
         }
-        expect(sentBatches()).toEqual([['Original content', '20:46:03']]);
-        expect(clockText.data).toBe('20:46:08');
+        expect(sentBatches()).toEqual([['Original content', 'Time 20:46:03']]);
+        expect(clockText.data).toBe('Time 20:46:08');
 
         batches[0].resolve();
         await switching;
-        expect(clockText.data).toBe('it:20:46:08');
+        expect(clockText.data).toBe('it:Time 20:46:08');
 
-        clockText.data = '20:46:09';
+        clockText.data = 'Time 20:46:09';
         await flushMutations();
-        expect(clockText.data).toBe('it:20:46:09');
-        expect(sentBatches()).toEqual([['Original content', '20:46:03']]);
+        expect(clockText.data).toBe('it:Time 20:46:09');
+        expect(sentBatches()).toEqual([['Original content', 'Time 20:46:03']]);
         session.dispose();
     });
 
@@ -950,7 +950,7 @@ describe('TranslationSession', () =>
                 totalGroups: 1,
             };
         });
-        document.body.innerHTML = '<main><p>Original content</p><span id="clock">20:46:03</span></main>';
+        document.body.innerHTML = '<main><p>Original content</p><span id="clock">Time 20:46:03</span></main>';
         const session = createSession({
             root: document.body,
             sourceLang: 'en',
@@ -959,12 +959,12 @@ describe('TranslationSession', () =>
         const clock = document.querySelector('#clock') as HTMLSpanElement;
 
         await session.switchTo('it');
-        expect(clock.textContent).toBe('20:46:03');
+        expect(clock.textContent).toBe('Time 20:46:03');
 
-        clock.textContent = '20:46:04';
+        clock.textContent = 'Time 20:46:04';
         await flushMutations();
 
-        expect(clock.textContent).toBe('it:20:46:04');
+        expect(clock.textContent).toBe('it:Time 20:46:04');
         session.dispose();
     });
 

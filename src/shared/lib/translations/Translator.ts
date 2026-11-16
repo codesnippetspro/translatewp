@@ -1,3 +1,4 @@
+import { hasTranslationLetters } from '@/shared/lib/translations/hasTranslationLetters';
 import type { ServedTimingEvent } from '@/shared/lib/translations/ServedTranslationTiming';
 import { EntryType } from '@/shared/lib/translations/constants';
 import { aiSettingsForLanguage } from '@/shared/lib/translations/aiSettingsForLanguage';
@@ -171,7 +172,7 @@ export class Translator
     ): Promise<string | null>
     {
         const value = source.trim();
-        if ('' === value)
+        if (!hasTranslationLetters(value))
         {
             return null;
         }
@@ -760,6 +761,12 @@ export class Translator
 
         for (const entry of group.entries)
         {
+            if (!hasTranslationLetters(entry.value))
+            {
+                translatedById.set(entry.id, entry.value);
+                options.onEntryTranslated?.(entry.withTranslation(entry.value), false);
+                continue;
+            }
             const translatedValue = translatedBySourceValue.get(entry.value);
             if (undefined === translatedValue)
             {

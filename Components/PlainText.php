@@ -26,6 +26,10 @@ class PlainText {
 		return self::decode( (string) ( $site->blogname ?? '' ) );
 	}
 
+	public static function has_letters( string $text ): bool {
+		return 1 === preg_match( '/\p{L}/u', $text );
+	}
+
 	public static function decode( string $text ): string {
 		return html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 	}
