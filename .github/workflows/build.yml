@@ -104,3 +104,22 @@ jobs:
         with:
           name: ${{ steps.build.outputs.artifact_name }}
           path: ./upload
+
+  php-minimum:
+    name: Packaged PHP 8.0 syntax
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up PHP minimum
+        uses: codesnippetspro/setup-php@v2
+        with:
+          php-version: '8.0'
+
+      - name: Download the verified plugin
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: candidate
+
+      - name: Check every shipped PHP file
+        run: find candidate -type f -name '*.php' -print0 | xargs -0 -n 1 php -l
