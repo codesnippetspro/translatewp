@@ -21,7 +21,7 @@ export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = fals
     const stepError = useStepStore(state => state.stepError);
 
     return (
-        <div className={`px-6 py-4.5 flex flex-wrap items-center gap-3 border-t border-translatewp-border ${isFirstStep ? 'justify-end' : 'justify-between'}`}>
+        <footer className={`px-6 py-4.5 flex flex-wrap items-center gap-3 border-t border-translatewp-border ${isFirstStep ? 'justify-end' : 'justify-between'}`}>
             {!isFirstStep && (
                 <Button variant='secondary' onClick={previousStep} className='rounded-sm!'>
                     {__('Previous', 'translate')}
@@ -47,6 +47,6 @@ export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = fals
                             {__('Continue', 'translate')}
                         </Button>
                     )}
-        </div>
+        </footer>
     );
 }

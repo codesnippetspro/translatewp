@@ -55,7 +55,7 @@ export const Setup = () =>
                 ) }
 
                 {/* Step content */}
-                <section className='setup-step p-8 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto'>
+                <section aria-label={currentStep.label} tabIndex={0} className='setup-step p-8 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto'>
                     { currentStep.id === 'connect' && <ConnectStep /> }
                     { currentStep.id === 'languages' && <LanguagesStep /> }
                     { currentStep.id === 'translation' && <TranslationStep enabled={finishEnabled} pending={finishPending} proAction={proAction} proPending={proPending} finish={() => void nextStep()} finishWithPro={() => void finishWithPro()} /> }
