@@ -71,6 +71,7 @@ class CleanupInventory {
 		'translatewp_pro_welcome_seen',
 		'translatewp_index_last_drain',
 		Indexer::SPINE_PENDING_OPTION,
+		Indexer::NEXT_READER_OPTION,
 		Indexer::SPINE_CHECKED_OPTION,
 		'translatewp_crawler_refill_lock',
 		\TranslateWP\Functionality\LexiconChanges::SEEDED_OPTION,

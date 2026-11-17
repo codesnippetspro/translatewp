@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\IndexQueue;
+use TranslateWP\Components\MutationLock;
 use TranslateWP\Components\TranslationStore;
 use TranslateWP\Components\ReadinessBudget;
 use TranslateWP\Components\SiteConnection;
@@ -59,6 +60,19 @@ class ReadinessReconcile {
 	}
 
 	public function run(): void {
+		$ran = MutationLock::run(
+            'index_drain',
+            function (): void {
+				$this->run_unlocked();
+			},
+            0
+        );
+		if ( ! $ran && ! wp_next_scheduled( self::HOOK ) ) {
+			wp_schedule_single_event( time() + self::CATCH_UP_SECONDS, self::HOOK );
+		}
+	}
+
+	private function run_unlocked(): void {
 		if ( ! SiteConnection::is_connected() ) {
 			return;
 		}

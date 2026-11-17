@@ -22,6 +22,7 @@ use TranslateWP\Components\TranslationReadiness;
 use TranslateWP\Components\TranslationUrl;
 use TranslateWP\Components\RenderedPageExtraction;
 use TranslateWP\Components\CrawlerRefillBudget;
+use TranslateWP\Components\MutationLock;
 
 /**
  * Warm-up indexer (C3): enumerates public content into the index queue and
@@ -29,6 +30,7 @@ use TranslateWP\Components\CrawlerRefillBudget;
  */
 class Indexer {
 	public const JOB_POLL_CURSOR_OPTION = 'translatewp_job_poll_cursor';
+	public const NEXT_READER_OPTION = 'translatewp_reader_next_at';
 	public const SPINE_PENDING_OPTION = 'translatewp_spine_refresh_pending';
 	public const SPINE_CHECKED_OPTION = 'translatewp_spine_checked';
 	public const LOOPBACK_ERROR_TRANSIENT = 'translatewp_reader_loopback_error';
@@ -92,6 +94,7 @@ class Indexer {
 		add_action( self::DRAIN_HOOK, [ $this, 'drain_tick' ] );
 		add_action( 'translatewp_languages_saved', [ $this, 'on_languages_saved' ] );
 		add_action( 'init', [ $this, 'ensure_spine' ] );
+		add_action( 'shutdown', [ $this, 'kick_due_drain' ] );
 		add_action( 'update_option_page_on_front', [ $this, 'schedule_spine_refresh' ] );
 		add_action( 'update_option_show_on_front', [ $this, 'schedule_spine_refresh' ] );
 		add_action( 'wp_update_nav_menu', [ $this, 'schedule_spine_refresh' ] );
@@ -999,11 +1002,34 @@ class Indexer {
 		return max( 0, (int) apply_filters( 'translatewp_drain_reschedule_delay', self::RESCHEDULE_DELAY_SECONDS ) );
 	}
 
+	public function kick_due_drain(): void {
+		$next = wp_next_scheduled( self::DRAIN_HOOK );
+		if ( SiteConnection::is_connected() && $next && $next <= time() && (int) get_option( self::LAST_DRAIN_OPTION, 0 ) <= time() - self::RESCHEDULE_DELAY_SECONDS ) {
+			LoopbackKick::fire();
+		}
+	}
+
 	/**
 	 * One cron tick: claim up to BATCH_SIZE push rows and relay each stored
 	 * payload through the remote job pipeline within the tick budget.
 	 */
 	public function drain_tick(): array {
+		$result = [
+			'processed' => 0,
+			'failed' => 0,
+			'released' => 0,
+		];
+		MutationLock::run(
+            'index_drain',
+            function () use ( &$result ): void {
+				$result = $this->drain_tick_unlocked();
+			},
+            0
+        );
+		return $result;
+	}
+
+	private function drain_tick_unlocked(): array {
 		$started = ( $this->clock )();
 		$result  = [
 			'processed' => 0,
@@ -1057,26 +1083,44 @@ class Indexer {
 
 		if ( $this->has_pending( $counts ) || (int) $this->queue->read_counts()['pending'] > 0 ) {
 			self::schedule_drain( self::drain_reschedule_delay() );
-			register_shutdown_function( [ LoopbackKick::class, 'fire' ] );
 		}
 
 		return $result;
 	}
 
 	private function extract_pending_page(): void {
+		if ( (int) get_option( self::NEXT_READER_OPTION, 0 ) > time() ) {
+			return;
+		}
 		$rows = $this->claim_extract_batch( 1 );
 		if ( ! $rows ) {
 			return;
 		}
 		$row = $rows[0];
+		if ( self::MISS_OBJECT_TYPE === $row['object_type'] && empty( $row['retranslate'] ) ) {
+			if ( json_decode( (string) $row['payload'], true ) ) {
+				$this->queue->store_payload( (int) $row['id'], (string) $row['payload'] );
+			} else {
+				$this->queue->fail( (int) $row['id'], 'missing_source_groups' );
+			}
+			return;
+		}
+		update_option( self::NEXT_READER_OPTION, time() + self::RESCHEDULE_DELAY_SECONDS, false );
 		$html = $this->fetch_page( (string) $row['url'], self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] );
 		if ( is_wp_error( $html ) ) {
 			$this->reader_failed( $html->get_error_code() );
-			$this->queue->fail( (int) $row['id'], $html->get_error_code() );
+			if ( preg_match( '/^page_fetch_(?:timeout|failed|408|429|5[0-9]{2})$/', $html->get_error_code() ) ) {
+				$this->queue->defer_reader( (int) $row['id'], $html->get_error_code() );
+			} else {
+				$this->queue->fail( (int) $row['id'], $html->get_error_code() );
+			}
 			return;
 		}
 		try {
 			$this->submit_extraction( (int) $row['id'], RenderedPageExtraction::extract( $html ) );
+			delete_post_meta( (int) $row['id'], '_twp_reader_not_before' );
+			delete_post_meta( (int) $row['id'], '_twp_reader_retries' );
+			delete_transient( self::LOOPBACK_ERROR_TRANSIENT );
 		} catch ( \RuntimeException $error ) {
 			$this->reader_failed( $error->getMessage() );
 			$this->queue->fail( (int) $row['id'], $error->getMessage() );
@@ -1117,7 +1161,7 @@ class Indexer {
 				]
             );
 			if ( is_wp_error( $response ) ) {
-				$code = LoopbackKick::failure_reason( $response );
+				$code = ( microtime( true ) - $started >= self::PAGE_FETCH_TIMEOUT_SECONDS || false !== stripos( $response->get_error_message(), 'timed out' ) || false !== stripos( $response->get_error_message(), 'cURL error 28' ) ) ? 'page_fetch_timeout' : LoopbackKick::failure_reason( $response );
 				return new \WP_Error( $code, $code );
 			}
 			$status = (int) wp_remote_retrieve_response_code( $response );
@@ -1763,7 +1807,7 @@ class Indexer {
 
 	private function has_pending( array $counts ): bool {
 		foreach ( $counts as $count ) {
-			if ( $count['pending_push'] > 0 ) {
+			if ( $count['pending_push'] > 0 || $count['pending_extract'] > 0 ) {
 				return true;
 			}
 		}
