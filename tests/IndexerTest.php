@@ -1030,7 +1030,7 @@ $indexer = make_indexer( $queue );
 $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 1, 'url' => 'https://example.com/?p=1', 'language' => 'es', 'priority' => 100 ] ] );
 unset( $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] );
 assert_true( 1 === $queue->counts()['es']['pending_extract'], 'Precondition: one row waits for extraction' );
-assert_true( false === $indexer->status()['scheduledTasksLate'], 'Rows waiting for extraction with no drain scheduled are not late' );
+assert_true( true === $indexer->status()['scheduledTasksLate'], 'Background extraction with no drain scheduled is late' );
 
 // --- Scheduled-tasks-late case a: push work waits but the drain is not scheduled at all ---
 wp_test_reset( connected_options() );
