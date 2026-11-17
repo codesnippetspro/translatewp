@@ -8,6 +8,7 @@ use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\TranslationStore;
 use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\Options;
+use TranslateWP\Components\PlainText;
 use TranslateWP\Components\MutationLock;
 use TranslateWP\Components\TranslationProxySettings;
 use TranslateWP\Entities\CPTs\Lexicon;
@@ -179,7 +180,7 @@ class LexiconChanges {
 		sort( $languages );
 		return [
 			'status' => $post->post_status,
-			'term' => trim( $post->post_title ),
+			'term' => PlainText::decode( trim( $post->post_title ) ),
 			'description' => trim( $post->post_content ),
 			'languages' => $languages,
 		];
