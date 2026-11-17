@@ -112,7 +112,7 @@ class CrawlerResponse {
 			}
 		}
 
-		( new Indexer() )->refill_crawler_page( $post_id, $source, $locale );
+		Indexer::refill_crawler_page( $post_id, $source, $locale );
 		return $this->original_page( $html, $source );
 	}
 

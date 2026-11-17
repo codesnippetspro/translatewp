@@ -117,12 +117,13 @@ class Indexer {
 		return $post_id > 0 || self::NOT_FOUND_OBJECT_ID === $post_id ? $post_id : (int) hexdec( substr( hash( 'sha256', TranslationUrl::canonicalize( $url ) ), 0, 7 ) );
 	}
 
-	public function refill_crawler_page( int $post_id, string $url, string $language ): void {
-		if ( ! SiteConnection::is_connected() || 0 >= $post_id || 'publish' !== get_post_status( $post_id ) || PageExclusion::is_excluded( $post_id ) || ! in_array( $language, $this->target_languages( null ), true ) ) {
+	public static function refill_crawler_page( int $post_id, string $url, string $language ): void {
+		if ( ! SiteConnection::is_connected() || 0 >= $post_id || 'publish' !== get_post_status( $post_id ) || PageExclusion::is_excluded( $post_id ) || ! in_array( $language, self::target_languages( null ), true ) ) {
 			return;
 		}
 		$url = (string) get_permalink( $post_id );
-		foreach ( $this->queue->failed_items( $language ) as $failed ) {
+		$queue = new IndexQueue();
+		foreach ( $queue->failed_items( $language ) as $failed ) {
 			if ( (int) ( $failed['object_id'] ?? 0 ) === $post_id ) {
 				return;
 			}
@@ -142,11 +143,11 @@ class Indexer {
 			'language' => $language,
 			'priority' => self::PRIORITY_HOME,
 		];
-		if ( ! $this->queue->read_items( $type, $id ) ) {
-			$this->queue->enqueue_read( [ $row ] );
+		if ( ! $queue->read_items( $type, $id ) ) {
+			$queue->enqueue_read( [ $row ] );
 		}
-		$this->queue->enqueue( [ $row ] );
-		$this->queue->enqueue_rewarm( [ $row ] );
+		$queue->enqueue( [ $row ] );
+		$queue->enqueue_rewarm( [ $row ] );
 		self::schedule_drain();
 		LoopbackKick::fire();
 	}
@@ -218,7 +219,7 @@ class Indexer {
 	 * to the per-language extraction.
 	 */
 	public function start_translation( ?array $languages = null, bool $force = false ): int {
-		$languages = $this->target_languages( $languages );
+		$languages = self::target_languages( $languages );
 		if ( ! $languages ) {
 			return 0;
 		}
@@ -291,7 +292,7 @@ class Indexer {
 	}
 
 	/** The target languages to translate into: the given or active ones, minus the source. */
-	private function target_languages( ?array $languages ): array {
+	private static function target_languages( ?array $languages ): array {
 		$languages = $languages ?? TranslationProxySettings::active_lookup_languages();
 		$languages = array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $languages ) ) ) ) );
 		$default   = TranslationProxySettings::default_locale();
@@ -685,7 +686,7 @@ class Indexer {
 			return;
 		}
 
-		$languages = $this->target_languages( null );
+		$languages = self::target_languages( null );
 		if ( $languages && $this->fan_out_read_rows( [ $read_row ], $languages, true ) > 0 ) {
 			self::schedule_drain();
 			LoopbackKick::fire();
