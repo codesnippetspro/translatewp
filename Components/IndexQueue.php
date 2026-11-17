@@ -29,6 +29,7 @@ class IndexQueue {
 
 	public const MAX_ATTEMPTS = 3;
 	public const STALE_CLAIM_SECONDS = 300;
+	private const LEGACY_CLOCK_SKEW_SECONDS = 5;
 
 	private const META_OBJECT_TYPE = '_twp_object_type';
 	private const META_OBJECT_ID   = '_twp_object_id';
@@ -318,17 +319,22 @@ class IndexQueue {
 		return $inserted;
 	}
 
-	/**
-	 * Retranslate path: re-queue the given objects for a fresh pass that
-	 * overwrites the server cache. New rows and every existing row not claimed
-	 * right now (re)enter the extract stage with the retranslate flag and a
-	 * dropped payload, so the tab re-extracts fresh neighbours, title and
-	 * context instead of the drain resending a stored payload. A row claimed
-	 * right now is mid-extract or mid-push and cannot be interrupted: it keeps
-	 * its pass but is marked so that pass still sends the flag. A non-empty page
-	 * title on the request is carried onto the row. Returns how many rows were
-	 * (re)queued.
-	 */
+	public function rows_before_lexicon_changes( array $times ): array {
+		return array_values(
+            array_filter(
+                $this->list_rows(),
+                static function ( array $row ) use ( $times ): bool {
+					$changed_at = (int) ( $times[ $row['language'] ] ?? 0 );
+					$translated_at = (int) get_post_meta( (int) $row['id'], self::META_TRANSLATED_AT, true );
+					if ( self::STATUS_DONE !== $row['status'] || ! self::is_target_row_language( $row['language'] ) || $changed_at <= 0 || $translated_at > $changed_at + self::LEGACY_CLOCK_SKEW_SECONDS ) {
+						return false;
+					}
+					return 'miss' !== $row['object_type'] || (bool) json_decode( self::decode_payload( (string) get_post_field( 'post_content', (int) $row['id'] ) ), true );
+				}
+            )
+        );
+	}
+
 	public function enqueue_retranslate( array $rows, bool $force = true ): int {
 		$queued = 0;
 
@@ -338,7 +344,11 @@ class IndexQueue {
 			$language    = (string) $row['language'];
 
 			$existing_id = $this->find_row( $object_type, $object_id, $language );
+			$priority = (int) ( $row['priority'] ?? ( null === $existing_id ? 0 : get_post_meta( $existing_id, self::META_PRIORITY, true ) ) );
 
+			if ( ! $force && null === $existing_id && 'miss' === $object_type ) {
+				continue;
+			}
 			if ( null === $existing_id ) {
 				$post_id = wp_insert_post(
 					[
@@ -353,7 +363,7 @@ class IndexQueue {
 							self::META_LANGUAGE    => $language,
 							self::META_STAGE       => self::STAGE_EXTRACT,
 							self::META_STATUS      => self::STATUS_PENDING,
-							self::META_PRIORITY    => (int) $row['priority'],
+							self::META_PRIORITY    => $priority,
 							self::META_ATTEMPTS    => 0,
 							self::META_FAIL_REASON => '',
 							self::META_RETRANSLATE => $force ? 1 : 0,
@@ -370,6 +380,14 @@ class IndexQueue {
 				continue;
 			}
 
+			$miss_payload = 'miss' === $object_type ? self::decode_payload( (string) get_post_field( 'post_content', $existing_id ) ) : '';
+			if ( ! $force && 'miss' === $object_type && ! json_decode( $miss_payload, true ) ) {
+				continue;
+			}
+			delete_post_meta( $existing_id, '_twp_reader_not_before' );
+			delete_post_meta( $existing_id, '_twp_reader_retries' );
+			$replay_items = $force ? [] : ( 'miss' === $object_type ? json_decode( $miss_payload, true ) : $this->read_items( $object_type, $object_id ) );
+			$replay_payload = $replay_items ? (string) wp_json_encode( $replay_items ) : '';
 			update_post_meta( $existing_id, self::META_RETRANSLATE, $force ? 1 : 0 );
 			update_post_meta( $existing_id, self::META_RETRANSLATING, 1 );
 			delete_post_meta( $existing_id, self::META_REFILL_FINISHED );
@@ -394,9 +412,9 @@ class IndexQueue {
 				continue;
 			}
 
-			update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
+			update_post_meta( $existing_id, self::META_STAGE, $replay_items ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
-			update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
+			update_post_meta( $existing_id, self::META_PRIORITY, $priority );
 			update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
 			update_post_meta( $existing_id, self::META_URL, (string) ( $row['url'] ?? '' ) );
@@ -405,7 +423,7 @@ class IndexQueue {
 			wp_update_post(
 				[
 					'ID'           => $existing_id,
-					'post_content' => '',
+					'post_content' => $replay_items ? wp_slash( self::encode_payload( $replay_payload ) ) : '',
 				]
 			);
 			$queued++;
@@ -751,7 +769,7 @@ class IndexQueue {
 	public function claim_rows( array $ids ): array {
 		$claimed = [];
 		foreach ( array_map( 'intval', $ids ) as $post_id ) {
-			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) ) {
+			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
 
@@ -806,6 +824,19 @@ class IndexQueue {
 						'key'   => self::META_STAGE,
 						'value' => $stage,
 					],
+					[
+						'relation' => 'OR',
+						[
+							'key' => '_twp_reader_not_before',
+							'compare' => 'NOT EXISTS',
+						],
+						[
+							'key' => '_twp_reader_not_before',
+							'value' => $this->now(),
+							'type' => 'NUMERIC',
+							'compare' => '<=',
+						],
+					],
 				],
 			]
 		);
@@ -813,7 +844,7 @@ class IndexQueue {
 		$claimed = [];
 		foreach ( $candidates as $post_id ) {
 			$post_id = (int) $post_id;
-			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) ) {
+			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
 
@@ -1300,13 +1331,15 @@ class IndexQueue {
 		}
 		delete_post_meta( $id, self::META_RETRANSLATE );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
-		wp_update_post(
-			[
-				'ID'           => $id,
-				'post_content' => '',
-			]
-		);
+		if ( 'miss' !== (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ) ) {
+			wp_update_post(
+                [
+					'ID'           => $id,
+					'post_content' => '',
+                ]
+			);
 
+		}
 		return true;
 	}
 
@@ -1378,6 +1411,14 @@ class IndexQueue {
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 
 		return true;
+	}
+
+	public function defer_reader( int $id, string $reason ): void {
+		$attempts = min( 7, 1 + (int) get_post_meta( $id, '_twp_reader_retries', true ) );
+		update_post_meta( $id, '_twp_reader_retries', $attempts );
+		update_post_meta( $id, '_twp_reader_not_before', $this->now() + min( HOUR_IN_SECONDS, 60 * ( 2 ** ( $attempts - 1 ) ) ) );
+		update_post_meta( $id, self::META_FAIL_REASON, $reason );
+		$this->release( $id );
 	}
 
 	/**
@@ -1660,7 +1701,7 @@ class IndexQueue {
 		$pinned = array_map( 'intval', $pinned_object_ids );
 
 		foreach ( $this->all_row_ids() as $post_id ) {
-			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) ) {
+			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
 
