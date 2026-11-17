@@ -24,9 +24,15 @@ function readPatterns(key: string): Pattern[]
     } catch { return []; }
 }
 
+function isClockText(value: string): boolean
+{
+    return /\b\d{1,3}:\d{2}(?::\d{2})?\b/.test(value)
+        || /^(?:\s*\d+\s*[dhms]\s*){2,}$/i.test(value);
+}
+
 export function isChangingNumberText(value: string): boolean
 {
-    if (!digitRuns(value).length) return false;
+    if (!isClockText(value) || !digitRuns(value).length) return false;
     const key = storageKey();
     if (!key) return false;
     const pattern = normalizeNumbers(value);
@@ -35,7 +41,7 @@ export function isChangingNumberText(value: string): boolean
 
 export function rememberChangingNumberText(previous: string, current: string): boolean
 {
-    if (previous === current || !digitRuns(current).length) return false;
+    if (!isClockText(previous) || !isClockText(current) || previous === current || !digitRuns(current).length) return false;
     const pattern = normalizeNumbers(current);
     if (normalizeNumbers(previous) !== pattern || pattern.length > MAX_PATTERN_LENGTH) return false;
     const key = storageKey();
