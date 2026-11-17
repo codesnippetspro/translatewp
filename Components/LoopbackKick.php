@@ -38,6 +38,7 @@ class LoopbackKick {
 			[
 				'timeout'   => 0.01,
 				'blocking'  => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
 				'headers'   => [ 'Content-Type' => 'application/json' ],
 				'body'      => wp_json_encode( $body ),
 			]
