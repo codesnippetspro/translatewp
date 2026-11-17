@@ -35,6 +35,16 @@ const WAITING_READ_RETRY_MS = 30000;
 function readerErrorMessage(reason: string): string
 {
     switch (reason) {
+        case 'page_fetch_timeout':
+            return __('The site took too long to respond. Background reading will retry automatically.', 'translate');
+        case 'page_fetch_failed':
+        case 'page_fetch_408':
+        case 'page_fetch_429':
+        case 'page_fetch_500':
+        case 'page_fetch_502':
+        case 'page_fetch_503':
+        case 'page_fetch_504':
+            return __('The site could not be reached temporarily. Background reading will retry automatically.', 'translate');
         case 'page_tls_failed':
             return __('WordPress could not verify the site’s HTTPS certificate. Fix the certificate or the site’s local DNS, then try reading again.', 'translate');
         case 'page_parser_unavailable':
