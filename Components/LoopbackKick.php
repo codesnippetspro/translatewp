@@ -23,9 +23,11 @@ class LoopbackKick {
 		}
 
 		$timestamp = (string) time();
+		$nonce = bin2hex( random_bytes( 16 ) );
 		$body      = [
 			'ts'  => $timestamp,
-			'sig' => self::signature( $token, $timestamp ),
+			'sig' => self::signature( $token, $timestamp, $nonce ),
+			'nonce' => $nonce,
 		];
 		$url       = rest_url( self::ROUTE );
 
@@ -36,21 +38,25 @@ class LoopbackKick {
 			[
 				'timeout'   => 0.01,
 				'blocking'  => false,
-				'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
 				'headers'   => [ 'Content-Type' => 'application/json' ],
 				'body'      => wp_json_encode( $body ),
 			]
 		);
 
 		if ( is_wp_error( $response ) ) {
+			set_transient( \TranslateWP\Functionality\Indexer::LOOPBACK_ERROR_TRANSIENT, self::failure_reason( $response ), self::FRESHNESS_SECONDS );
 			ActionLog::record( 'The site could not call itself to run the queue (loopback): ' . $response->get_error_code(), 'warning' );
 		}
 
 		return ! is_wp_error( $response );
 	}
 
+	public static function failure_reason( \WP_Error $error ): string {
+		return false !== strpos( $error->get_error_message(), 'cURL error 60' ) ? 'page_tls_failed' : 'page_fetch_failed';
+	}
+
 	/** True when the timestamp is fresh and the signature is the site's own. */
-	public static function verify( string $timestamp, string $signature ): bool {
+	public static function verify( string $timestamp, string $signature, string $nonce = '' ): bool {
 		$token = (string) Options::get( 'site.token', '' );
 		if ( '' === $token || ! preg_match( '/^\d{9,12}$/', $timestamp ) ) {
 			return false;
@@ -60,7 +66,14 @@ class LoopbackKick {
 			return false;
 		}
 
-		return hash_equals( self::signature( $token, $timestamp ), $signature );
+		if ( ! preg_match( '/^[a-f0-9]{32}$/', $nonce ) || ! hash_equals( self::signature( $token, $timestamp, $nonce ), $signature ) ) {
+			return false;
+		}
+		$key = 'translatewp_drain_nonce_' . $nonce;
+		if ( false !== get_transient( $key ) ) {
+			return false;
+		}
+		return set_transient( $key, true, self::FRESHNESS_SECONDS );
 	}
 
 	/** Run the callback once; a second kick inside the lock window does nothing. */
@@ -79,9 +92,9 @@ class LoopbackKick {
 		return true;
 	}
 
-	private static function signature( string $token, string $timestamp ): string {
+	private static function signature( string $token, string $timestamp, string $nonce ): string {
 		$key = hash( 'sha256', $token );
 
-		return rtrim( strtr( base64_encode( hash_hmac( 'sha256', "drain\n" . $timestamp, $key, true ) ), '+/', '-_' ), '=' );
+		return rtrim( strtr( base64_encode( hash_hmac( 'sha256', "drain\n" . $timestamp . "\n" . $nonce, $key, true ) ), '+/', '-_' ), '=' );
 	}
 }

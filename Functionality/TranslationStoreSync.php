@@ -118,13 +118,17 @@ class TranslationStoreSync {
 				$segments[] = [
 					'hash'          => $hash,
 					'markerPayload' => $payload,
+					'settingsVersion' => (int) ( $item['cache']['settingsVersion'] ?? 0 ),
+					'lexiconVersion' => (int) ( $item['cache']['lexiconVersion'] ?? 0 ),
+					'lexiconChangedAt' => (int) ( $item['cache']['lexiconChangedAt'] ?? 0 ),
+					'settingsChangedAt' => (int) ( $item['cache']['settingsChangedAt'] ?? 0 ),
 				];
 			}
 
-			if ( $segments && TranslationStore::record_pending( $url, $object_id, $language, $source_lang, $segments ) ) {
+			if ( $segments && TranslationStore::record_pending( $url, $object_id, $language, $source_lang, $segments, ( ! empty( $row['retranslate'] ) || ! empty( $row['retranslating'] ) ) ) ) {
 				$recorded = true;
 
-				if ( ! empty( $row['retranslate'] ) ) {
+				if ( ( ! empty( $row['retranslate'] ) || ! empty( $row['retranslating'] ) ) ) {
 					TranslationStore::hold_overwrite( $url, $object_id, $language, self::OVERWRITE_HOLD_SECONDS );
 				}
 			}

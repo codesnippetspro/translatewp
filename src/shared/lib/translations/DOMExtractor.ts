@@ -8,6 +8,7 @@ import {
 import { createPrintedPhpDiagnosticFilter } from '@/shared/lib/translations/printedPhpDiagnostics';
 import { NodeFilter } from '@/shared/lib/translations/NodeFilter';
 import { pageAreaSelector } from '@/shared/lib/translations/pageAreas';
+import { isChangingNumberText } from '@/shared/lib/translations/changingNumberText';
 import { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
 
 /**
@@ -110,7 +111,7 @@ export class DOMExtractor
             if (this.#inExcludedArea((node as Text).parentElement)) continue;
 
             const value = node.nodeValue ?? '';
-            if (!value.trim().length) continue;
+            if (!value.trim().length || isChangingNumberText(value)) continue;
 
             entries.push(new TranslatableEntry({
                 id:             this.#nextId('txt'),

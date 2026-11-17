@@ -54,14 +54,20 @@ export const Lexicon = () =>
     const lexiconTermsResponse = termsQuery.data ?? lastTerms;
     const { isFetching } = termsQuery;
 
-    // A term change never marks anything stale by itself. The pages
-    // translated under the previous terms are counted here and retranslated
-    // only when the owner asks, behind the cost figure.
     const { data: stale } = useQuery({
         queryKey: ['getStaleTranslations'],
         queryFn: getStaleTranslations,
-        refetchInterval: 30000,
+        refetchInterval: 5000,
     });
+    const refill = stale?.refill;
+    const wasRefilling = useRef(false);
+    useEffect(() => {
+        if (!refill) return;
+        if (wasRefilling.current && refill.pending === 0 && refill.failed === 0) {
+            setApplyNotice(__('Translations now use your current terms.', 'translate'));
+        }
+        wasRefilling.current = refill.pending > 0;
+    }, [refill?.pending, refill?.failed]);
     const staleLexicon = stale?.lexicon ?? {};
     const stalePages = Object.values(staleLexicon).reduce((sum, count) => sum + count, 0);
     const staleLocales = Object.keys(staleLexicon);
@@ -78,7 +84,7 @@ export const Lexicon = () =>
                 result.requeued > 0
                     /* translators: %s: number of pages. */
                     ? sprintf(__('%s pages are being translated again with the current terms.', 'translate'), result.requeued.toLocaleString())
-                    : __('Every translated page already uses the current terms.', 'translate')
+                    : __('No additional pages were queued. Current progress is shown below.', 'translate')
             );
             await queryClient.invalidateQueries({ queryKey: ['getStaleTranslations'] });
         },
@@ -211,11 +217,32 @@ export const Lexicon = () =>
                 )}
             />
 
+            <p className={`-mt-2 text-sm text-translatewp-muted ${PAGE_INSET}`}>
+                {__('Saving a term refreshes translations in the background. This can update every translated page in your translation languages and counts toward your translation usage.', 'translate')}
+            </p>
+            {Boolean(refill?.pending) && (
+                <p className={`text-sm text-translatewp-muted ${PAGE_INSET}`} role="status">
+                    {sprintf(
+                        /* translators: %d: remaining page translations. */
+                        __('Still translating with your current terms: %d page translations remaining.', 'translate'),
+                        refill?.pending ?? 0
+                    )}
+                </p>
+            )}
+            {Boolean(refill?.failed) && (
+                <p className={`text-sm text-translatewp-muted ${PAGE_INSET}`} role="alert">
+                    {sprintf(
+                        /* translators: %d: failed page translations. */
+                        __('%d page translations could not be updated. Review and retry the failed pages in the Dashboard.', 'translate'),
+                        refill?.failed ?? 0
+                    )}
+                </p>
+            )}
             {stalePages > 0 && !applyNotice && (
                 <p className={`-mt-2 text-sm text-translatewp-muted ${PAGE_INSET}`} role="status">
                     {sprintf(
                         /* translators: 1: number of pages, 2: language names. */
-                        __('%1$s translated pages in %2$s still use the previous terms. New visits keep the stored translation until you retranslate.', 'translate'),
+                        __('%1$s translated pages in %2$s still use the previous terms. The background update starts shortly; you can start it now.', 'translate'),
                         stalePages.toLocaleString(),
                         staleLanguages
                     )}

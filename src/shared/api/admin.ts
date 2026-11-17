@@ -152,6 +152,7 @@ export const applyLocalizerNow = async (): Promise<ApplyStaleResult> =>
 
 /** Finished pages per language that wait for a retranslation, per group. */
 export type StaleTranslations = {
+    refill?: { pending: number; failed: number };
     lexicon: Record<string, number>;
     localizer: Record<string, number>;
 };

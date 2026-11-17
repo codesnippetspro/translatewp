@@ -276,7 +276,8 @@ $queue->complete( (int) $again['id'] );
 $de = tnw_language( $indexer, 'de' );
 tnw_check( 1 === $de['retranslating'] && 0 === $de['ready'], 'A re-pushed row still reads as retranslating while its job runs: ' . wp_json_encode( $de ) );
 $GLOBALS['wp_test_job_states'] = [ 'job-second' => 'done' ];
-( new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $refused, static fn (): int => 1000, false ) )->reconcile( 0 );
+tnw_manifest( $again );
+( new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, 'tnw_present', static fn (): int => 1000, false ) )->reconcile( 0 );
 $de = tnw_language( $indexer, 'de' );
 tnw_check( 0 === $de['retranslating'] && 1 === $de['ready'], 'Once confirmed it is translated and the retranslation is over: ' . wp_json_encode( $de ) );
 

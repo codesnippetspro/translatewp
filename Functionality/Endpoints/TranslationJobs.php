@@ -2,6 +2,8 @@
 
 namespace TranslateWP\Functionality\Endpoints;
 
+use TranslateWP\Components\CacheVersions;
+
 use PluboRoutes\Endpoint\GetEndpoint;
 use PluboRoutes\Endpoint\PostEndpoint;
 use TranslateWP\Components\TranslationSubscription;
@@ -269,10 +271,7 @@ class TranslationJobs extends BaseApiEndpoints {
 				],
 				null === $neighbours ? [] : [ 'neighbours' => $neighbours ],
 				[
-					'cache' => [
-						'siteId' => $site_id,
-						'hash'   => $hash,
-					],
+					'cache' => CacheVersions::cache_reference( $site_id, $hash, $language ),
 				]
 			);
 			$hashes[] = $hash;
@@ -1038,7 +1037,7 @@ class TranslationJobs extends BaseApiEndpoints {
 					'contextKind'   => $context_kind,
 				],
 				null === $neighbours ? [] : [ 'neighbours' => $neighbours ],
-				[ 'cache' => $cache ]
+				[ 'cache' => CacheVersions::cache_reference( $cache['siteId'], $cache['hash'], $job_languages['targetLang'] ) ]
 			);
 		}
 

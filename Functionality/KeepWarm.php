@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\PageExclusion;
+use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\DebouncedTask;
 use TranslateWP\Components\IndexQueue;
@@ -12,6 +13,7 @@ use TranslateWP\Components\TranslationStore;
 
 class KeepWarm {
 
+	public const VERSIONED_REFILL_HOOK = 'translatewp_versioned_refill';
 	public const LEXICON_DEBOUNCE_HOOK  = 'translatewp_lexicon_stale_debounce';
 	public const SETTINGS_DEBOUNCE_HOOK = 'translatewp_settings_rebuild_debounce';
 	public const PENDING_LANGUAGES_OPTION = 'translatewp_settings_rebuild_languages';
@@ -48,6 +50,7 @@ class KeepWarm {
 			10,
 			1
 		);
+		add_action( self::VERSIONED_REFILL_HOOK, [ $this, 'refill_versioned_changes' ] );
 		add_action( self::LEXICON_DEBOUNCE_HOOK, [ $this, 'mark_lexicon_stale' ] );
 		add_action( 'translatewp_localizer_settings_saved', [ $this, 'mark_localizer_stale' ] );
 		add_action( self::SETTINGS_DEBOUNCE_HOOK, [ $this, 'rebuild_after_settings_change' ] );
@@ -148,6 +151,7 @@ class KeepWarm {
 
 	public function mark_lexicon_stale(): void {
 		CacheVersions::bump_lexicon_version();
+		self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
 
 	/**
@@ -195,7 +199,7 @@ class KeepWarm {
 	 * older lexicon or localizer version, so the new terms or formats reach
 	 * the pages that already exist. Returns how many rows were queued.
 	 */
-	public static function retranslate_stale( string $group ): int {
+	public static function retranslate_stale( string $group, bool $force = false ): int {
 		if ( ! SiteConnection::is_connected() ) {
 			return 0;
 		}
@@ -206,23 +210,34 @@ class KeepWarm {
 			return 0;
 		}
 
-		$queued = $queue->enqueue_retranslate( $rows );
+		$queued = $queue->enqueue_retranslate( $rows, $force );
 		if ( $queued > 0 ) {
 			$languages = [];
 			foreach ( $rows as $row ) {
 				$languages[ (string) $row['language'] ] = true;
 			}
 			TranslationStore::bump_cache_generation( array_keys( $languages ) );
+			Indexer::schedule_drain();
+			LoopbackKick::fire();
 		}
 
 		return $queued;
 	}
 
+	public function refill_versioned_changes(): void {
+		self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER );
+	}
+
 	public static function apply_lexicon_now(): int {
+		LexiconChanges::flush();
+		if ( wp_next_scheduled( self::LEXICON_DEBOUNCE_HOOK ) ) {
+			wp_clear_scheduled_hook( self::LEXICON_DEBOUNCE_HOOK );
+		}
+
 		return self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
 
 	public static function apply_localizer_now(): int {
-		return self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER );
+		return self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER, true );
 	}
 }

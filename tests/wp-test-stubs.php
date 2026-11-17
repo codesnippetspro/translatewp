@@ -291,6 +291,9 @@ class WP_Testwpdb {
 	}
 
 	public function get_var( string $query ) {
+		if ( false !== strpos( $this->last_query, 'GET_LOCK(' ) || false !== strpos( $this->last_query, 'RELEASE_LOCK(' ) ) {
+			return '1';
+		}
 		unset( $query );
 
 		if ( false !== strpos( $this->last_query, 'SELECT payload FROM' ) ) {
@@ -1036,6 +1039,10 @@ function wp_update_nav_menu_item( $menu_id, $menu_item_db_id, $menu_item_data ) 
 
 function wp_setup_nav_menu_item( $menu_item ) {
 	return $menu_item;
+}
+
+function get_post_modified_time( $format = 'U', $gmt = false, $post = null ) {
+	return 0;
 }
 
 function get_post_status( $post_id ) {

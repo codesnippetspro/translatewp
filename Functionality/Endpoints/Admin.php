@@ -676,7 +676,7 @@ class Admin extends BaseApiEndpoints {
 
         update_post_meta( $post_id, Lexicon::LANGUAGES_META_KEY, $sanitized_languages );
 
-        do_action( 'translatewp_lexicon_changed' );
+        \TranslateWP\Functionality\LexiconChanges::flush();
 
         return [
             'id' => $post_id,
@@ -744,7 +744,7 @@ class Admin extends BaseApiEndpoints {
 
         update_post_meta( $post_id, Lexicon::LANGUAGES_META_KEY, $sanitized_languages );
 
-        do_action( 'translatewp_lexicon_changed' );
+        \TranslateWP\Functionality\LexiconChanges::flush();
 
         return [
             'id' => $post_id,
@@ -769,7 +769,7 @@ class Admin extends BaseApiEndpoints {
             return new \WP_Error( 'delete_failed', 'Failed to delete lexicon term', [ 'status' => 500 ] );
         }
 
-        do_action( 'translatewp_lexicon_changed' );
+        \TranslateWP\Functionality\LexiconChanges::flush();
 
         return [
             'id' => $post_id,

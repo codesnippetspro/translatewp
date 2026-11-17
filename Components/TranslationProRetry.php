@@ -37,8 +37,18 @@ class TranslationProRetry {
 			return self::own_providers_missing( $language );
 		}
 		$body = self::with_own_providers_when_wanted( $body, $job_id, $language );
+		if ( '/v1/translation/jobs' === $path ) {
+			$body['cacheVersions'] = CacheVersions::job_hint( $language );
+		}
 
 		$response = SiteRequests::post( $path, $body, $timeout_seconds );
+		if ( '/v1/translation/jobs' === $path && is_wp_error( $response ) ) {
+			$data = $response->get_error_data();
+			if ( is_array( $data ) && 409 === (int) ( $data['status'] ?? 0 ) && 'cache_revision_conflict' === ( $data['payload']['code'] ?? '' ) && is_array( $data['payload']['floor'] ?? null ) && CacheVersions::adopt_floor( $data['payload']['floor'], $language ) ) {
+				$body['cacheVersions'] = CacheVersions::job_hint( $language );
+				$response = SiteRequests::post( $path, $body, $timeout_seconds );
+			}
+		}
 		if ( self::is_pro_required( $response ) ) {
 			self::record_notice();
 

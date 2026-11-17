@@ -114,7 +114,7 @@ class Indexing extends BaseApiEndpoints {
 
 	/** The site's own loopback kick; signature and freshness are the permission. */
 	public function drain_now_permissions_check( $request ) {
-		return LoopbackKick::verify( (string) $request->get_param( 'ts' ), (string) $request->get_param( 'sig' ) );
+		return LoopbackKick::verify( sanitize_text_field( (string) $request->get_param( 'ts' ) ), sanitize_text_field( (string) $request->get_param( 'sig' ) ), sanitize_text_field( (string) $request->get_param( 'nonce' ) ) );
 	}
 
 	public function drain_now( $request ) {

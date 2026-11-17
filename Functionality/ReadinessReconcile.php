@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\IndexQueue;
+use TranslateWP\Components\TranslationStore;
 use TranslateWP\Components\ReadinessBudget;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationReadiness;
@@ -103,6 +104,17 @@ class ReadinessReconcile {
 			}
 			// A finished job is evidence; so are proven segments. A cancelled,
 			// forgotten or unrecorded job is not: the proofs decide for those.
+			if ( ! empty( $row['retranslating'] ) ) {
+				if ( 'done' !== $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) || ! TranslationReadiness::is_ready( $row ) ) {
+					continue;
+				}
+				$object_id = 'miss' === $row['object_type'] ? 0 : (int) $row['object_id'];
+				TranslationStore::hold_overwrite( $row['url'], $object_id, $row['language'], 0 );
+				TranslationStore::resolve_pending( $row['url'], $object_id, $row['language'], null, $budget );
+				if ( TranslationStore::pending_count( $row['url'], $row['language'], $object_id ) > 0 ) {
+					continue;
+				}
+			}
 			if ( TranslationReadiness::is_ready( $row ) || 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) ) {
 				$translated[] = (int) $row['id'];
 			}

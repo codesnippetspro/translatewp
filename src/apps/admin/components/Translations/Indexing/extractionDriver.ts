@@ -135,6 +135,7 @@ export type ScanProgress = {
 };
 
 export type IndexStatus = {
+    readerError?: string;
     firstPassDone?: boolean;
     languages: Record<string, LanguageIndexStatus>;
     /** How the reading stands, separate from translation. */

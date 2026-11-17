@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\PlainText;
+use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\PageExclusion;
 use TranslateWP\Components\PageCachePurge;
 use TranslateWP\Components\IndexQueue;
@@ -19,15 +20,18 @@ use TranslateWP\Components\TranslationProxyDedupe;
 use TranslateWP\Components\TranslationProxySettings;
 use TranslateWP\Components\TranslationReadiness;
 use TranslateWP\Components\TranslationUrl;
+use TranslateWP\Components\RenderedPageExtraction;
+use TranslateWP\Components\CrawlerRefillBudget;
 
 /**
  * Warm-up indexer (C3): enumerates public content into the index queue and
- * drains the push stage on WP-Cron. Extraction itself happens in the admin
- * browser with the production DOM extractor (fingerprint parity); this class
- * never parses DOM.
+ * drains rendered-page extraction and translation pushes on WP-Cron.
  */
 class Indexer {
 	public const JOB_POLL_CURSOR_OPTION = 'translatewp_job_poll_cursor';
+	public const SPINE_PENDING_OPTION = 'translatewp_spine_refresh_pending';
+	public const SPINE_CHECKED_OPTION = 'translatewp_spine_checked';
+	public const LOOPBACK_ERROR_TRANSIENT = 'translatewp_reader_loopback_error';
 	private const TERMINAL_JOB_OUTCOMES = [ 'done', 'cancelled', 'failed', 'expired', 'unknown' ];
 
 
@@ -63,6 +67,9 @@ class Indexer {
 	private const FALLBACK_LINK_CAP = 50;
 	private const TITLE_CONTEXT_KEY = 'seo:title';
 	private const TITLE_MARKER       = '⟪item_0001⟫';
+	private const PAGE_FETCH_TIMEOUT_SECONDS = 8;
+	private const PAGE_MAX_BYTES = 2097152;
+	private const PAGE_MAX_REDIRECTS = 3;
 
 	private IndexQueue $queue;
 
@@ -84,6 +91,64 @@ class Indexer {
 		add_action( 'init', [ IndexQueue::class, 'register_post_type' ], 5 );
 		add_action( self::DRAIN_HOOK, [ $this, 'drain_tick' ] );
 		add_action( 'translatewp_languages_saved', [ $this, 'on_languages_saved' ] );
+		add_action( 'init', [ $this, 'ensure_spine' ] );
+		add_action( 'update_option_page_on_front', [ $this, 'schedule_spine_refresh' ] );
+		add_action( 'update_option_show_on_front', [ $this, 'schedule_spine_refresh' ] );
+		add_action( 'wp_update_nav_menu', [ $this, 'schedule_spine_refresh' ] );
+		add_action( 'save_post_wp_navigation', [ $this, 'schedule_spine_refresh' ] );
+	}
+
+	public function ensure_spine(): void {
+		if ( SiteConnection::is_connected() && ! get_option( self::SPINE_CHECKED_OPTION, false ) ) {
+			update_option( self::SPINE_CHECKED_OPTION, true, false );
+			$this->schedule_spine_refresh();
+		}
+	}
+
+	public function schedule_spine_refresh(): void {
+		if ( SiteConnection::is_connected() ) {
+			update_option( self::SPINE_PENDING_OPTION, true, false );
+			self::schedule_drain();
+			LoopbackKick::fire();
+		}
+	}
+
+	public static function crawler_object_id( int $post_id, string $url ): int {
+		return $post_id > 0 || self::NOT_FOUND_OBJECT_ID === $post_id ? $post_id : (int) hexdec( substr( hash( 'sha256', TranslationUrl::canonicalize( $url ) ), 0, 7 ) );
+	}
+
+	public function refill_crawler_page( int $post_id, string $url, string $language ): void {
+		if ( ! SiteConnection::is_connected() || 0 >= $post_id || 'publish' !== get_post_status( $post_id ) || PageExclusion::is_excluded( $post_id ) || ! in_array( $language, $this->target_languages( null ), true ) ) {
+			return;
+		}
+		$url = (string) get_permalink( $post_id );
+		foreach ( $this->queue->failed_items( $language ) as $failed ) {
+			if ( (int) ( $failed['object_id'] ?? 0 ) === $post_id ) {
+				return;
+			}
+		}
+		$key = 'twp_crawler_refill_' . md5( TranslationUrl::canonicalize( $url ) . '|' . $language );
+		if ( get_transient( $key ) || ! CrawlerRefillBudget::admit() ) {
+			return;
+		}
+		set_transient( $key, true, self::RESCHEDULE_DELAY_SECONDS );
+		$type = $post_id > 0 ? (string) get_post_type( $post_id ) : ( self::NOT_FOUND_OBJECT_ID === $post_id ? self::NOT_FOUND_OBJECT_TYPE : 'archive' );
+		$id = self::crawler_object_id( $post_id, $url );
+		$row = [
+			'object_type' => $type,
+			'object_id' => $id,
+			'url' => $url,
+			'page_title' => $post_id > 0 ? PlainText::title( $post_id ) : '',
+			'language' => $language,
+			'priority' => self::PRIORITY_HOME,
+		];
+		if ( ! $this->queue->read_items( $type, $id ) ) {
+			$this->queue->enqueue_read( [ $row ] );
+		}
+		$this->queue->enqueue( [ $row ] );
+		$this->queue->enqueue_rewarm( [ $row ] );
+		self::schedule_drain();
+		LoopbackKick::fire();
 	}
 
 	/**
@@ -103,7 +168,8 @@ class Indexer {
 	 * Queue every spine page for reading, one row per page with no
 	 * language. The admin tab extracts them; nothing is sent to the service.
 	 */
-	public function enqueue_read_rows(): int {
+	public function enqueue_read_rows( bool $translate = false ): int {
+		$this->queue->delete_unpublished_rows();
 		$pins = get_option( self::PINS_OPTION, [] );
 		$pins = is_array( $pins ) ? array_map( 'intval', $pins ) : [];
 		$rows = [];
@@ -127,7 +193,15 @@ class Indexer {
 			];
 		}
 
-		return $rows ? $this->queue->enqueue_read( $rows ) : 0;
+		$queued = $rows ? $this->queue->enqueue_read( $rows ) : 0;
+		if ( $translate ) {
+			$this->queue->translate_after_reading();
+		}
+		if ( $queued > 0 ) {
+			self::schedule_drain();
+			LoopbackKick::fire();
+		}
+		return $queued;
 	}
 
 	/** Queue only the pages saved since they were read for a fresh reading. */
@@ -205,6 +279,9 @@ class Indexer {
 					]
 				);
 				if ( false !== $row_id ) {
+					if ( $force ) {
+						$this->queue->track_refill( (int) $row_id );
+					}
 					$queued++;
 				}
 			}
@@ -312,7 +389,12 @@ class Indexer {
 			}
 		}
 
-		$spine_ids = array_merge( $spine_ids, $menu_ids ? $menu_ids : $this->front_page_link_ids() );
+		$menu_ids = array_merge( $menu_ids, $this->block_navigation_ids() );
+		$fallback = $menu_ids ? $menu_ids : $this->front_page_link_ids();
+		if ( ! $fallback ) {
+			$fallback = $this->sitemap_ids( $types );
+		}
+		$spine_ids = array_merge( $spine_ids, $fallback );
 
 		$objects = $front_page > 0 ? [] : [ 0 => 'home' ];
 		// The "page not found" page is part of every site a visitor can reach.
@@ -369,6 +451,64 @@ class Indexer {
 		return 'posts' === get_option( 'show_on_front', 'page' ) ? 0 : (int) get_option( 'page_on_front', 0 );
 	}
 
+	private function block_navigation_ids(): array {
+		if ( ! function_exists( 'parse_blocks' ) ) {
+			return [];
+		}
+		$ids = [];
+		$visit = static function ( array $blocks ) use ( &$visit, &$ids ): void {
+			foreach ( $blocks as $block ) {
+				if ( in_array( $block['blockName'] ?? '', [ 'core/navigation-link', 'core/navigation-submenu' ], true ) ) {
+					$id = (int) ( $block['attrs']['id'] ?? 0 );
+					$url = (string) ( $block['attrs']['url'] ?? '' );
+					if ( 0 >= $id && '' !== $url ) {
+						$host = (string) wp_parse_url( $url, PHP_URL_HOST );
+						if ( '' === $host || (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) === $host ) {
+							$id = (int) url_to_postid( $url );
+						}
+					}
+					if ( 0 < $id ) {
+						$ids[] = $id;
+					}
+				}
+				$visit( is_array( $block['innerBlocks'] ?? null ) ? $block['innerBlocks'] : [] );
+			}
+		};
+		foreach ( get_posts(
+            [
+				'post_type' => 'wp_navigation',
+				'post_status' => 'publish',
+				'numberposts' => self::FALLBACK_LINK_CAP,
+			]
+        ) as $navigation ) {
+			$visit( parse_blocks( $navigation->post_content ) );
+		}
+		return array_values( array_unique( $ids ) );
+	}
+
+	private function sitemap_ids( array $types ): array {
+		if ( ! function_exists( 'wp_sitemaps_get_server' ) ) {
+			return [];
+		}
+		$provider = wp_sitemaps_get_server()->registry->get_provider( 'posts' );
+		if ( ! $provider ) {
+			return [];
+		}
+		$ids = [];
+		foreach ( $types as $type ) {
+			foreach ( $provider->get_url_list( 1, $type ) as $entry ) {
+				$id = (int) url_to_postid( (string) ( $entry['loc'] ?? '' ) );
+				if ( 0 < $id ) {
+					$ids[] = $id;
+				}
+				if ( count( $ids ) >= self::FALLBACK_LINK_CAP ) {
+					return array_values( array_unique( $ids ) );
+				}
+			}
+		}
+		return array_values( array_unique( $ids ) );
+	}
+
 	/**
 	 * Fallback spine source: same-host internal links on the rendered front
 	 * page, resolved to object ids, capped.
@@ -386,13 +526,9 @@ class Indexer {
 			return [];
 		}
 
-		$response = wp_remote_get( $front_url, [ 'timeout' => 15 ] );
-		if ( is_wp_error( $response ) ) {
-			return [];
-		}
-
-		$html = (string) wp_remote_retrieve_body( $response );
-		if ( '' === $html ) {
+		$html = $this->fetch_page( $front_url );
+		if ( is_wp_error( $html ) ) {
+			$this->reader_failed( $html->get_error_code() );
 			return [];
 		}
 
@@ -879,6 +1015,11 @@ class Indexer {
 		}
 
 		update_option( self::LAST_DRAIN_OPTION, time() );
+		if ( get_option( self::SPINE_PENDING_OPTION, false ) ) {
+			delete_option( self::SPINE_PENDING_OPTION );
+			$this->enqueue_read_rows( true );
+		}
+		$this->extract_pending_page();
 
 		$rows = $this->queue->claim_batch( IndexQueue::STAGE_PUSH, self::drain_batch_size() );
 
@@ -913,24 +1054,92 @@ class Indexer {
 		$counts = $this->queue->counts();
 		$this->report_completed_languages( $counts );
 
-		if ( $this->has_pending( $counts ) ) {
+		if ( $this->has_pending( $counts ) || (int) $this->queue->read_counts()['pending'] > 0 ) {
 			self::schedule_drain( self::drain_reschedule_delay() );
+			register_shutdown_function( [ LoopbackKick::class, 'fire' ] );
 		}
 
 		return $result;
 	}
 
-	/**
-	 * Push one language's claimed rows as a single job/batch; charges
-	 * failures and completes successes on the queue.
-	 *
-	 * @param string $language      Target language of every row.
-	 * @param array  $language_rows Rows of [ id, items ].
-	 * @param array  $result        Drain counters, mutated in place.
-	 * @param bool   $retranslate   Force the API to overwrite its cache for this
-	 *                              batch instead of treating a fingerprint match
-	 *                              as a cache hit.
-	 */
+	private function extract_pending_page(): void {
+		$rows = $this->claim_extract_batch( 1 );
+		if ( ! $rows ) {
+			return;
+		}
+		$row = $rows[0];
+		$html = $this->fetch_page( (string) $row['url'], self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] );
+		if ( is_wp_error( $html ) ) {
+			$this->reader_failed( $html->get_error_code() );
+			$this->queue->fail( (int) $row['id'], $html->get_error_code() );
+			return;
+		}
+		try {
+			$this->submit_extraction( (int) $row['id'], RenderedPageExtraction::extract( $html ) );
+		} catch ( \RuntimeException $error ) {
+			$this->reader_failed( $error->getMessage() );
+			$this->queue->fail( (int) $row['id'], $error->getMessage() );
+		}
+	}
+
+	private function reader_failed( string $code ): void {
+		set_transient( self::LOOPBACK_ERROR_TRANSIENT, $code, self::LAST_DRAIN_STALE_SECONDS );
+		\TranslateWP\Components\ActionLog::record( 'The background reader could not read a page: ' . $code, 'warning' );
+	}
+
+	private function fetch_page( string $url, bool $expect_not_found = false ) {
+		if ( ! TranslationUrl::is_indexable_url( $url ) ) {
+			return new \WP_Error( 'page_redirected', 'page_redirected' );
+		}
+		$home = wp_parse_url( home_url( '/' ) );
+		$started = microtime( true );
+		for ( $redirects = 0; $redirects <= self::PAGE_MAX_REDIRECTS; $redirects++ ) {
+			$target = wp_parse_url( $url );
+			if ( ! is_array( $target ) || ( $target['host'] ?? '' ) !== ( $home['host'] ?? '' )
+				|| ( $target['port'] ?? null ) !== ( $home['port'] ?? null ) || ( $target['scheme'] ?? '' ) !== ( $home['scheme'] ?? '' )
+				|| isset( $target['user'] ) || isset( $target['pass'] ) || ! TranslationUrl::is_indexable_url( $url ) ) {
+				return new \WP_Error( 'page_redirected', 'page_redirected' );
+			}
+			$remaining = self::PAGE_FETCH_TIMEOUT_SECONDS - ( microtime( true ) - $started );
+			if ( $remaining <= 0 ) {
+				return new \WP_Error( 'page_fetch_timeout', 'page_fetch_timeout' );
+			}
+			$response = wp_remote_get(
+                $url,
+                [
+					'timeout' => $remaining,
+					'redirection' => 0,
+					'limit_response_size' => self::PAGE_MAX_BYTES,
+					'sslverify' => true,
+					'reject_unsafe_urls' => true,
+					'cookies' => [],
+				]
+            );
+			if ( is_wp_error( $response ) ) {
+				$code = LoopbackKick::failure_reason( $response );
+				return new \WP_Error( $code, $code );
+			}
+			$status = (int) wp_remote_retrieve_response_code( $response );
+			if ( $status >= 300 && $status < 400 ) {
+				$location = (string) wp_remote_retrieve_header( $response, 'location' );
+				$url = \WP_Http::make_absolute_url( $location, $url );
+				if ( '' !== $location && $redirects < self::PAGE_MAX_REDIRECTS ) {
+					continue;
+				}
+			}
+			if ( ( $status < 200 || $status >= 300 ) && ! ( 404 === $status && $expect_not_found ) ) {
+				return new \WP_Error( 'page_fetch_' . $status, 'page_fetch_' . $status );
+			}
+			$html = (string) wp_remote_retrieve_body( $response );
+			$type = (string) wp_remote_retrieve_header( $response, 'content-type' );
+			if ( strlen( $html ) >= self::PAGE_MAX_BYTES || ( '' !== $type && ! preg_match( '~text/html|application/xhtml\+xml~i', $type ) ) ) {
+				return new \WP_Error( 'page_not_html', 'page_not_html' );
+			}
+			return $html;
+		}
+		return new \WP_Error( 'page_redirected', 'page_redirected' );
+	}
+
 	private function push_language_rows( string $language, array $language_rows, array &$result, bool $retranslate = false ): void {
 		// Every segment leaves under the fingerprint this site computes for
 		// it (its source language, the target and its own model profile),
@@ -947,6 +1156,12 @@ class Indexer {
 		$readiness_items = [];
 		foreach ( $language_rows as &$language_row ) {
 			if ( self::MISS_OBJECT_TYPE === (string) ( $language_row['object_type'] ?? '' ) ) {
+				foreach ( $language_row['items'] as &$miss_item ) {
+					if ( empty( $miss_item['cache']['hash'] ) ) {
+						$miss_item = $this->stamp_hashes( $language, [ $miss_item ] )[0];
+					}
+				}
+				unset( $miss_item );
 				$readiness_items[ (int) $language_row['id'] ] = $language_row['items'];
 				continue;
 			}
@@ -963,7 +1178,7 @@ class Indexer {
 			$readiness_items[ (int) $language_row['id'] ] = $language_row['items'];
 			// A forced retranslation overwrites whatever is in flight or
 			// cached, so it pushes every segment.
-			if ( ! empty( $language_row['retranslate'] ) ) {
+			if ( ! empty( $language_row['retranslate'] ) || ! empty( $language_row['retranslating'] ) ) {
 				continue;
 			}
 			$owned = [];
@@ -1013,7 +1228,7 @@ class Indexer {
 					(int) $language_row['id'],
 					$language,
 					$readiness_items[ (int) $language_row['id'] ] ?? [],
-					! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
+					! empty( $language_row['retranslating'] ) || ! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
 				);
 				$this->queue->complete( $language_row['id'] );
 				// Nothing was sent: every segment was already translated.
@@ -1034,6 +1249,18 @@ class Indexer {
 			return;
 		}
 		$job_id = $job['id'];
+		foreach ( $batch_items as &$item ) {
+			$item['cache'] = CacheVersions::cache_reference( $site_id, $item['cache']['hash'], $language );
+		}
+		unset( $item );
+		foreach ( $store_rows as &$store_row ) {
+			$this->queue->remember_versions( (int) $store_row['id'] );
+			foreach ( $store_row['items'] as &$item ) {
+				$item['cache'] = CacheVersions::cache_reference( $site_id, $item['cache']['hash'], $language );
+			}
+			unset( $item );
+		}
+		unset( $store_row );
 
 		$base_body = [
 			'batchId'    => 'index-' . (int) $language_rows[0]['id'],
@@ -1080,13 +1307,16 @@ class Indexer {
 				(int) $language_row['id'],
 				$language,
 				$readiness_items[ (int) $language_row['id'] ] ?? [],
-				! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
+				! empty( $language_row['retranslating'] ) || ! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
 			);
 			$this->queue->complete( $language_row['id'] );
 			$result['processed']++;
 		}
 
 		$this->announce_pushed_rows( $language, $store_rows );
+		if ( ! wp_next_scheduled( ReadinessReconcile::HOOK ) ) {
+			wp_schedule_single_event( time() + self::RESCHEDULE_DELAY_SECONDS, ReadinessReconcile::HOOK );
+		}
 	}
 
 	/**
@@ -1215,10 +1445,7 @@ class Indexer {
 				continue;
 			}
 			$seen[ $hash ] = true;
-			$item['cache'] = [
-				'siteId' => $site_id,
-				'hash'   => $hash,
-			];
+			$item['cache'] = CacheVersions::cache_reference( $site_id, $hash, $language );
 			$stamped[]     = $item;
 		}
 
@@ -1246,6 +1473,7 @@ class Indexer {
 			'object_type' => (string) ( $row['object_type'] ?? '' ),
 			'object_id'   => (int) ( $row['object_id'] ?? 0 ),
 			'retranslate' => $retranslate,
+			'retranslating' => ! empty( $row['retranslating'] ),
 		];
 	}
 
@@ -1388,6 +1616,7 @@ class Indexer {
 		}
 
 		return [
+			'readerError' => (string) get_transient( self::LOOPBACK_ERROR_TRANSIENT ),
 			'firstPassDone'      => $first_pass_done,
 			'languages'          => $languages,
 			'read'               => $this->queue->read_counts(),

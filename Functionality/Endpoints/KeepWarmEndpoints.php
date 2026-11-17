@@ -81,6 +81,18 @@ class KeepWarmEndpoints extends BaseApiEndpoints {
 	public function stale_translations( $request ) {
 		unset( $request );
 
-		return ( new IndexQueue() )->stale_counts();
+		$queue = new IndexQueue();
+		$result = $queue->stale_counts();
+		$result['refill'] = [
+			'pending' => 0,
+			'failed' => 0,
+		];
+		foreach ( $queue->list_rows() as $row ) {
+			if ( ! empty( $row['retranslating'] ) ) {
+				$key = IndexQueue::STATUS_DEAD === $row['status'] ? 'failed' : 'pending';
+				$result['refill'][ $key ]++;
+			}
+		}
+		return $result;
 	}
 }

@@ -11,17 +11,6 @@ use TranslateWP\Components\PageTextTranslator;
 use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\TranslationStore;
 
-/**
- * What a crawler receives at a translated address. People get the page and
- * the browser runtime translates it; a crawler gets one of two finished
- * pages instead, and never the runtime:
- *
- * - the complete translation, when every text of the page has one, or
- * - the original page with a canonical to its source address and a
- *   Retry-After, when anything is still missing.
- *
- * It is never served part of a translation.
- */
 class CrawlerResponse {
 
 	public const RETRY_AFTER_SECONDS = 600;
@@ -85,14 +74,26 @@ class CrawlerResponse {
 	public function render( string $html ): string {
 		$locale  = LanguageUrl::requested_locale();
 		$is_404  = function_exists( 'is_404' ) && is_404();
-		$post_id = $is_404 ? Indexer::NOT_FOUND_OBJECT_ID : (int) get_queried_object_id();
+		$post_id = $is_404 ? Indexer::NOT_FOUND_OBJECT_ID : ( ! function_exists( 'is_singular' ) || is_singular() ? (int) get_queried_object_id() : 0 );
+		if ( 0 === $post_id && function_exists( 'is_home' ) && is_home() ) {
+			$post_id = (int) get_option( 'page_for_posts', 0 );
+		}
+		if ( 0 === $post_id && function_exists( 'is_shop' ) && is_shop() && function_exists( 'wc_get_page_id' ) ) {
+			$post_id = max( 0, (int) wc_get_page_id( 'shop' ) );
+		}
 		$source  = $post_id > 0
 			? (string) get_permalink( $post_id )
 			: ( $is_404 ? home_url( '/' . Indexer::NOT_FOUND_PATH . '/' ) : home_url( '/' ) );
 
 		// First the whole page from the service's cache, the site's header and
 		// footer included; failing that, what this page's own store holds.
-		$map = CrawlerTranslation::map( $post_id, $locale );
+		if ( 0 === $post_id ) {
+			$home = wp_parse_url( home_url( '/' ) );
+			$path = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+			$source = LanguageUrl::source( ( $home['scheme'] ?? 'https' ) . '://' . $home['host'] . ( isset( $home['port'] ) ? ':' . $home['port'] : '' ) . '/' . ltrim( $path, '/' ) );
+		}
+		$map = CrawlerTranslation::map( $post_id, $locale, null, $source );
+		$indexed = ! empty( $map );
 		if ( ! $map ) {
 			TranslationStore::resolve_pending( $source, $post_id, $locale );
 			$map = 0 === TranslationStore::pending_count( $source, $locale, $post_id )
@@ -106,11 +107,12 @@ class CrawlerResponse {
 				? PageTextTranslator::TRANSLATED_ATTRIBUTES
 				: array_values( array_diff( PageTextTranslator::TRANSLATED_ATTRIBUTES, [ 'alt' ] ) );
 			$translated = PageTextTranslator::translate( $html, $map, $attributes );
-			if ( 0 === $translated['missing'] && $translated['translated'] > 0 ) {
+			if ( ( $indexed || 0 === $translated['missing'] ) && $translated['translated'] > 0 ) {
 				return $translated['html'];
 			}
 		}
 
+		( new Indexer() )->refill_crawler_page( $post_id, $source, $locale );
 		return $this->original_page( $html, $source );
 	}
 

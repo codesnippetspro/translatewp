@@ -99,7 +99,7 @@ export class NodeFilter
         let node: Node | null = element;
 
         while (node) {
-            if (SKIP_TAGS.has(node.nodeName)) return true;
+            if (SKIP_TAGS.has(node.nodeName.toUpperCase())) return true;
             node = node.parentElement;
         }
 

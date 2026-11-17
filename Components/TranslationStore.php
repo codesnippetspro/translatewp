@@ -60,7 +60,7 @@ class TranslationStore {
 	 * Record the source segments of one indexed URL and locale as pending
 	 * translation. Segments are [ hash, markerPayload ] pairs.
 	 */
-	public static function record_pending( string $url, int $post_id, string $locale, string $source_lang, array $segments ): bool {
+	public static function record_pending( string $url, int $post_id, string $locale, string $source_lang, array $segments, bool $replacement = false ): bool {
 		$url    = trim( $url );
 		$locale = trim( $locale );
 		if ( '' === $url || '' === $locale || ! $segments ) {
@@ -70,11 +70,18 @@ class TranslationStore {
 		$target = self::resolve_target( $url, $post_id );
 
 		self::locked(
-			static function () use ( $target, $url, $locale, $source_lang, $segments ): void {
+			static function () use ( $target, $url, $locale, $source_lang, $segments, $replacement ): void {
 				$entry = self::read_entry( $target, $locale );
 
 				$entry['source_lang'] = '' !== $source_lang ? $source_lang : (string) $entry['source_lang'];
 				$entry['url']         = $url;
+				$entry['replacement'] = $replacement || $entry['replacement'];
+				foreach ( $segments as $segment ) {
+					$entry['settings_version'] = max( $entry['settings_version'], (int) ( $segment['settingsVersion'] ?? CacheVersions::settings_version() ) );
+					$entry['lexicon_version'] = max( $entry['lexicon_version'], (int) ( $segment['lexiconVersion'] ?? CacheVersions::lexicon_version_for( $locale ) ) );
+					$entry['lexicon_changed_at'] = max( $entry['lexicon_changed_at'], (int) ( $segment['lexiconChangedAt'] ?? CacheVersions::lexicon_changed_at( $locale ) ) );
+					$entry['settings_changed_at'] = max( $entry['settings_changed_at'], (int) ( $segment['settingsChangedAt'] ?? Options::get( 'cache.localizer_changed_at', 0 ) ) );
+				}
 
 				foreach ( $segments as $segment ) {
 					$hash    = isset( $segment['hash'] ) ? (string) $segment['hash'] : '';
@@ -113,7 +120,7 @@ class TranslationStore {
 	 * is fn( string $locale, array $hashes ): array<string,?string> and defaults
 	 * to the API cache.
 	 */
-	public static function resolve_pending( string $url, int $post_id, string $locale, ?callable $lookup = null ): int {
+	public static function resolve_pending( string $url, int $post_id, string $locale, ?callable $lookup = null, ?ReadinessBudget $budget = null ): int {
 		$locale = trim( $locale );
 		if ( '' === $locale ) {
 			return 0;
@@ -130,11 +137,20 @@ class TranslationStore {
 			return 0;
 		}
 
-		$lookup     = $lookup ?? [ self::class, 'remote_lookup' ];
+		$revision = [
+			'settingsVersion' => $entry['settings_version'],
+			'lexiconVersion' => $entry['lexicon_version'],
+			'lexiconChangedAt' => $entry['lexicon_changed_at'],
+			'settingsChangedAt' => $entry['settings_changed_at'],
+		];
+		$lookup = $lookup ?? static fn( string $language, array $hashes ): array => self::lookup_revision( $language, $hashes, $revision, $budget ? $budget->remaining_seconds() : SiteRequests::DEFAULT_TIMEOUT_SECONDS );
 		$hashes     = array_keys( $entry['pending'] );
 		$translated = [];
 
 		foreach ( array_chunk( $hashes, self::LOOKUP_BATCH_SIZE ) as $chunk ) {
+			if ( null !== $budget && $budget->remaining_seconds() <= 0 ) {
+				break;
+			}
 			$items = call_user_func( $lookup, $locale, $chunk );
 			if ( ! is_array( $items ) || ! $items ) {
 				continue;
@@ -156,9 +172,12 @@ class TranslationStore {
 		// recorded by another request in the meantime are kept.
 		$complete = false;
 		$resolved = (int) self::locked(
-			static function () use ( $target, $locale, $translated, &$complete ): int {
+			static function () use ( $target, $locale, $translated, $revision, &$complete ): int {
 				$entry    = self::read_entry( $target, $locale );
 				$resolved = 0;
+				if ( $entry['settings_version'] !== $revision['settingsVersion'] || $entry['lexicon_version'] !== $revision['lexiconVersion'] || $entry['lexicon_changed_at'] !== $revision['lexiconChangedAt'] || $entry['settings_changed_at'] !== $revision['settingsChangedAt'] || $entry['hold_until'] > self::now() ) {
+					return 0;
+				}
 
 				foreach ( $translated as $hash => $translated_payload ) {
 					if ( ! isset( $entry['pending'][ $hash ] ) ) {
@@ -172,6 +191,9 @@ class TranslationStore {
 				}
 
 				if ( $resolved > 0 ) {
+					if ( ! $entry['pending'] ) {
+						$entry['replacement'] = false;
+					}
 					$entry['stored_at'] = self::now();
 					self::write_entry( $target, $locale, $entry );
 					$complete = ! $entry['pending'];
@@ -441,7 +463,10 @@ class TranslationStore {
 			// A row gives up after MAX_BACKFILL_ATTEMPTS misses: its pending hashes are dropped.
 			$item['attempts'] = (int) ( $item['attempts'] ?? 0 ) + 1;
 			if ( $item['attempts'] >= self::MAX_BACKFILL_ATTEMPTS ) {
-				self::drop_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'] );
+				$entry = self::read_entry( self::resolve_target( (string) $item['url'], (int) $item['post_id'] ), (string) $item['locale'] );
+				if ( ! $entry['replacement'] ) {
+					self::drop_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'] );
+				}
 				$done[ $key ] = $item;
 				continue;
 			}
@@ -704,6 +729,11 @@ class TranslationStore {
 	 *
 	 * @return array<string,?string>
 	 */
+	private static function lookup_revision( string $locale, array $hashes, array $revision, int|float $timeout = SiteRequests::DEFAULT_TIMEOUT_SECONDS ): array {
+		$result = self::remote_lookup_result( $locale, $hashes, $timeout, $revision );
+		return is_wp_error( $result ) ? [] : $result;
+	}
+
 	public static function remote_lookup( string $locale, array $hashes ): array {
 		$items = self::remote_lookup_result( $locale, $hashes );
 
@@ -717,7 +747,7 @@ class TranslationStore {
 	 *
 	 * @return array<string,?string>|\WP_Error
 	 */
-	public static function remote_lookup_result( string $locale, array $hashes, int|float $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS ) {
+	public static function remote_lookup_result( string $locale, array $hashes, int|float $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS, ?array $revision = null ) {
 		$site_id = Sites::registered_id();
 		if ( '' === $site_id || ! $hashes ) {
 			return [];
@@ -730,6 +760,10 @@ class TranslationStore {
 				'language'  => $locale,
 				'hashes'    => array_values( $hashes ),
 				'hydration' => true,
+				'settingsVersion' => (int) ( $revision['settingsVersion'] ?? CacheVersions::settings_version() ),
+				'lexiconVersion' => (int) ( $revision['lexiconVersion'] ?? CacheVersions::lexicon_version_for( $locale ) ),
+				'lexiconChangedAt' => (int) ( $revision['lexiconChangedAt'] ?? CacheVersions::lexicon_changed_at( $locale ) ),
+				'settingsChangedAt' => (int) ( $revision['settingsChangedAt'] ?? Options::get( 'cache.localizer_changed_at', 0 ) ),
 			],
 			$timeout_seconds
 		);
@@ -859,6 +893,11 @@ class TranslationStore {
 			'url'         => '',
 			'stored_at'   => 0,
 			'hold_until'  => 0,
+			'settings_version' => 0,
+			'lexicon_version' => 0,
+			'replacement' => false,
+			'lexicon_changed_at' => 0,
+			'settings_changed_at' => 0,
 			'map'         => [],
 			'pending'     => [],
 		];
@@ -875,6 +914,11 @@ class TranslationStore {
 			'url'         => (string) ( $entry['url'] ?? '' ),
 			'stored_at'   => (int) ( $entry['stored_at'] ?? 0 ),
 			'hold_until'  => (int) ( $entry['hold_until'] ?? 0 ),
+			'settings_version' => (int) ( $entry['settings_version'] ?? 0 ),
+			'lexicon_version' => (int) ( $entry['lexicon_version'] ?? 0 ),
+			'replacement' => ! empty( $entry['replacement'] ),
+			'lexicon_changed_at' => (int) ( $entry['lexicon_changed_at'] ?? 0 ),
+			'settings_changed_at' => (int) ( $entry['settings_changed_at'] ?? 0 ),
 			'map'         => is_array( $entry['map'] ?? null ) ? $entry['map'] : [],
 			'pending'     => is_array( $entry['pending'] ?? null ) ? $entry['pending'] : [],
 		];

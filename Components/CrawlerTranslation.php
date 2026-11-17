@@ -28,14 +28,14 @@ class CrawlerTranslation {
 	 * @param string        $locale  The translation language.
 	 * @param callable|null $lookup  fn( string $locale, string[] $hashes ): array|\WP_Error, the service's cache by default.
 	 */
-	public static function map( int $post_id, string $locale, ?callable $lookup = null ): array {
-		$cached = get_transient( self::cache_key( $post_id, $locale ) );
+	public static function map( int $post_id, string $locale, ?callable $lookup = null, ?string $source_url = null ): array {
+		$cached = get_transient( self::cache_key( $post_id, $locale, $source_url ) );
 		if ( is_array( $cached ) ) {
 			return $cached;
 		}
 
-		$map = self::build( $post_id, $locale, $lookup ?? [ TranslationStore::class, 'remote_lookup_result' ] );
-		set_transient( self::cache_key( $post_id, $locale ), $map, $map ? self::COMPLETE_TTL : self::INCOMPLETE_TTL );
+		$map = self::build( $post_id, $locale, $lookup ?? [ TranslationStore::class, 'remote_lookup_result' ], $source_url );
+		set_transient( self::cache_key( $post_id, $locale, $source_url ), $map, $map ? self::COMPLETE_TTL : self::INCOMPLETE_TTL );
 
 		return $map;
 	}
@@ -44,10 +44,14 @@ class CrawlerTranslation {
 		delete_transient( self::cache_key( $post_id, $locale ) );
 	}
 
-	private static function build( int $post_id, string $locale, callable $lookup ): array {
+	private static function build( int $post_id, string $locale, callable $lookup, ?string $source_url ): array {
 		$object_type = $post_id > 0
 			? (string) get_post_type( $post_id )
 			: ( \TranslateWP\Functionality\Indexer::NOT_FOUND_OBJECT_ID === $post_id ? \TranslateWP\Functionality\Indexer::NOT_FOUND_OBJECT_TYPE : 'home' );
+		if ( 0 === $post_id && null !== $source_url ) {
+			$object_type = 'archive';
+			$post_id = \TranslateWP\Functionality\Indexer::crawler_object_id( $post_id, $source_url );
+		}
 		$items       = ( new IndexQueue() )->read_items( $object_type, $post_id );
 		if ( ! $items ) {
 			return [];
@@ -97,7 +101,7 @@ class CrawlerTranslation {
 		return $map;
 	}
 
-	private static function cache_key( int $post_id, string $locale ): string {
-		return self::CACHE_PREFIX . md5( $post_id . '|' . $locale . '|' . TranslationStore::cache_generation_for( $locale ) );
+	private static function cache_key( int $post_id, string $locale, ?string $source_url = null ): string {
+		return self::CACHE_PREFIX . md5( $post_id . '|' . ( 0 === $post_id ? ( $source_url ?? '' ) : '' ) . '|' . $locale . '|' . TranslationStore::cache_generation_for( $locale ) );
 	}
 }

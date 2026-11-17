@@ -56,11 +56,13 @@ class IndexQueue {
 	private const META_JOB_OUTCOME = '_twp_job_outcome';
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
+	private const META_REFILL_FINISHED = '_twp_refill_finished';
 	// A read row re-queued because its page changed; its next reading is translated.
 	private const META_TRANSLATE_ON_READ = '_twp_translate_on_read';
 	// The lexicon and localizer versions a finished row was translated under.
 	private const META_LEXICON_VERSION   = '_twp_lexicon_version';
 	private const META_LOCALIZER_VERSION = '_twp_localizer_version';
+	private const META_SETTINGS_VERSION = '_twp_settings_version';
 
 	public const STALE_GROUP_LEXICON   = 'lexicon';
 	public const STALE_GROUP_LOCALIZER = 'localizer';
@@ -101,6 +103,28 @@ class IndexQueue {
 
 	public static function delete_all(): void {
 		CleanupInventory::delete_posts_of_type( self::POST_TYPE );
+	}
+
+	public function delete_unpublished_rows(): int {
+		$deleted = 0;
+		foreach ( $this->all_row_ids() as $id ) {
+			$type = (string) get_post_meta( $id, self::META_OBJECT_TYPE, true );
+			$object_id = (int) get_post_meta( $id, self::META_OBJECT_ID, true );
+			if ( $object_id > 0 && ! in_array( $type, [ 'miss', 'archive' ], true ) && 'publish' !== get_post_status( $object_id ) ) {
+				if ( wp_delete_post( $id, true ) ) {
+					$deleted++;
+				}
+			}
+		}
+		return $deleted;
+	}
+
+	public function translate_after_reading(): void {
+		foreach ( $this->all_row_ids() as $id ) {
+			if ( self::READ_LANGUAGE === (string) get_post_meta( $id, self::META_LANGUAGE, true ) && self::STATUS_PENDING === $this->row_status( $id ) ) {
+				update_post_meta( $id, self::META_TRANSLATE_ON_READ, 1 );
+			}
+		}
 	}
 
 	/**
@@ -305,7 +329,7 @@ class IndexQueue {
 	 * title on the request is carried onto the row. Returns how many rows were
 	 * (re)queued.
 	 */
-	public function enqueue_retranslate( array $rows ): int {
+	public function enqueue_retranslate( array $rows, bool $force = true ): int {
 		$queued = 0;
 
 		foreach ( $rows as $row ) {
@@ -332,8 +356,9 @@ class IndexQueue {
 							self::META_PRIORITY    => (int) $row['priority'],
 							self::META_ATTEMPTS    => 0,
 							self::META_FAIL_REASON => '',
-							self::META_RETRANSLATE => 1,
+							self::META_RETRANSLATE => $force ? 1 : 0,
 							self::META_RETRANSLATING => 1,
+							self::META_REFILL_FINISHED => 0,
 						],
 					],
 					false
@@ -345,8 +370,9 @@ class IndexQueue {
 				continue;
 			}
 
-			update_post_meta( $existing_id, self::META_RETRANSLATE, 1 );
+			update_post_meta( $existing_id, self::META_RETRANSLATE, $force ? 1 : 0 );
 			update_post_meta( $existing_id, self::META_RETRANSLATING, 1 );
+			delete_post_meta( $existing_id, self::META_REFILL_FINISHED );
 			if ( empty( $row['self_heal'] ) ) {
 				delete_post_meta( $existing_id, self::META_COLD_RETRIES );
 				delete_post_meta( $existing_id, self::META_COLD_EXHAUSTED );
@@ -410,6 +436,7 @@ class IndexQueue {
 				'stage'       => (string) get_post_meta( $post_id, self::META_STAGE, true ),
 				'status'      => $this->row_status( $post_id ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
+				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
 				'reason'      => (string) get_post_meta( $post_id, self::META_FAIL_REASON, true ),
 				'updated'     => (int) get_post_meta( $post_id, self::META_UPDATED_AT, true ),
 				'claimed_at'  => (int) get_post_meta( $post_id, self::META_CLAIMED_AT, true ),
@@ -437,10 +464,51 @@ class IndexQueue {
 			if ( self::STATUS_DONE !== $this->row_status( (int) $id ) ) {
 				continue;
 			}
-			delete_post_meta( (int) $id, self::META_RETRANSLATING );
 			if ( (int) get_post_meta( (int) $id, self::META_TRANSLATED_AT, true ) <= 0 ) {
 				update_post_meta( (int) $id, self::META_TRANSLATED_AT, $this->now() );
 			}
+		}
+		$this->settle_refills();
+	}
+
+	public function settle_refills(): void {
+		$languages = [];
+		foreach ( $this->all_row_ids() as $id ) {
+			if ( get_post_meta( $id, self::META_RETRANSLATING, true ) && ! get_post_meta( $id, self::META_REFILL_FINISHED, true ) ) {
+				$languages[ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] = true;
+			}
+		}
+		$this->finish_refills( array_keys( $languages ) );
+	}
+
+	private function finish_refills( array $languages ): void {
+		foreach ( $languages as $language ) {
+			MutationLock::run(
+                'refill_' . $language,
+                function () use ( $language ): void {
+					$rows = [];
+					$pending = false;
+					$unannounced = false;
+					foreach ( $this->all_row_ids() as $id ) {
+						wp_cache_delete( (string) $id, 'post_meta' );
+						if ( (string) get_post_meta( $id, self::META_LANGUAGE, true ) !== $language || ! get_post_meta( $id, self::META_RETRANSLATING, true ) ) {
+							continue;
+						}
+						$rows[] = $id;
+						$pending = $pending || ( self::STATUS_DEAD !== $this->row_status( $id ) && ! $this->is_translated( $id ) );
+						$unannounced = $unannounced || ! get_post_meta( $id, self::META_REFILL_FINISHED, true );
+					}
+					if ( ! $pending && $unannounced ) {
+						if ( ! TranslationReadiness::complete_refill( $language ) ) {
+							return;
+						}
+						PageCachePurge::purge_all( 'retranslation settled' );
+						foreach ( $rows as $id ) {
+							update_post_meta( $id, self::META_REFILL_FINISHED, 1 );
+						}
+					}
+				}
+            );
 		}
 	}
 
@@ -703,6 +771,7 @@ class IndexQueue {
 				'payload'     => self::decode_payload( (string) get_post_field( 'post_content', $post_id ) ),
 				'attempts'    => (int) get_post_meta( $post_id, self::META_ATTEMPTS, true ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
+				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
 			];
 		}
 
@@ -764,6 +833,7 @@ class IndexQueue {
 				'payload'     => self::decode_payload( (string) get_post_field( 'post_content', $post_id ) ),
 				'attempts'    => (int) get_post_meta( $post_id, self::META_ATTEMPTS, true ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
+				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
 			];
 		}
 
@@ -959,6 +1029,12 @@ class IndexQueue {
 			return [];
 		}
 
+		if ( $object_id > 0 && ! in_array( $object_type, [ 'archive', 'miss' ], true ) ) {
+			$modified = (int) get_post_modified_time( 'U', true, $object_id );
+			if ( 'publish' !== get_post_status( $object_id ) || $modified > (int) get_post_meta( $row_id, self::META_UPDATED_AT, true ) ) {
+				return [];
+			}
+		}
 		return $this->read_row( $row_id )['items'];
 	}
 
@@ -1199,6 +1275,17 @@ class IndexQueue {
 		return true;
 	}
 
+	public function track_refill( int $id ): void {
+		update_post_meta( $id, self::META_RETRANSLATING, 1 );
+		delete_post_meta( $id, self::META_REFILL_FINISHED );
+	}
+
+	public function remember_versions( int $id ): void {
+		update_post_meta( $id, self::META_LEXICON_VERSION, CacheVersions::lexicon_version_for( (string) get_post_meta( $id, self::META_LANGUAGE, true ) ) );
+		update_post_meta( $id, self::META_LOCALIZER_VERSION, CacheVersions::localizer_version() );
+		update_post_meta( $id, self::META_SETTINGS_VERSION, CacheVersions::settings_version() );
+	}
+
 	public function complete( int $id ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
@@ -1208,8 +1295,9 @@ class IndexQueue {
 		update_post_meta( $id, self::META_FAIL_REASON, '' );
 		update_post_meta( $id, self::META_UPDATED_AT, $this->now() );
 		delete_post_meta( $id, self::META_TRANSLATED_AT );
-		update_post_meta( $id, self::META_LEXICON_VERSION, CacheVersions::lexicon_version() );
-		update_post_meta( $id, self::META_LOCALIZER_VERSION, CacheVersions::localizer_version() );
+		if ( '' === get_post_meta( $id, self::META_LEXICON_VERSION, true ) ) {
+			$this->remember_versions( $id );
+		}
 		delete_post_meta( $id, self::META_RETRANSLATE );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 		wp_update_post(
@@ -1228,15 +1316,17 @@ class IndexQueue {
 	 *
 	 * @param string $group STALE_GROUP_LEXICON or STALE_GROUP_LOCALIZER.
 	 */
-	public function stale_rows( string $group ): array {
+	public function stale_rows( string $group, ?int $revision = null ): array {
 		$meta_key = self::STALE_GROUP_LOCALIZER === $group ? self::META_LOCALIZER_VERSION : self::META_LEXICON_VERSION;
-		$current  = self::STALE_GROUP_LOCALIZER === $group ? CacheVersions::localizer_version() : CacheVersions::lexicon_version();
+		$current = $revision ?? ( self::STALE_GROUP_LOCALIZER === $group ? CacheVersions::localizer_version() : CacheVersions::lexicon_version() );
 		$rows     = [];
 
 		foreach ( $this->all_row_ids() as $post_id ) {
 			if ( self::STATUS_DONE !== $this->row_status( $post_id ) || ! $this->is_target_row( $post_id ) ) {
 				continue;
 			}
+			$language = (string) get_post_meta( $post_id, self::META_LANGUAGE, true );
+			$current = self::STALE_GROUP_LEXICON === $group ? CacheVersions::lexicon_version_for( $language ) : $current;
 			if ( (int) get_post_meta( $post_id, $meta_key, true ) >= $current ) {
 				continue;
 			}
@@ -1265,7 +1355,8 @@ class IndexQueue {
 		];
 
 		foreach ( array_keys( $counts ) as $group ) {
-			foreach ( $this->stale_rows( $group ) as $row ) {
+			$revision = null;
+			foreach ( $this->stale_rows( $group, $revision ) as $row ) {
 				$language = $row['language'];
 				$counts[ $group ][ $language ] = ( $counts[ $group ][ $language ] ?? 0 ) + 1;
 			}
@@ -1306,6 +1397,9 @@ class IndexQueue {
 		update_post_meta( $id, self::META_UPDATED_AT, $this->now() );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 
+		if ( $attempts >= self::MAX_ATTEMPTS && get_post_meta( $id, self::META_RETRANSLATING, true ) ) {
+			$this->finish_refills( [ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] );
+		}
 		return true;
 	}
 
@@ -1382,6 +1476,7 @@ class IndexQueue {
 			$has_payload  = '' !== trim( $payload );
 			update_post_meta( $post_id, self::META_STAGE, $has_payload ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			delete_post_meta( $post_id, self::META_REFILL_FINISHED );
 			update_post_meta( $post_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $post_id, self::META_FAIL_REASON, '' );
 			delete_post_meta( $post_id, self::META_CLAIMED_AT );
@@ -1428,6 +1523,7 @@ class IndexQueue {
 			update_post_meta( $id, self::META_STATUS, self::STATUS_DEAD );
 			update_post_meta( $id, self::META_FAIL_REASON, 'Translation did not reach the warm cache after automatic retries.' );
 			update_post_meta( $id, self::META_COLD_EXHAUSTED, 1 );
+			$this->finish_refills( [ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] );
 			update_post_meta( $id, self::META_UPDATED_AT, $this->now() );
 			return false;
 		}

@@ -14,6 +14,35 @@ class TranslationReadiness {
 	private const BACKOFF_DEFAULT_SECONDS = 30;
 	private const BATCH_SIZE = 100;
 
+	public static function complete_refill( string $language ): bool {
+		return MutationLock::run(
+            'cache_versions',
+            static function () use ( $language ): void {
+				$scope = self::scope( $language );
+				$proofs = self::proofs( $language );
+				$swept = self::swept( $language );
+				$manifests = [];
+				foreach ( ( new IndexQueue() )->list_rows() as $row ) {
+					if ( $row['language'] !== $language ) {
+						continue;
+					}
+					$manifest = get_post_meta( (int) $row['id'], self::META, true );
+					if ( is_array( $manifest ) && ( $manifest['scope'] ?? '' ) === $scope ) {
+						$manifests[ (int) $row['id'] ] = $manifest;
+					}
+				}
+				TranslationStore::bump_cache_generation( [ $language ] );
+				$next_scope = self::scope( $language );
+				foreach ( $manifests as $id => $manifest ) {
+					$manifest['scope'] = $next_scope;
+					update_post_meta( $id, self::META, $manifest );
+				}
+				set_transient( 'twp_ready_' . $next_scope, $proofs, self::PROOF_GRACE_SECONDS );
+				set_transient( 'twp_swept_' . $next_scope, $swept, self::PROOF_GRACE_SECONDS );
+			}
+        );
+	}
+
 	public static function record( int $id, string $language, array $items, bool $full_page = true ): void {
 		$groups = [];
 		$valid = true;
@@ -295,6 +324,9 @@ class TranslationReadiness {
 					$language,
 					TranslationFingerprint::model_profile( TranslationProxySettings::ai_settings( $language ) ),
 					TranslationStore::cache_generation_for( $language ),
+					CacheVersions::settings_version(),
+					CacheVersions::lexicon_version_for( $language ),
+					CacheVersions::localizer_version(),
 				]
             )
         );

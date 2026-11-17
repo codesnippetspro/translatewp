@@ -32,6 +32,21 @@ import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/
 const STATUS_POLL_MS = 5000;
 const WAITING_READ_RETRY_MS = 30000;
 
+function readerErrorMessage(reason: string): string
+{
+    switch (reason) {
+        case 'page_tls_failed':
+            return __('WordPress could not verify the site’s HTTPS certificate. Fix the certificate or the site’s local DNS, then try reading again.', 'translate');
+        case 'page_parser_unavailable':
+            return __('Background reading needs the PHP DOM extension. Enable it on the server, or keep this screen open while reading finishes.', 'translate');
+        case 'page_fetch_401':
+        case 'page_fetch_403':
+            return __('The site blocked WordPress when it tried to read a page. Allow requests from the server, then try reading again.', 'translate');
+        default:
+            return __('The site could not read its own pages. Check that WordPress can reach the site address and that requests from the server are allowed, then try reading again.', 'translate');
+    }
+}
+
 export const LanguagesIndexing = () =>
 {
     const liveStatus = useTranslationReadiness();
@@ -326,8 +341,13 @@ export const LanguagesIndexing = () =>
                     {__('Reading and translating', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
-                    {__('Reading collects the text of your site spine, the front page and menu pages, in this tab and costs nothing. Translation runs on the service for the languages you chose, visible pages first. Other pages translate the first time someone views them.', 'translate')}
+                    {__('Reading collects the text of your site spine, the front page and menu pages, in the background and costs nothing. Translation runs on the service for the languages you chose, visible pages first. Other pages translate the first time someone views them.', 'translate')}
                 </p>
+                {status?.readerError && (
+                    <p className="text-sm text-translatewp-error m-0" role="alert">
+                        {readerErrorMessage(status.readerError)}
+                    </p>
+                )}
                 {status?.read && (
                     <p className="text-sm text-translatewp-muted m-0" role="status">
                         {sprintf(
