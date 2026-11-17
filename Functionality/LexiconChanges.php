@@ -71,7 +71,7 @@ class LexiconChanges {
 		update_option( self::SNAPSHOTS_OPTION, $snapshots, false );
 		update_option( self::SEEDED_OPTION, true, false );
 		$queue = new IndexQueue();
-		$rows = array_values( array_filter( $queue->list_rows(), static fn( array $row ): bool => IndexQueue::STATUS_DONE === $row['status'] && ! empty( $times[ $row['language'] ] ) ) );
+		$rows = $queue->rows_before_lexicon_changes( $times );
 		if ( $rows && $queue->enqueue_retranslate( $rows, false ) > 0 ) {
 			TranslationStore::bump_cache_generation( array_values( array_unique( array_column( $rows, 'language' ) ) ) );
 			Indexer::schedule_drain();
