@@ -35,16 +35,18 @@ class CrawlerTranslation {
 		}
 
 		$map = self::build( $post_id, $locale, $lookup ?? [ TranslationStore::class, 'remote_lookup_result' ], $source_url );
-		set_transient( self::cache_key( $post_id, $locale, $source_url ), $map, $map ? self::COMPLETE_TTL : self::INCOMPLETE_TTL );
+		if ( null !== $map ) {
+			set_transient( self::cache_key( $post_id, $locale, $source_url ), $map, $map ? self::COMPLETE_TTL : self::INCOMPLETE_TTL );
+		}
 
-		return $map;
+		return $map ?? [];
 	}
 
 	public static function forget( int $post_id, string $locale ): void {
 		delete_transient( self::cache_key( $post_id, $locale ) );
 	}
 
-	private static function build( int $post_id, string $locale, callable $lookup, ?string $source_url ): array {
+	private static function build( int $post_id, string $locale, callable $lookup, ?string $source_url ): ?array {
 		$object_type = $post_id > 0
 			? (string) get_post_type( $post_id )
 			: ( \TranslateWP\Functionality\Indexer::NOT_FOUND_OBJECT_ID === $post_id ? \TranslateWP\Functionality\Indexer::NOT_FOUND_OBJECT_TYPE : 'home' );
@@ -54,7 +56,7 @@ class CrawlerTranslation {
 		}
 		$items       = ( new IndexQueue() )->read_items( $object_type, $post_id );
 		if ( ! $items ) {
-			return [];
+			return null;
 		}
 
 		$source_lang = TranslationProxySettings::default_locale();
