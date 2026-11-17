@@ -104,7 +104,7 @@ $job_posts   = array_values( array_filter( $GLOBALS['wp_test_remote_posts'], sta
 $batch_posts = array_values( array_filter( $GLOBALS['wp_test_remote_posts'], static fn( array $post ): bool => str_ends_with( $post['path'], '/batches' ) ) );
 $pushed     = array_column( $batch_posts[0]['body']['items'] ?? [], 'cache' );
 assert_backfill( 1 === count( $job_posts ) && 1 === count( $batch_posts ), 'Mixed ownership must send one index job and one batch' );
-assert_backfill( [ [ 'siteId' => $site_id, 'hash' => $hashes[0] ] ] === $pushed, 'The index batch must contain only its owned body group' );
+assert_backfill( [ [ 'siteId' => $site_id, 'hash' => $hashes[0], 'settingsVersion' => 0, 'lexiconVersion' => 0, 'lexiconChangedAt' => 0, 'settingsChangedAt' => 0 ] ] === $pushed, 'The index batch must contain only its owned body group' );
 assert_backfill( 3 === TranslationStore::pending_count( $url, 'de', $post_id ), 'Mixed ownership must register all body and title hashes' );
 backfill_arrival( $url, $post_id, $hashes );
 
