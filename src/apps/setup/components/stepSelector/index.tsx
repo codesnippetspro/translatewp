@@ -9,7 +9,7 @@ export const StepSelector = () =>
 
     return (
         <div className="px-8 py-3 flex flex-col gap-2 border-b border-translatewp-border">
-            <p className="text-xs text-translatewp-muted! m-0">
+            <p role="status" className="text-xs text-translatewp-muted! m-0">
                 {sprintf(
                     /* translators: 1: current step number, 2: total number of steps */
                     __( 'Step %1$d of %2$d', 'translate' ),
@@ -17,7 +17,7 @@ export const StepSelector = () =>
                     steps.length
                 )}
             </p>
-            <div className="setup-step-names flex flex-wrap items-center gap-x-6 gap-y-2">
+            <ol aria-label={__('Setup steps', 'translate')} className="setup-step-names m-0 list-none p-0 flex flex-wrap items-center gap-x-6 gap-y-2">
                 {steps.map( ( step, index ) =>
                 {
                     const isCurrent = index === currentIndex;
@@ -30,18 +30,19 @@ export const StepSelector = () =>
                             : 'text-translatewp-muted!';
 
                     return (
-                        <span
+                        <li
+                            aria-current={isCurrent ? 'step' : undefined}
                             key={step.id}
                             data-step={step.id}
                             data-state={state}
-                            className={`flex items-center gap-1 whitespace-nowrap font-bold text-xs uppercase ${color}`}
+                            className={`m-0 flex items-center gap-1 whitespace-nowrap font-bold text-xs uppercase ${color}`}
                         >
                             {isCompleted && <Check size={14} aria-hidden="true" />}
                             {step.label}
-                        </span>
+                        </li>
                     );
                 } )}
-            </div>
+            </ol>
         </div>
     );
 }
