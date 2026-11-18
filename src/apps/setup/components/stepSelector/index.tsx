@@ -17,7 +17,7 @@ export const StepSelector = () =>
                     steps.length
                 )}
             </p>
-            <ol aria-label={__('Setup steps', 'translate')} className="setup-step-names m-0 list-none p-0 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <ol aria-label={__('Setup steps', 'translate')} className="setup-step-names m-0! list-none! p-0! flex flex-wrap items-center gap-x-6 gap-y-2">
                 {steps.map( ( step, index ) =>
                 {
                     const isCurrent = index === currentIndex;
@@ -35,7 +35,7 @@ export const StepSelector = () =>
                             key={step.id}
                             data-step={step.id}
                             data-state={state}
-                            className={`m-0 flex items-center gap-1 whitespace-nowrap font-bold text-xs uppercase ${color}`}
+                            className={`m-0! flex items-center gap-1 whitespace-nowrap font-bold text-xs uppercase ${color}`}
                         >
                             {isCompleted && <Check size={14} aria-hidden="true" />}
                             {step.label}
