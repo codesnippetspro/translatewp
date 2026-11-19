@@ -481,6 +481,7 @@ class IndexQueue {
 		$work = $this->deferred_work( $rows, $force );
 		if ( $work['ids'] ) {
 			update_option( self::DEFERRED_REFILLS_OPTION, $work, false );
+			\TranslateWP\Functionality\Indexer::schedule_drain( 60 );
 		}
 	}
 

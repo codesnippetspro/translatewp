@@ -228,6 +228,7 @@ if ( in_array( $case, [ 'deferred-ids', 'all' ], true ) ) {
     try { $queue->enqueue_retranslate( $rows, false ); } finally { held_budget( null ); }
     $work = get_option( IndexQueue::DEFERRED_REFILLS_OPTION );
     check_lifecycle( array_column( $rows, 'id' ) === ( $work['ids'] ?? null ) && ! isset( $work['rows'] ), 'Deferred refill state stores only exact row IDs, not row payloads' );
+    check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'Saving an entirely deferred batch leaves its next worker scheduled' );
 }
 if ( in_array( $case, [ 'deferred-loop', 'all' ], true ) ) {
     [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
