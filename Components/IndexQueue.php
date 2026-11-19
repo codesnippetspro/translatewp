@@ -2188,30 +2188,22 @@ class IndexQueue {
 		return $next;
 	}
 
-	public function defer_reader( int $id, string $reason ): void {
-		$attempts = min( 7, 1 + (int) get_post_meta( $id, '_twp_reader_retries', true ) );
-		update_post_meta( $id, '_twp_reader_retries', $attempts );
-		update_post_meta( $id, '_twp_reader_not_before', $this->now() + min( HOUR_IN_SECONDS, 60 * ( 2 ** ( $attempts - 1 ) ) ) );
-		update_post_meta( $id, self::META_FAIL_REASON, $reason );
-		$this->release( $id );
-	}
-
 	/**
 	 * Record a failure: retry (back to pending) until the attempt cap, then
 	 * dead-letter with the reason kept for the ops log.
 	 */
-	public function fail( int $id, string $reason ): bool {
-		return self::mutate_rows( fn () => $this->fail_unlocked( $id, $reason ), false );
+	public function fail( int $id, string $reason, bool $backoff = false ): bool {
+		return self::mutate_rows( fn () => $this->fail_unlocked( $id, $reason, $backoff ), false );
 	}
 
-	private function fail_unlocked( int $id, string $reason ): bool {
+	private function fail_unlocked( int $id, string $reason, bool $backoff ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
 		}
 
 		$attempts = (int) get_post_meta( $id, self::META_ATTEMPTS, true ) + 1;
 
-		if ( QueueExecution::is_bounded() && $attempts < self::MAX_ATTEMPTS ) {
+		if ( $attempts < self::MAX_ATTEMPTS && ( QueueExecution::is_bounded() || $backoff ) ) {
 			update_post_meta( $id, '_twp_reader_not_before', $this->now() + 60 * $attempts );
 		}
 		update_post_meta( $id, self::META_ATTEMPTS, $attempts );
@@ -2243,6 +2235,11 @@ class IndexQueue {
 		return self::is_target_row_language( (string) get_post_meta( $post_id, self::META_LANGUAGE, true ) );
 	}
 
+	private function is_read_or_target_row( int $id ): bool {
+		$language = (string) get_post_meta( $id, self::META_LANGUAGE, true );
+		return self::READ_LANGUAGE === $language || self::is_target_row_language( $language );
+	}
+
 	public static function is_target_row_language( string $language ): bool {
 		if ( self::READ_LANGUAGE === $language ) {
 			return false;
@@ -2259,7 +2256,7 @@ class IndexQueue {
 		$items = [];
 
 		foreach ( $this->all_row_ids() as $post_id ) {
-			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_target_row( $post_id ) ) {
+			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_read_or_target_row( $post_id ) ) {
 				continue;
 			}
 
@@ -2296,7 +2293,7 @@ class IndexQueue {
 		$revived = 0;
 
 		foreach ( $this->all_row_ids() as $post_id ) {
-			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_target_row( $post_id ) ) {
+			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_read_or_target_row( $post_id ) ) {
 				continue;
 			}
 
@@ -2306,7 +2303,7 @@ class IndexQueue {
 
 			$payload      = self::decode_payload( (string) get_post_field( 'post_content', $post_id ) );
 			$has_payload  = '' !== trim( $payload );
-			update_post_meta( $post_id, self::META_STAGE, $has_payload ? self::STAGE_PUSH : self::STAGE_EXTRACT );
+			update_post_meta( $post_id, self::META_STAGE, $has_payload && $this->is_target_row( $post_id ) ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			self::mark_pending( $post_id );
 			if ( $this->requires_background_refresh( (int) $post_id ) ) {
 				$this->track_refill( (int) $post_id );
@@ -2503,7 +2500,7 @@ class IndexQueue {
             ]
         ) : $this->all_row_ids();
 		foreach ( $ids as $post_id ) {
-			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_target_row( $post_id )
+			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_read_or_target_row( $post_id )
 				|| 1 === (int) get_post_meta( $post_id, self::META_COLD_EXHAUSTED, true ) ) {
 				continue;
 			}
@@ -2514,7 +2511,8 @@ class IndexQueue {
 			}
 			update_post_meta( $post_id, self::META_DEAD_RETRIES, $attempts + 1 );
 			$payload = self::decode_payload( (string) get_post_field( 'post_content', $post_id ) );
-			update_post_meta( $post_id, self::META_STAGE, 0 < strlen( trim( $payload ) ) ? self::STAGE_PUSH : self::STAGE_EXTRACT );
+			$can_push = '' !== trim( $payload ) && $this->is_target_row( $post_id );
+			update_post_meta( $post_id, self::META_STAGE, $can_push ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			self::mark_pending( $post_id );
 			if ( $this->requires_background_refresh( (int) $post_id ) ) {
 				$this->track_refill( (int) $post_id );
@@ -2925,6 +2923,11 @@ class IndexQueue {
 				$next = null === $next ? $due : min( $next, $due );
 			}
 			if ( self::READ_LANGUAGE === $language ) {
+				if ( self::STATUS_DEAD === $status && ! empty( $row['recoverable'] ) ) {
+					$due = max( $this->now(), (int) $row['due'] );
+					$next = null === $next ? $due : min( $next, $due );
+					$pending['refill'] += $n;
+				}
 				if ( $active ) {
 					$refill_pending['__unknown'] = 1;
 				}

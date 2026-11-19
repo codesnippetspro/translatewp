@@ -129,11 +129,15 @@ if ( in_array( $case, [ 'reader', 'all' ], true ) ) {
     $id = $queue->list_rows()[0]['id'];
     $GLOBALS['wp_test_remote_get_response'] = new WP_Error( 'http_request_failed', 'cURL error 60: certificate verification failed' );
     $last = 0;
-    for ( $i = 0; $i < 4; ++$i ) {
+    for ( $i = 1; $i <= IndexQueue::MAX_ATTEMPTS; ++$i ) {
         delete_option( Indexer::NEXT_READER_OPTION );
         delete_post_meta( $id, '_twp_reader_not_before' );
         $indexer->step_read( new ReadinessBudget() );
-        check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'An unreadable TLS page remains pending beyond the terminal retry limit' );
+        if ( IndexQueue::MAX_ATTEMPTS === $i ) {
+            check_lifecycle( IndexQueue::STATUS_DEAD === $queue->list_rows()[0]['status'], 'A persistently unreadable TLS page reaches the terminal retry limit' );
+            break;
+        }
+        check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'TLS waits until its next attempt' );
         $next = (int) get_post_meta( $id, '_twp_reader_not_before', true );
         check_lifecycle( $next > time() && $next > $last, 'TLS retries persist an increasing backoff' );
         $last = $next;

@@ -57,6 +57,11 @@ namespace {
 		] ] );
 		$pages[$source] = [ 'url' => $url, 'html' => "<p>Meet our dance instructor for class $n.</p>", 'status' => 200 ];
 	}
+	$blocked_url = home_url( '/private-class/' );
+	$blocked = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+		'_twp_language' => '', '_twp_status' => 'pending', '_twp_stage' => 'extract', '_twp_object_type' => 'page',
+		'_twp_object_id' => wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] ), '_twp_url' => $blocked_url,
+	] ] );
 	$start = TranslationStore::cache_generations();
 	$GLOBALS['wp_test_job_states']['00000000-0000-4000-8000-000000000099'] = 'done';
 	foreach ( $pages as $source => $page ) {
@@ -73,13 +78,16 @@ namespace {
 		$GLOBALS['fixed_time'] += 60;
 		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
 	}
-	for ( $n = 0; $n < 10; ++$n ) {
-		if ( 'done' === BackgroundEngine::step()['state'] ) {
+	for ( $n = 0; $n < 15; ++$n ) {
+		$result = BackgroundEngine::step( [ [ 'url' => $blocked_url, 'status' => 403, 'html' => '' ] ] );
+		if ( 'done' === $result['state'] ) {
 			break;
 		}
-		$GLOBALS['fixed_time'] += 60;
+		$GLOBALS['fixed_time'] = max( $GLOBALS['fixed_time'] + 60, $result['nextDue'] ?? 0 );
 		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
 	}
+	check_convergence( 'done' === $result['state'] && 3 === (int) get_post_meta( $blocked, '_twp_dead_retries', true ), 'A persistent 403 exhausts three late retries and settles within 25 steps including the ten supplied reads: ' . wp_json_encode( $result ) );
+	check_convergence( 'page_fetch_403' === array_column( $queue->failed_items(), 'reason', 'id' )[ $blocked ], 'The dead source preserves the visible HTTP reason' );
 	foreach ( [ 'es', 'it' ] as $language ) {
 		check_convergence( 1 + ( $start[$language] ?? 1 ) === TranslationStore::cache_generation_for( $language ), "Ten page deliveries complete $language exactly once" );
 	}

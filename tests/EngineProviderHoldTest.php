@@ -168,35 +168,37 @@ namespace {
 	expect_hold( ! ProviderHold::watching() && get_option( ProviderHold::WATCH_OPTION )['verifiedUntil'] > $GLOBALS['fixture_time'], 'A clean legacy provider job verifies the provider' );
 	expect_hold( ! get_post_meta( $ids[0], '_twp_translated_at', true ), 'Provider verification alone never confirms a translation' );
 
-	$ids = fixture();
-	$id = $ids[1];
-	wp_test_set_filter( 'translatewp_translation_job_request_body', static fn( array $body ): array => $body );
-	wp_test_set_filter( 'translatewp_translation_batch_request_body', static fn( array $body ): array => $body );
-	update_post_meta( $ids[0], '_twp_status', 'done' );
-	$queue->mark_translated( [ $ids[0] ] );
-	for ( $i = 0; $i < 50; ++$i ) {
-		if ( 0 === $i % 2 ) {
-			$GLOBALS['wp_test_translation_batch_responses'] = [ service_answer( [ 'code' => 'rate_limited', 'retryAfterSeconds' => 90 ], 429 ) ];
-		} else {
-			$GLOBALS['wp_test_remote_get_response'] = service_answer( [ 'state' => 'done', 'items' => [ 'total' => 2, 'failed' => 2, 'succeeded' => 0 ], 'failure' => [ 'code' => 'rate_limited', 'retryAfterSeconds' => 90 ] ] );
-		}
-		$r = BackgroundEngine::step();
-		if ( 1 === $i % 2 && 'done' === get_post_meta( $id, '_twp_status', true ) ) {
+	foreach ( [ 'batch', 'job' ] as $source ) {
+		$ids = fixture();
+		$id = $ids[1];
+		wp_test_set_filter( 'translatewp_translation_job_request_body', static fn( array $body ): array => $body );
+		wp_test_set_filter( 'translatewp_translation_batch_request_body', static fn( array $body ): array => $body );
+		update_post_meta( $ids[0], '_twp_status', 'done' );
+		$queue->mark_translated( [ $ids[0] ] );
+		for ( $i = 0; $i < 50; ++$i ) {
+			if ( 'batch' === $source ) {
+				$GLOBALS['wp_test_translation_batch_responses'] = [ service_answer( [ 'code' => 'rate_limited', 'retryAfterSeconds' => 90 ], 429 ) ];
+			} else {
+				$GLOBALS['wp_test_remote_get_response'] = service_answer( [ 'state' => 'done', 'items' => [ 'total' => 2, 'failed' => 2, 'succeeded' => 0 ], 'failure' => [ 'code' => 'rate_limited', 'retryAfterSeconds' => 90 ] ] );
+			}
 			$r = BackgroundEngine::step();
+			if ( 'job' === $source && 'done' === get_post_meta( $id, '_twp_status', true ) ) {
+				$r = BackgroundEngine::step();
+			}
+			$due = (int) get_post_meta( $id, '_twp_reader_not_before', true );
+			expect_hold( 'pending' === get_post_meta( $id, '_twp_status', true ) && ! get_post_meta( $id, '_twp_attempts', true ) && $due === $GLOBALS['fixture_time'] + 90 && ( $r['nextDue'] ?? 0 ) === $due, 'Background throttling preserves attempt counts and schedules the supplied deadline, round ' . $i );
+			$GLOBALS['fixture_time'] = $due;
+			$GLOBALS['wp_test_now'] = $due;
 		}
-		$due = (int) get_post_meta( $id, '_twp_reader_not_before', true );
-		expect_hold( 'pending' === get_post_meta( $id, '_twp_status', true ) && ! get_post_meta( $id, '_twp_attempts', true ) && $due === $GLOBALS['fixture_time'] + 90 && ( $r['nextDue'] ?? 0 ) === $due, 'Background throttling preserves attempt counts and schedules the supplied deadline, round ' . $i );
-		$GLOBALS['fixture_time'] = $due;
-		$GLOBALS['wp_test_now'] = $due;
+		$batches = requests_to( '/batches' );
+		foreach ( end( $batches )['body']['items'] as $item ) {
+			$GLOBALS['wp_test_cache_lookup_items'][ $item['cache']['hash'] ] = '⟪item_0001⟫Traduzione';
+		}
+		$GLOBALS['wp_test_remote_get_response'] = service_answer( [ 'state' => 'done', 'items' => [ 'total' => 2, 'succeeded' => 2, 'failed' => 0 ] ] );
+		BackgroundEngine::step();
+		BackgroundEngine::step();
+		expect_hold( (int) get_post_meta( $id, '_twp_translated_at', true ) > 0, 'A row translates after fifty throttles' );
 	}
-	$batches = requests_to( '/batches' );
-	foreach ( end( $batches )['body']['items'] as $item ) {
-		$GLOBALS['wp_test_cache_lookup_items'][ $item['cache']['hash'] ] = '⟪item_0001⟫Traduzione';
-	}
-	$GLOBALS['wp_test_remote_get_response'] = service_answer( [ 'state' => 'done', 'items' => [ 'total' => 2, 'succeeded' => 2, 'failed' => 0 ] ] );
-	BackgroundEngine::step();
-	BackgroundEngine::step();
-	expect_hold( (int) get_post_meta( $id, '_twp_translated_at', true ) > 0, 'A row translates after fifty throttles' );
 	$ids = fixture();
 	new \TranslateWP\Functionality\KeepWarm( '', '' );
 	do_action( 'translatewp_translation_affecting_settings_saved', [ 'it' ] );

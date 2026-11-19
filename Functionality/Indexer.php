@@ -1308,11 +1308,7 @@ class Indexer {
 				update_post_meta( (int) $row['id'], '_twp_redirect_target', $error_data['target'] );
 			}
 			$this->reader_failed( $html->get_error_code() );
-			if ( preg_match( '/^(?:page_tls_failed|page_fetch_(?:timeout|failed|401|403|408|429|5[0-9]{2}))$/', $html->get_error_code() ) ) {
-				$this->queue->defer_reader( (int) $row['id'], $html->get_error_code() );
-			} else {
-				$this->queue->fail( (int) $row['id'], $html->get_error_code() );
-			}
+			$this->queue->fail( (int) $row['id'], $html->get_error_code(), true );
 			return 1;
 		}
 		try {
