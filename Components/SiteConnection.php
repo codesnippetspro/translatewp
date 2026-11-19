@@ -1127,6 +1127,7 @@ class SiteConnection {
 		}
 
 		if ( 'invalidated' === self::connection_status() ) {
+			AdminNotices::mark_action_required();
 			printf(
 				'<div class="notice notice-error"><p>%s</p><p><a class="button button-primary" href="%s">%s</a> <a class="button" href="%s">%s</a></p></div>',
 				esc_html__( 'The service no longer recognises this site\'s credentials. Reconnect it to keep it on the same account, or connect it as a new site if this is a copy.', 'translate' ),
@@ -1143,6 +1144,7 @@ class SiteConnection {
 		if ( '' === $message ) {
 			$address_change = Sites::address_change_state();
 			if ( self::is_connected() && null !== $address_change ) {
+				AdminNotices::mark_action_required();
 				printf(
 					'<div class="notice notice-warning"><p>%s</p></div>',
 					sprintf(
@@ -1156,6 +1158,7 @@ class SiteConnection {
 			}
 
 			if ( ! self::is_connected() && Options::get( 'setup.ended', false ) ) {
+				AdminNotices::mark_action_required();
 				printf(
 					'<div class="notice notice-warning"><p>%s</p><p><a class="button button-primary" href="%s">%s</a></p></div>',
 					esc_html__( 'Connect your site to enable translation.', 'translate' ),
@@ -1167,6 +1170,9 @@ class SiteConnection {
 		}
 
 		$class = in_array( $notice, [ 'connected', 'reconnected' ], true ) ? 'notice-success' : 'notice-error';
+		if ( 'notice-error' === $class ) {
+			AdminNotices::mark_action_required();
+		}
 		echo '<div id="translatewp-connect-return-notice" class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p>';
 		if ( 'invalid_state' === $notice ) {
 			printf(

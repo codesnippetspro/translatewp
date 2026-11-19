@@ -56,6 +56,15 @@ Every plan includes AI translation with a fair-use allowance per 30 days. When y
 
 Visit [TranslateWP](https://translatewp.ai/) for plan information.
 
+= About TranslateWP =
+
+TranslateWP is made by Code Snippets B.V., Teteringen, the Netherlands, the company behind the Code Snippets plugin.
+
+* Website: [translatewp.ai](https://translatewp.ai/)
+* Documentation: [translatewp.ai/docs](https://translatewp.ai/docs/)
+* Contact: [translatewp.ai/contact-us](https://translatewp.ai/contact-us/) or team@translatewp.ai
+* Ideas for the plugin: [Request a feature](https://translatewp.ai/request-a-feature/)
+
 = Support and contributions =
 
 * [WordPress.org support forum](https://wordpress.org/support/plugin/translate/)
@@ -83,6 +92,10 @@ Find TranslateWP useful? [Leave a review on WordPress.org](https://wordpress.org
 Network activate TranslateWP from Network Admin to use the network settings and defaults. Check each site's connection, languages and settings before offering translations to visitors.
 
 == Frequently Asked Questions ==
+
+= Who makes TranslateWP? =
+
+TranslateWP is made by Code Snippets B.V., the team behind the Code Snippets plugin, based in Teteringen, the Netherlands. You can reach the team at team@translatewp.ai or through [translatewp.ai/contact-us](https://translatewp.ai/contact-us/).
 
 = Do I need a TranslateWP account? =
 
@@ -130,6 +143,8 @@ Use the plugin's Support screen or the [WordPress.org support forum](https://wor
 
 == External services and privacy ==
 
+The TranslateWP service is operated by Code Snippets B.V., the Netherlands.
+
 TranslateWP connects to `api.translatewp.ai` to register your connected site, generate and retrieve translations, report translation progress and check which features your account may use.
 
 The plugin also uses `app.translatewp.ai`, the TranslateWP account portal, to sign in and connect your site, view account information and access plans and upgrades.
@@ -144,8 +159,8 @@ When you connect your site or use these features, the TranslateWP service is inv
 
 Using your own AI provider on Pro also makes the provider's terms and privacy policy relevant to the content it processes.
 
-* [TranslateWP service terms](https://translatewp.ai/terms)
-* [TranslateWP privacy policy](https://translatewp.ai/privacy)
+* [TranslateWP service terms](https://translatewp.ai/terms-and-conditions/)
+* [TranslateWP privacy policy](https://translatewp.ai/privacy-policy/)
 
 == Upgrade Notice ==
 
