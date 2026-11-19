@@ -121,13 +121,7 @@ class PageTextTranslator {
 		$decoded = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		$key     = self::normalize( $decoded );
 		if ( ! isset( $normalized[ $key ] ) ) {
-			[ $prefix, $words, $suffix ] = TranslationWhitespace::separator_edges( $decoded );
-			$words_key                   = self::normalize( $words );
-			if ( '' === $prefix . $suffix || ! isset( $normalized[ $words_key ] ) ) {
-				return null;
-			}
-
-			return htmlspecialchars( $prefix . $normalized[ $words_key ] . $suffix, ENT_NOQUOTES | ENT_HTML5, 'UTF-8' );
+			return null;
 		}
 
 		preg_match( '/^(\s*).*?(\s*)$/su', $text, $edges );

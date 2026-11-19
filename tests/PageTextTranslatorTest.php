@@ -106,18 +106,6 @@ assert_same(
 $result = PageTextTranslator::translate( '<div class="translatewp-no-translate"><img alt="Contact"></div><code><img alt="Contact"></code>', $map );
 assert_same( '<div class="translatewp-no-translate"><img alt="Contact"></div><code><img alt="Contact"></code>', $result['html'], 'Attributes inside opted-out or skipped elements are untouched' );
 
-// --- A breadcrumb's last crumb is stored as its words; its separator stays as printed ---
-$result = PageTextTranslator::translate(
-	'<nav class="woocommerce-breadcrumb"><a href="/">Home</a>&nbsp;&#47;&nbsp;<a href="/c/">Uncategorized</a>&nbsp;&#47;&nbsp;Garden Lantern</nav>',
-	[ 'Home' => 'Home', 'Uncategorized' => 'Senza categoria', 'Garden Lantern' => 'Lanterna da giardino' ]
-);
-assert_same(
-	"<nav class=\"woocommerce-breadcrumb\"><a href=\"/\">Home</a>&nbsp;&#47;&nbsp;<a href=\"/c/\">Senza categoria</a>\u{a0}/\u{a0}Lanterna da giardino</nav>",
-	$result['html'],
-	'The last crumb is translated behind its separator'
-);
-assert_same( 0, $result['missing'], 'Every breadcrumb crumb is covered' );
-
 // --- An empty map translates nothing and reports the text as missing ---
 $result = PageTextTranslator::translate( '<p>Contact</p>', [] );
 assert_same( '<p>Contact</p>', $result['html'], 'With no translations the page is unchanged' );
