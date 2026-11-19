@@ -17,15 +17,25 @@ class ServiceBlockNotice {
 	private const REPORT_INTERVAL_SECONDS = 3600;
 	private const LIFETIME_SECONDS        = 7 * 86400;
 	private const PATH_MAX_LENGTH         = 200;
+	private const DEFAULT_PORTS           = [
+		'https' => 443,
+		'http'  => 80,
+	];
 
-	/** The scheme, host and port the front end requests translations from. */
+	/**
+	 * The scheme, host and port the front end requests translations from,
+	 * written as the browser writes an origin: lowercase, no default port.
+	 */
 	public static function service_origin(): string {
 		$parts = wp_parse_url( RemoteApi::base_url() );
 		if ( ! is_array( $parts ) || empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
 			return '';
 		}
 
-		return $parts['scheme'] . '://' . $parts['host'] . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' );
+		$scheme = strtolower( $parts['scheme'] );
+		$port   = isset( $parts['port'] ) && ( self::DEFAULT_PORTS[ $scheme ] ?? null ) !== (int) $parts['port'] ? ':' . $parts['port'] : '';
+
+		return $scheme . '://' . strtolower( $parts['host'] ) . $port;
 	}
 
 	/**

@@ -95,6 +95,16 @@ add_filter( 'translatewp_api_base_url', static fn() => 'https://api.translatewp.
 check_block( str_contains( render_block_notice(), 'blocks https://api.translatewp.ai:8443, so' ), 'The notice follows the configured origin, without its path' );
 $GLOBALS['wp_test_filters'] = [];
 
+// A base with an explicit default port is the origin the browser reports.
+$saved = get_option( ServiceBlockNotice::OPTION );
+foreach ( [ 'https://API.translatewp.ai:443' => 'https://api.translatewp.ai', 'http://api.translatewp.ai:80/' => 'http://api.translatewp.ai' ] as $base => $browser_origin ) {
+	add_filter( 'translatewp_api_base_url', static fn() => $base );
+	ServiceBlockNotice::clear();
+	check_block( [ 'recorded' => true ] === ServiceBlockNotice::record( $browser_origin, '/' ), 'A report from ' . $browser_origin . ' is accepted for the base ' . $base );
+	$GLOBALS['wp_test_filters'] = [];
+}
+update_option( ServiceBlockNotice::OPTION, $saved );
+
 $_GET = [ 'page' => 'plugins' ];
 check_block( '' === render_block_notice(), 'The notice stays off screens other than TranslateWP ones' );
 $_GET = [];
