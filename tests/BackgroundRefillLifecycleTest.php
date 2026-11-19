@@ -95,8 +95,13 @@ if ( in_array( $case, [ 'lock', 'all' ], true ) ) {
     $GLOBALS['wpdb'] = new class() extends WP_Testwpdb {
         public function get_var( string $query ) { return null; }
     };
+    $ran = false;
+    \TranslateWP\Components\QueueExecution::run( static function () use ( &$ran ): void { $ran = true; } );
+    check_lifecycle( $ran && ! get_transient( \TranslateWP\Components\MutationLock::FAILURE_TRANSIENT ), 'Unsupported named locks use the option lease without a false warning' );
+    $GLOBALS['wp_test_option_insert_fail'] = true;
     \TranslateWP\Components\QueueExecution::run( static function (): void {} );
-    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'database' ), 'Unsupported named locks are visible in the Dashboard' );
+    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'database' ), 'A failure of both lock mechanisms is visible in the Dashboard' );
+    unset( $GLOBALS['wp_test_option_insert_fail'] );
     $GLOBALS['wpdb'] = $previous;
 }
 if ( in_array( $case, [ 'metadata', 'all' ], true ) ) {
@@ -218,6 +223,7 @@ if ( in_array( $case, [ 'deferred-ids', 'all' ], true ) ) {
     [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
     held_budget( new ReadinessBudget( 0 ) );
     try { $queue->enqueue_retranslate( $rows, false ); } finally { held_budget( null ); }
+    \TranslateWP\Components\BackgroundEngine::schedule();
     $work = get_option( IndexQueue::DEFERRED_REFILLS_OPTION );
     check_lifecycle( array_column( $rows, 'id' ) === ( $work['ids'] ?? null ) && ! isset( $work['rows'] ), 'Deferred refill state stores only exact row IDs, not row payloads' );
     check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'Saving an entirely deferred batch leaves its next worker scheduled' );

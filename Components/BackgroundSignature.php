@@ -22,6 +22,9 @@ class BackgroundSignature {
 	}
 
 	public static function refresh_after_failure(): void {
+		if ( (int) get_option( self::REFRESH_OPTION, 0 ) > time() - self::REFRESH_SECONDS ) {
+			return;
+		}
 		$refresh = false;
 		MutationLock::run(
             'engine_key_refresh',
@@ -41,12 +44,12 @@ class BackgroundSignature {
 		}
 	}
 
-	public static function verify( \WP_REST_Request $request, ?int $now = null ): bool {
+	public static function verify( \WP_REST_Request $request, ?int $now = null ): ?bool {
 		$now = $now ?? time();
 		$raw = $request->get_body();
-		$signature = $request->get_header( 'X-TranslateWP-Signature' );
+		$signature = (string) $request->get_header( 'X-TranslateWP-Signature' );
 		if ( strlen( $raw ) > self::MAX_BODY_BYTES || ! preg_match( '/^v2=([a-f0-9]{64})$/D', $signature, $match )
-			|| ! preg_match( '~^application/json(?:\s*;|$)~i', $request->get_header( 'Content-Type' ) ) ) {
+			|| ! preg_match( '~^application/json(?:\s*;|$)~i', (string) $request->get_header( 'Content-Type' ) ) ) {
 			return false;
 		}
 		$body = json_decode( $raw, true );
@@ -65,7 +68,7 @@ class BackgroundSignature {
 			return false;
 		}
 		$accepted = false;
-		MutationLock::run(
+		$locked = MutationLock::run(
 			'engine_nonce',
 			static function () use ( $body, $now, &$accepted ): void {
 				wp_cache_delete( self::NONCES_OPTION, 'options' );
@@ -78,8 +81,8 @@ class BackgroundSignature {
 				$nonces[ $body['nonce'] ] = $now + self::NONCE_SECONDS;
 				$accepted = update_option( self::NONCES_OPTION, $nonces, false );
 			},
-			0
+			1
 		);
-		return $accepted;
+		return $locked ? $accepted : null;
 	}
 }

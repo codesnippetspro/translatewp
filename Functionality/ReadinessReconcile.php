@@ -23,6 +23,12 @@ class ReadinessReconcile {
 	private const DEAD_BACKOFF_SECONDS = 600;
 
 	private ?int $step_row_id = null;
+	private int $rows_seen = 0;
+
+	public function step_rows_seen(): int {
+		return $this->rows_seen;
+	}
+	private ?array $step_translated = null;
 	private Indexer $indexer;
 	private $lookup;
 	private $clock;
@@ -47,40 +53,54 @@ class ReadinessReconcile {
 	}
 
 	public function step_run( ReadinessBudget $budget, bool $visitor_only = false ): void {
-		$rows = $this->indexer->page_rows();
-		if ( $visitor_only ) {
-			$queue = new IndexQueue();
-			$rows = array_values( array_filter( $rows, static fn ( array $row ): bool => 'miss' === $row['object_type'] && IndexQueue::STATUS_DONE === $row['status'] && ! $queue->requires_background_refresh( $row['id'] ) && ! $row['translated'] ) );
-		}
-		if ( ! SiteConnection::is_connected() || ! $rows || $budget->remaining_seconds() <= 0 ) {
+		$this->rows_seen = 0;
+		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
 			return;
 		}
+		$queue = new IndexQueue();
 		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
 		$position = (array) get_option( $option, [] );
-		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) ) % count( $rows );
-		foreach ( $rows as $index => $row ) {
-			if ( (int) ( $position['row'] ?? 0 ) === (int) $row['id'] ) {
-				$offset = 0 < (int) ( $position['cursor'] ?? 0 ) ? $index : ( $index + 1 ) % count( $rows );
+		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) );
+		$rows = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 50, $offset );
+		if ( ! $rows && $offset > 0 ) {
+			$offset = 0;
+			$rows = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 50 );
+		}
+		if ( (int) ( $position['cursor'] ?? 0 ) > 0 ) {
+			$resume = $queue->list_rows( [ (int) $position['row'] ] );
+			$rows = array_merge( $resume, array_values( array_filter( $rows, static fn ( array $row ): bool => (int) $row['id'] !== (int) $position['row'] ) ) );
+		}
+		$this->step_translated = [];
+		foreach ( $rows as $row ) {
+			if ( $budget->remaining_seconds() <= 0 ) {
+				break;
+			}
+			++$this->rows_seen;
+			$this->step_row_id = (int) $row['id'];
+			$cursor = (int) ( $position['row'] ?? 0 ) === $this->step_row_id ? (int) ( $position['cursor'] ?? 0 ) : 0;
+			try {
+				$result = $this->reconcile( $cursor, $budget );
+			} finally {
+				$this->step_row_id = null;
+			}
+			$next = (int) ( $result['cursor'] ?? 0 );
+			update_option(
+                $option,
+                [
+					'offset' => 0 === $next ? ++$offset : $offset,
+					'row' => (int) $row['id'],
+					'cursor' => $next,
+				],
+                false
+            );
+			if ( $next > 0 ) {
 				break;
 			}
 		}
-		$this->step_row_id = (int) $rows[ $offset ]['id'];
-		$cursor = (int) ( $position['row'] ?? 0 ) === $this->step_row_id ? (int) ( $position['cursor'] ?? 0 ) : 0;
-		try {
-			$result = $this->reconcile( $cursor, $budget );
-		} finally {
-			$this->step_row_id = null;
-		}
-		$next_cursor = (int) ( $result['cursor'] ?? 0 );
-		update_option(
-            self::STEP_CURSOR_OPTION,
-            [
-				'offset' => 0 === $next_cursor ? ( $offset + 1 ) % count( $rows ) : $offset,
-				'row' => (int) $rows[ $offset ]['id'],
-				'cursor' => $next_cursor,
-			],
-            false
-        );
+		$translated = $this->step_translated;
+		$this->step_translated = null;
+		if ( $translated ) {
+			$this->indexer->mark_translated( array_values( array_unique( $translated ) ) ); }
 	}
 
 	public static function batches_per_pass( int $batches ): int {
@@ -109,11 +129,8 @@ class ReadinessReconcile {
 
 	private function reconcile_unlocked( int $cursor, ?ReadinessBudget $budget ): array {
 		$budget = $budget ?? new ReadinessBudget();
-		$jobs = $this->indexer->poll_remembered_jobs( $budget );
-		$rows   = $this->indexer->page_rows();
-		if ( null !== $this->step_row_id ) {
-			$rows = array_values( array_filter( $rows, fn ( array $row ): bool => (int) $row['id'] === $this->step_row_id ) );
-		}
+		$rows = null === $this->step_row_id ? $this->indexer->page_rows() : ( new IndexQueue() )->list_rows( [ $this->step_row_id ] );
+		$jobs = $this->indexer->poll_remembered_jobs( $budget, null === $this->step_row_id ? null : $rows );
 		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
 		$now    = (int) call_user_func( $this->clock );
 		$ids    = array_unique( array_merge( $result['rowIds'], $result['legacyRowIds'] ) );
@@ -147,7 +164,11 @@ class ReadinessReconcile {
 				$translated[] = (int) $row['id'];
 			}
 		}
-		$this->indexer->mark_translated( $translated );
+		if ( null !== $this->step_translated ) {
+			$this->step_translated = array_merge( $this->step_translated, $translated );
+		} else {
+			$this->indexer->mark_translated( $translated );
+		}
 		foreach ( $ids as $id ) {
 			$row = $by_id[ (int) $id ] ?? null;
 			if ( ! is_array( $row ) || (int) $row['updated'] > $now - self::GRACE_SECONDS ) {

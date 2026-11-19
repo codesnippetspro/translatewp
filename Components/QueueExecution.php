@@ -5,26 +5,43 @@ namespace TranslateWP\Components;
 class QueueExecution {
 
 	public const STEP_SECONDS = 8.0;
+	private const MAX_STATUS_CALLS = 20;
 	private const MIN_HTTP_SECONDS = 0.01;
 	private static bool $active = false;
+	private static int $remote = 0;
+
+	public static function reset_trace(): void {
+		self::$remote = 0;
+	}
+
+	public static function trace_remote(): int {
+		return self::$remote;
+	}
 	private static ?ReadinessBudget $budget = null;
 
-	public static function run( callable $work ): bool {
+	public static function run( callable $work, float $seconds = self::STEP_SECONDS ): bool {
 		if ( BackgroundSwitch::off() || self::expired() ) {
 			return false;
 		}
 		if ( self::$active ) {
-			$work();
-			return true;
+			$parent = self::$budget;
+			self::$budget = new ReadinessBudget( min( $seconds, $parent->remaining_seconds() ) );
+			try {
+				$work();
+				return true;
+			} finally {
+				self::$budget = $parent;
+			}
 		}
 		return MutationLock::run(
 			'index_drain',
-			static function () use ( $work ): void {
+			static function () use ( $work, $seconds ): void {
 				if ( BackgroundSwitch::off() ) {
 					return;
 				}
 				self::$active = true;
-				self::$budget = new ReadinessBudget( self::STEP_SECONDS );
+				self::$budget = new ReadinessBudget( min( self::STEP_SECONDS, max( self::MIN_HTTP_SECONDS, $seconds ) ) );
+				self::$budget->set_status_limit( self::MAX_STATUS_CALLS );
 				add_filter( 'http_request_args', [ self::class, 'bound_http_args' ], PHP_INT_MAX, 1 );
 				add_filter( 'pre_http_request', [ self::class, 'stop_expired_request' ], PHP_INT_MAX, 1 );
 				try {
@@ -41,6 +58,9 @@ class QueueExecution {
 	}
 
 	public static function bound_http_args( array $args ): array {
+		if ( defined( 'TRANSLATEWP_ENGINE_TRACE' ) ) {
+			++self::$remote;
+		}
 		if ( null !== self::$budget ) {
 			$args['timeout'] = max( self::MIN_HTTP_SECONDS, min( (float) ( $args['timeout'] ?? self::STEP_SECONDS ), self::$budget->remaining_seconds() ) );
 		}

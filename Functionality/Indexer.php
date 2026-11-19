@@ -821,8 +821,9 @@ class Indexer {
 	 */
 	public function self_heal_cold( array $rows, int $max_attempts ): array {
 		$reads = [];
-		foreach ( $this->queue->read_rows() as $read_row ) {
-			$reads[ $read_row['object_type'] . ':' . $read_row['object_id'] ] = $read_row;
+		foreach ( $rows as $row ) {
+			$key = $row['object_type'] . ':' . $row['object_id'];
+			$reads[ $key ] = $this->queue->read_row_for_object( (string) $row['object_type'], (int) $row['object_id'] );
 		}
 
 		$result    = [
@@ -904,15 +905,25 @@ class Indexer {
 		return $state;
 	}
 
-	public function poll_remembered_jobs( \TranslateWP\Components\ReadinessBudget $budget ): array {
-		$groups = $this->queue->remembered_jobs();
+	public function poll_remembered_jobs( \TranslateWP\Components\ReadinessBudget $budget, ?array $rows = null ): array {
+		$groups = [];
+		if ( null === $rows ) {
+			$groups = $this->queue->remembered_jobs();
+		} else {
+			foreach ( $rows as $row ) {
+				$id = $this->queue->job_id( (int) $row['id'] );
+				if ( '' !== $id ) {
+					$groups[ $id ][] = (int) $row['id'];
+				}
+			}
+		}
 		$pending = get_option( \TranslateWP\Components\Migrations::JOB_CLEANUP_OPTION, false );
-		$ids = array_values( array_unique( array_merge( is_array( $pending ) ? $pending : [], array_keys( $groups ) ) ) );
+		$ids = array_values( array_unique( array_merge( null === $rows && is_array( $pending ) ? $pending : [], array_keys( $groups ) ) ) );
 		$known = [];
 		$last = array_search( get_option( self::JOB_POLL_CURSOR_OPTION, '' ), $ids, true );
 		$job_count = count( $ids );
 		$start = false === $last ? 0 : ( $last + 1 ) % max( 1, $job_count );
-		for ( $offset = 0; $offset < $job_count && ( ! QueueExecution::is_bounded() || 0 === $offset ); ++$offset ) {
+		for ( $offset = 0; $offset < $job_count; ++$offset ) {
 			$id = $ids[ ( $start + $offset ) % $job_count ];
 			if ( ! isset( $groups[ $id ] ) ) {
 				$pending = is_array( $pending ) ? array_values( array_diff( $pending, [ $id ] ) ) : $pending;
@@ -980,7 +991,7 @@ class Indexer {
 	}
 
 	public static function schedule_drain( int $delay_seconds = 0 ): void {
-		if ( \TranslateWP\Components\BackgroundSwitch::off() ) {
+		if ( \TranslateWP\Components\BackgroundSwitch::off() || QueueExecution::is_bounded() ) {
 			return;
 		}
 		\TranslateWP\Components\BackgroundEngine::schedule( $delay_seconds );
@@ -1064,8 +1075,8 @@ class Indexer {
 			}
 			$this->push_language_rows( (string) $group['language'], $group['rows'], $result, (bool) $group['retranslate'] );
 		}
-		if ( ! QueueExecution::expired() ) {
-			$this->report_completion();
+		if ( $result['processed'] > 0 && ! QueueExecution::expired() ) {
+			$this->report_completed_languages( $this->queue->counts() );
 		}
 		self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
 		return $result;
@@ -1300,18 +1311,15 @@ class Indexer {
 		}
 
 		if ( ! $batch_items ) {
-			foreach ( $language_rows as $language_row ) {
-				TranslationReadiness::record(
-					(int) $language_row['id'],
-					$language,
-					$readiness_items[ (int) $language_row['id'] ] ?? [],
-					! empty( $language_row['retranslating'] ) || ! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
-				);
-				$this->queue->complete( $language_row['id'] );
-				// Nothing was sent: every segment was already translated.
-				$this->queue->mark_translated( [ (int) $language_row['id'] ] );
-				$result['processed']++;
-			}
+			$completed = $this->queue->complete_delivery(
+                [
+					'language' => $language,
+					'rows' => $language_rows,
+					'items' => $readiness_items,
+					'translated' => true,
+				]
+            );
+			$result['processed'] += $completed;
 			$this->announce_pushed_rows( $language, $store_rows );
 			return;
 		}
@@ -1340,8 +1348,14 @@ class Indexer {
 			$item['cache'] = CacheVersions::cache_reference( $site_id, $item['cache']['hash'], $language );
 		}
 		unset( $item );
+		if ( ! $this->queue->remember_batch_versions( array_column( $store_rows, 'id' ) ) ) {
+			foreach ( $language_rows as $row ) {
+				$this->queue->release( (int) $row['id'] );
+				$result['released']++;
+			}
+			return;
+		}
 		foreach ( $store_rows as &$store_row ) {
-			$this->queue->remember_versions( (int) $store_row['id'] );
 			foreach ( $store_row['items'] as &$item ) {
 				$item['cache'] = CacheVersions::cache_reference( $site_id, $item['cache']['hash'], $language );
 			}
@@ -1397,22 +1411,23 @@ class Indexer {
 			return;
 		}
 
-		foreach ( $language_rows as $language_row ) {
-			$this->queue->remember_job( (int) $language_row['id'], $job_id );
-			TranslationReadiness::record(
-				(int) $language_row['id'],
-				$language,
-				$readiness_items[ (int) $language_row['id'] ] ?? [],
-				! empty( $language_row['retranslating'] ) || ! in_array( (string) ( $language_row['object_type'] ?? '' ), [ self::MISS_OBJECT_TYPE ], true )
-			);
-			$this->queue->complete( $language_row['id'] );
-			$result['processed']++;
+		$completed = $this->queue->complete_delivery(
+            [
+				'language' => $language,
+				'rows' => $language_rows,
+				'items' => $readiness_items,
+				'job_id' => $job_id,
+			]
+        );
+		$result['processed'] += $completed;
+		if ( count( $language_rows ) !== $completed ) {
+			foreach ( $language_rows as $row ) {
+				if ( $this->queue->release( (int) $row['id'] ) ) {
+					$result['released']++; }
+			}
 		}
 
 		$this->announce_pushed_rows( $language, $store_rows );
-		if ( ! wp_next_scheduled( ReadinessReconcile::HOOK ) ) {
-			wp_schedule_single_event( time() + self::RESCHEDULE_DELAY_SECONDS, ReadinessReconcile::HOOK );
-		}
 	}
 
 	/**
@@ -1460,7 +1475,8 @@ class Indexer {
 		QueueExecution::run(
             function () use ( &$result, $ids, $budget_seconds ): void {
                 $result = $this->drain_rows_unlocked( $ids, $budget_seconds );
-            }
+            },
+            $budget_seconds
         );
 		return $result;
 	}
@@ -1602,26 +1618,28 @@ class Indexer {
 		return set_transient( self::INLINE_SLOT_TRANSIENT, $count + 1, self::INLINE_SLOT_TTL_SECONDS );
 	}
 
-	public static function schedule_inline_drain( array $ids ): string {
-		if ( ( ! function_exists( 'fastcgi_finish_request' ) && ! function_exists( 'litespeed_finish_request' ) ) || \TranslateWP\Components\BackgroundSwitch::off() ) {
+	public static function schedule_inline_drain( array $ids, bool $allow_inline = true ): string {
+		if ( \TranslateWP\Components\BackgroundSwitch::off() ) {
 			return 'cron';
 		}
-		if ( ! self::acquire_inline_slot() ) {
-			return 'capped';
-		}
+		$can_finish = function_exists( 'fastcgi_finish_request' ) || function_exists( 'litespeed_finish_request' );
+		$inline = $allow_inline && $can_finish && self::acquire_inline_slot();
 		register_shutdown_function(
-            static function () use ( $ids ): void {
+			static function () use ( $ids, $can_finish, $inline ): void {
 				try {
-					$finished = function_exists( 'fastcgi_finish_request' ) ? fastcgi_finish_request() : litespeed_finish_request();
-					if ( true === $finished ) {
+					$finished = $can_finish && ( function_exists( 'fastcgi_finish_request' ) ? fastcgi_finish_request() : litespeed_finish_request() );
+					if ( $finished && $inline ) {
 						( new self( '', '', null, null, false ) )->drain_rows( array_map( 'intval', $ids ) );
 					}
 				} finally {
-					self::release_inline_slot();
+					if ( $inline ) {
+						self::release_inline_slot();
+					}
+					\TranslateWP\Components\BackgroundEngine::visitor_wake();
 				}
 			}
-        );
-		return 'inline';
+		);
+		return $inline ? 'inline' : ( $can_finish ? 'capped' : 'cron' );
 	}
 
 	public static function release_inline_slot(): void {

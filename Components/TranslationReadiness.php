@@ -5,6 +5,8 @@ namespace TranslateWP\Components;
 class TranslationReadiness {
 
 	private const META = '_twp_delivery_manifest';
+	public const COMPLETED_SCOPES_OPTION = 'translatewp_completed_readiness_scopes';
+	private const MAX_COMPLETED_SCOPES = 128;
 	// Long enough for one full check cycle of a larger site under the service's
 	// look-up rate limit; settings and cache generation changes still withdraw
 	// readiness at once through the record scope.
@@ -21,22 +23,17 @@ class TranslationReadiness {
 				$scope = self::scope( $language );
 				$proofs = self::proofs( $language );
 				$swept = self::swept( $language );
-				$manifests = [];
-				foreach ( ( new IndexQueue() )->list_rows() as $row ) {
-					if ( $row['language'] !== $language ) {
-						continue;
-					}
-					$manifest = get_post_meta( (int) $row['id'], self::META, true );
-					if ( is_array( $manifest ) && ( $manifest['scope'] ?? '' ) === $scope ) {
-						$manifests[ (int) $row['id'] ] = $manifest;
-					}
-				}
+				$aliases = (array) get_option( self::COMPLETED_SCOPES_OPTION, [] );
+				$previous = $aliases[ $language ] ?? [];
+				$accepted = ( $previous['current'] ?? '' ) === $scope ? (array) ( $previous['accepted'] ?? [] ) : [];
+				$accepted[] = $scope;
 				TranslationStore::bump_cache_generation( [ $language ] );
 				$next_scope = self::scope( $language );
-				foreach ( $manifests as $id => $manifest ) {
-					$manifest['scope'] = $next_scope;
-					update_post_meta( $id, self::META, $manifest );
-				}
+				$aliases[ $language ] = [
+					'current' => $next_scope,
+					'accepted' => array_slice( array_values( array_unique( $accepted ) ), -self::MAX_COMPLETED_SCOPES ),
+				];
+				update_option( self::COMPLETED_SCOPES_OPTION, $aliases, false );
 				set_transient( 'twp_ready_' . $next_scope, $proofs, self::PROOF_GRACE_SECONDS );
 				set_transient( 'twp_swept_' . $next_scope, $swept, self::PROOF_GRACE_SECONDS );
 			}
@@ -44,6 +41,14 @@ class TranslationReadiness {
 	}
 
 	public static function record( int $id, string $language, array $items, bool $full_page = true ): void {
+		update_post_meta( $id, self::META, self::manifest_for( compact( 'id', 'language', 'items', 'full_page' ) ) );
+	}
+
+	public static function manifest_for( array $input ): array {
+		$id = (int) $input['id'];
+		$language = (string) $input['language'];
+		$items = (array) $input['items'];
+		$full_page = (bool) $input['full_page'];
 		$groups = [];
 		$valid = true;
 		$title = false;
@@ -59,7 +64,7 @@ class TranslationReadiness {
 		}
 		if ( ! $full_page ) {
 			$url = TranslationUrl::canonicalize( (string) get_post_meta( $id, '_twp_url', true ) );
-			foreach ( ( new IndexQueue() )->list_rows() as $row ) {
+			foreach ( ( new IndexQueue() )->rows_for_url( (string) get_post_meta( $id, '_twp_url', true ), $language ) as $row ) {
 				if ( $row['language'] === $language && '' !== $url && TranslationUrl::canonicalize( $row['url'] ) === $url ) {
 					$previous = self::groups( (int) $row['id'], $language );
 					if ( $previous ) {
@@ -70,15 +75,11 @@ class TranslationReadiness {
 				}
 			}
 		}
-		update_post_meta(
-            $id,
-            self::META,
-			[
-				'scope' => self::scope( $language ),
-				'groups' => $valid && $full_page ? $groups : [],
-				'title' => $title,
-			]
-        );
+		return [
+			'scope' => self::scope( $language ),
+			'groups' => $valid && $full_page ? $groups : [],
+			'title' => $title,
+		];
 	}
 
 	public static function is_ready( array $row ): bool {
@@ -111,7 +112,7 @@ class TranslationReadiness {
 		if ( ! is_array( $manifest ) || ! is_array( $manifest['groups'] ?? null ) ) {
 			return 'none';
 		}
-		return self::scope( $language ) === ( $manifest['scope'] ?? '' ) ? 'current' : 'stale';
+		return self::matching_scope( $manifest, $language ) ? 'current' : 'stale';
 	}
 
 	public static function sweep_incomplete( array $row ): bool {
@@ -304,14 +305,25 @@ class TranslationReadiness {
 	private static function groups( int $id, string $language ): array {
 		$manifest = get_post_meta( $id, self::META, true );
 		$title_required = '' !== trim( (string) get_post_meta( $id, '_twp_page_title', true ) );
-		return is_array( $manifest ) && self::scope( $language ) === ( $manifest['scope'] ?? '' ) && is_array( $manifest['groups'] ?? null )
+		return is_array( $manifest ) && self::matching_scope( $manifest, $language ) && is_array( $manifest['groups'] ?? null )
 			&& ( ! $title_required || true === ( $manifest['title'] ?? false ) )
 			? $manifest['groups'] : [];
 	}
 
 	private static function has_title( int $id, string $language ): bool {
 		$manifest = get_post_meta( $id, self::META, true );
-		return is_array( $manifest ) && self::scope( $language ) === ( $manifest['scope'] ?? '' ) && true === ( $manifest['title'] ?? false );
+		return is_array( $manifest ) && self::matching_scope( $manifest, $language ) && true === ( $manifest['title'] ?? false );
+	}
+
+	private static function matching_scope( array $manifest, string $language ): bool {
+		$current = self::scope( $language );
+		if ( ( $manifest['scope'] ?? '' ) === $current ) {
+			return true;
+		}
+		$aliases = (array) get_option( self::COMPLETED_SCOPES_OPTION, [] );
+		$completed = $aliases[ $language ] ?? [];
+		return ( $completed['current'] ?? '' ) === $current
+			&& in_array( $manifest['scope'] ?? '', $completed['accepted'] ?? [], true );
 	}
 
 	private static function scope( string $language ): string {

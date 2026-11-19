@@ -27,7 +27,7 @@ function engine_fixture(): IndexQueue {
 }
 $queue = engine_fixture();
 check_engine( [ 'state' => 'done', 'pending' => [ 'read' => 0, 'push' => 0, 'refill' => 0, 'visitor' => 0 ], 'v' => 1 ] === BackgroundEngine::step(), 'An empty step answers the exact done contract' );
-check_engine( 0 === get_option( BackgroundEngine::PHASE_OPTION ), 'A step advances one phase only' );
+check_engine( 1 === get_option( BackgroundEngine::PHASE_OPTION ), 'An idle step does not cycle through maintenance phases' );
 BackgroundEngine::service_step( [ 'pause' => true ] );
 check_engine( BackgroundSwitch::off(), 'Signed pause persists' );
 $phase = get_option( BackgroundEngine::PHASE_OPTION );
@@ -41,14 +41,14 @@ BackgroundEngine::cron();
 check_engine( $phase === get_option( BackgroundEngine::PHASE_OPTION ), 'Recent service activity suppresses cron work' );
 update_option( BackgroundEngine::LAST_SERVICE_OPTION, time() - 301, false );
 BackgroundEngine::cron();
-check_engine( $phase !== get_option( BackgroundEngine::PHASE_OPTION ), 'Service silence enables the cron fallback' );
-check_engine( 1 === count( array_filter( array_keys( $GLOBALS['wp_test_scheduled'] ), static fn ( string $hook ): bool => BackgroundEngine::CRON_HOOK === $hook ) ), 'Fallback scheduling does not accumulate duplicate cron events' );
+check_engine( $phase === get_option( BackgroundEngine::PHASE_OPTION ), 'Service silence does not launch empty fallback work' );
+check_engine( false === wp_next_scheduled( BackgroundEngine::CRON_HOOK ), 'An idle site schedules no fallback drain' );
 
 $queue = engine_fixture();
 $id = $queue->enqueue_push( [ 'object_type' => 'miss', 'object_id' => 123, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 50, 'payload' => wp_json_encode( [ [ 'groupId' => 'shop', 'markerPayload' => '⟪item_0001⟫Shop' ] ] ) ] );
 update_option( BackgroundEngine::PHASE_OPTION, 0, false );
 $result = BackgroundEngine::step();
-check_engine( 0 === $result['pending']['visitor'], 'The visitor phase pushes due misses immediately' );
+check_engine( 1 === $result['pending']['visitor'], 'A pushed visitor miss keeps the fast service pace until delivery is confirmed' );
 check_engine( IndexQueue::STATUS_DONE === $queue->list_rows()[0]['status'], 'Visitor work takes priority over the maintenance cursor' );
 check_engine( null === QueueExecution::budget(), 'The shared deadline is cleared after each step' );
 
@@ -99,7 +99,7 @@ $background = $queue->enqueue_push( [ 'object_type' => 'page', 'object_id' => 2,
 $queue->track_refill( $background );
 for ( $i = 1; $i <= 3; $i++ ) {
     $visitor = $queue->enqueue_push( [ 'object_type' => 'miss', 'object_id' => 100 + $i, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10, 'payload' => $payload( 100 + $i ) ] );
-    check_engine( 1 === BackgroundEngine::pending()['visitor'], 'Visitor count does not include pending background work' );
+    check_engine( $i === BackgroundEngine::pending()['visitor'], 'Visitor count includes unconfirmed visitor deliveries and excludes background work' );
     BackgroundEngine::step();
     check_engine( IndexQueue::STATUS_DONE === get_post_meta( $visitor, '_twp_status', true ), 'Due visitor pushes win over background priority pins' );
     check_engine( IndexQueue::STATUS_PENDING === get_post_meta( $background, '_twp_status', true ), 'A visitor phase does not push background rows as a second phase' );
@@ -107,20 +107,22 @@ for ( $i = 1; $i <= 3; $i++ ) {
 $waiting = $queue->enqueue_push( [ 'object_type' => 'miss', 'object_id' => 104, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10, 'payload' => $payload( 104 ) ] );
 $result = BackgroundEngine::step();
 check_engine( IndexQueue::STATUS_DONE === get_post_meta( $background, '_twp_status', true ) && IndexQueue::STATUS_PENDING === get_post_meta( $waiting, '_twp_status', true ), 'After three visitor phases one background phase prevents starvation' );
-check_engine( 1 === $result['pending']['visitor'], 'The response keeps the fast service pace while visitors wait' );
+check_engine( 4 === $result['pending']['visitor'], 'The response keeps the fast service pace while visitor pushes or confirmations wait' );
 
 engine_fixture();
 $GLOBALS['wp_test_remote_request_calls'] = [];
 BackgroundEngine::visitor_wake(); BackgroundEngine::visitor_wake(); BackgroundEngine::wake();
 $requests = $GLOBALS['wp_test_remote_request_calls'];
-check_engine( 1 === count( $requests ) && false === $requests[0]['args']['blocking'] && 0.01 === $requests[0]['args']['timeout'], 'An accepted visitor miss wakes the service without waiting, at most once per twenty seconds' );
+check_engine( 2 === count( $requests ) && true === $requests[0]['args']['blocking'] && 1.5 === $requests[0]['args']['timeout'], 'The visitor wake has enough transport budget and independent visitor and cron gates' );
 check_engine( '{}' === $requests[0]['args']['body'] && '1' === $requests[0]['args']['headers']['X-TranslateWP-Engine'], 'The visitor wake uses the authenticated engine marker and empty-object contract' );
-update_option( BackgroundEngine::LAST_WAKE_OPTION, time() - 21, false );
+update_option( BackgroundEngine::LAST_VISITOR_WAKE_OPTION, time() - 21, false );
+update_option( BackgroundEngine::LAST_VISITOR_ATTEMPT_OPTION, time() - 21, false );
 update_option( BackgroundEngine::LAST_STEP_OPTION, time(), false );
 BackgroundEngine::visitor_wake();
-check_engine( 2 === count( $GLOBALS['wp_test_remote_request_calls'] ), 'New visitor work may wake the service immediately after a done step' );
+check_engine( 3 === count( $GLOBALS['wp_test_remote_request_calls'] ), 'New visitor work may wake the service immediately after a done step' );
 
 $queue = engine_fixture();
+update_option( BackgroundEngine::VISITOR_HINT_OPTION, 'before-step', false );
 $GLOBALS['wp_test_after_option_write'][ BackgroundEngine::STATE_OPTION ] = static function () use ( $queue ): void {
     $queue->enqueue_miss_page( [ 'object_type' => 'miss', 'object_id' => 902, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10 ], [ [ 'groupId' => 'arriving-late', 'markerPayload' => '⟪item_0001⟫Another arrival' ] ] );
 };

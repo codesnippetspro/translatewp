@@ -176,6 +176,16 @@ class InMemoryIndexQueue extends IndexQueue {
 		return $claimed;
 	}
 
+	public function remember_batch_versions( array $ids ): bool { return true; }
+
+	public function complete_delivery( array $delivery ): int {
+		$completed = 0;
+		foreach ( $delivery['rows'] as $row ) {
+			$completed += $this->complete( (int) $row['id'] ) ? 1 : 0;
+		}
+		return $completed;
+	}
+
 	private function find( int $id ): ?string {
 		foreach ( $this->rows as $key => $row ) {
 			if ( $row['id'] === $id ) {

@@ -196,7 +196,7 @@ $queue->mark_translated( [ (int) $page['id'], (int) $gone['id'] ] );
 $generation_before = TranslationStore::cache_generation_for( 'de' );
 new \TranslateWP\Functionality\KeepWarm( 'translatewp', TRANSLATEWP_VERSION );
 do_action( 'translatewp_translation_affecting_settings_saved' );
-do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK );
+\TranslateWP\Components\QueueExecution::run( static function (): void { do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ); } );
 $rows = $queue->list_rows();
 $de   = array_values( array_filter( $rows, static fn ( array $row ): bool => 'de' === $row['language'] ) )[0];
 $fr   = array_values( array_filter( $rows, static fn ( array $row ): bool => 'fr' === $row['language'] ) )[0];
@@ -232,7 +232,7 @@ $counting  = static function ( string $language, array $batch ) use ( &$looked_u
 };
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $counting, static fn (): int => 1000, true );
 $heal->run();
-tnw_check( 2 === $looked_up, 'The scheduled pass proves a sixth of the site, two batches of seven, got ' . $looked_up );
+tnw_check( 14 === $looked_up, 'The bounded readiness turn visits all fourteen page rows while its time budget remains, got ' . $looked_up );
 $looked_up = 0;
 $heal->reconcile( 0 );
 tnw_check( 1 === $looked_up, 'A browser pass still proves one batch' );
@@ -305,15 +305,15 @@ for ( $n = 50; $n < 64; $n++ ) {
 }
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, 'tnw_present', static fn (): int => 1000, false );
 $heal->maybe_schedule();
-$ttl = ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time();
-tnw_check( $ttl > 0 && $ttl <= 60, 'Seven batches at two per pass: the next pass is due within a minute, got ' . $ttl );
+$ttl = (int) wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ) - time();
+tnw_check( $ttl >= 299 && $ttl <= 300 && ! wp_next_scheduled( ReadinessReconcile::HOOK ), 'The initial fallback waits for service grace with no independent readiness timer, got ' . $ttl );
 wp_test_reset( [ 'site' => [ 'id' => 'site', 'token' => 'secret' ] ] );
 $queue   = new IndexQueue();
 $indexer = new Indexer( 'translatewp', TRANSLATEWP_VERSION, $queue );
 tnw_manifest( tnw_done_row( $queue, 65, 'de' ) );
 ( new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, 'tnw_present', static fn (): int => 1000, false ) )->maybe_schedule();
-$ttl = ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time();
-tnw_check( 600 === $ttl, 'A site one pass covers keeps the ten-minute cadence, got ' . $ttl );
+$ttl = (int) wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ) - time();
+tnw_check( $ttl >= 299 && $ttl <= 300, 'A small bootstrap uses the same single service-grace fallback, got ' . $ttl );
 
 // Left alone, the scheduled passes walk the whole site: forty batches, each
 // pass proving a sixth, are all proven after six passes.
@@ -359,8 +359,8 @@ for ( $n = 200; $n < 500; $n++ ) {
 tnw_check( 300 === TranslationReadiness::batch_count( $queue->list_rows() ), 'Three hundred batches' );
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, 'tnw_present', static fn (): int => 1000, true );
 $heal->maybe_schedule();
-$ttl  = ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time();
-tnw_check( 60 === $ttl, 'A pass every minute while the site is being walked, got ' . $ttl );
+$ttl = (int) wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ) - time();
+tnw_check( $ttl >= 299 && $ttl <= 300, 'A large bootstrap also waits for service grace before its fallback, got ' . $ttl );
 $passes = 0;
 while ( $passes < 12 ) {
 	$heal->run();
@@ -437,7 +437,7 @@ $admin->update_data( new WP_REST_Request( 'POST', '', [ 'option' => 'translation
 tnw_check( ! isset( $GLOBALS['wp_test_scheduled'][ \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ] ), 'Saving the same brief again schedules no retranslation' );
 $admin->update_data( new WP_REST_Request( 'POST', '', [ 'option' => 'translations.context', 'data' => [ 'text_context' => 'A contemporary dance studio in Riga, for dancers of every level.' ] ] ) );
 tnw_check( isset( $GLOBALS['wp_test_scheduled'][ \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ] ), 'A changed brief schedules the retranslation' );
-do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK );
+\TranslateWP\Components\QueueExecution::run( static function (): void { do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ); } );
 tnw_check( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'and the site is translated again' );
 
 // A change that touches one language (a per-language model) retranslates that language only.
@@ -455,7 +455,7 @@ do_action( 'translatewp_translation_affecting_settings_saved', [ 'it' ] );
 tnw_check( [ 'it' ] === get_option( \TranslateWP\Functionality\KeepWarm::PENDING_LANGUAGES_OPTION ), 'Changes in one window gather their languages once' );
 $events = array_filter( $GLOBALS['wp_test_scheduled'], static fn ( $hook ): bool => \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK === $hook, ARRAY_FILTER_USE_KEY );
 tnw_check( 1 === count( $events ), 'and leave one scheduled retranslation' );
-do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK );
+\TranslateWP\Components\QueueExecution::run( static function (): void { do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ); } );
 $by = [];
 foreach ( $queue->list_rows() as $row ) {
 	$by[ $row['language'] ] = $row['status'];
@@ -477,7 +477,7 @@ new \TranslateWP\Functionality\KeepWarm( 'translatewp', TRANSLATEWP_VERSION );
 do_action( 'translatewp_translation_affecting_settings_saved', [ 'de', 'it' ] );
 do_action( 'translatewp_translation_affecting_settings_saved', [ 'it' ] );
 $generations = [ 'de' => TranslationStore::cache_generation_for( 'de' ), 'it' => TranslationStore::cache_generation_for( 'it' ) ];
-do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK );
+\TranslateWP\Components\QueueExecution::run( static function (): void { do_action( \TranslateWP\Functionality\KeepWarm::SETTINGS_DEBOUNCE_HOOK ); } );
 $by = [];
 foreach ( $queue->list_rows() as $row ) {
 	$by[ $row['language'] ] = $row['status'];

@@ -173,6 +173,47 @@ class WP_Testwpdb {
 	public function query( string $query ) {
 		unset( $query );
 
+        if ( false !== strpos( $this->last_query, 'WHERE option_name = %s AND option_value = %s' ) ) {
+            [ $name, $owner ] = $this->prepared_args;
+            if ( get_option( $name, '' ) !== $owner ) { return 0; }
+            delete_option( $name ); return 1;
+        }
+
+        if ( 0 === strpos( $this->last_query, 'INSERT IGNORE INTO wp_options' ) ) {
+            if ( ! empty( $GLOBALS['wp_test_option_insert_fail'] ) ) { return false; }
+            [ $name, $owner ] = $this->prepared_args;
+            if ( false !== get_option( $name, false ) ) { return 0; }
+            update_option( $name, $owner, false ); return 1;
+        }
+        if ( 0 === strpos( $this->last_query, 'INSERT INTO wp_postmeta (post_id, meta_key, meta_value)' ) ) {
+            for ( $i = 0; $i < count( $this->prepared_args ); $i += 7 ) {
+                [ $key, $value, $id, $type, $status ] = array_slice( $this->prepared_args, $i, 5 );
+                foreach ( $GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post ) {
+                    if ( (int) $post['ID'] === (int) $id && ($post['post_type']??'') === $type && ($post['post_status']??'') === $status && !array_key_exists($key,$post['meta_input']) ) { $post['meta_input'][$key] = maybe_unserialize($value); }
+                } unset($post);
+            } return 1;
+        }
+        if ( 0 === strpos( $this->last_query, 'UPDATE wp_postmeta pm INNER JOIN' ) ) {
+            $n = substr_count($this->last_query, ' WHEN pm.post_id =');
+            for ($i=0;$i<$n*3;$i+=3) {
+                [$id,$key,$value] = array_slice($this->prepared_args,$i,3);
+                foreach ($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post) {
+                    if ((int)$post['ID']===(int)$id && ($post['post_type']??'')==='twp_index_item' && ($post['post_status']??'')==='private' && array_key_exists($key,$post['meta_input'])) { $post['meta_input'][$key]=maybe_unserialize($value); }
+                } unset($post);
+            } return 1;
+        }
+        if ( 0 === strpos( $this->last_query, 'DELETE pm FROM wp_postmeta' ) ) {
+            $ids=[];$i=0;while(is_int($this->prepared_args[$i]??null)){$ids[]=$this->prepared_args[$i++];}
+            $keys=array_slice($this->prepared_args,$i,-2);
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post){
+                if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){foreach($keys as $key){unset($post['meta_input'][$key]);}}
+            }unset($post);return 1;
+        }
+        if ( 0 === strpos( $this->last_query, "UPDATE wp_posts SET post_content = ''" ) ) {
+            $ids=array_slice($this->prepared_args,2);
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post){if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){$post['post_content']='';}}unset($post);return count($ids);
+        }
+
 		// The uninstall's prefix delete of options, transients and network options.
 		if ( preg_match( '/^DELETE FROM (wp_options|wp_sitemeta) WHERE/', $this->last_query, $table ) ) {
 			$names = array_filter( $this->prepared_args, 'is_string' );
@@ -262,7 +303,61 @@ class WP_Testwpdb {
 		return false;
 	}
 
+	public function get_results( string $query ): array {
+        $GLOBALS['wp_test_engine_aggregate_calls'] = 1 + ( $GLOBALS['wp_test_engine_aggregate_calls'] ?? 0 );
+        $buckets = [];
+        foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
+            if ( 'twp_index_item' !== ( $post['post_type'] ?? '' ) ) { continue; }
+            $m = $post['meta_input'];
+            $row = [ 'language' => (string) ( $m['_twp_language'] ?? '' ), 'status' => $m['_twp_status'] ?? '', 'stage' => $m['_twp_stage'] ?? '', 'object_type' => $m['_twp_object_type'] ?? '', 'translated' => (int) ( $m['_twp_translated_at'] ?? 0 ) > 0, 'background' => (int) ( $m['_twp_background_refresh'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslate'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslating' => (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslate' => (int) ( $m['_twp_retranslate'] ?? 0 ) > 0, 'repairing' => (int) ( $m['_twp_cold_retries'] ?? 0 ) > 0 ];
+            $key = json_encode( $row ); $due = (int) ( $m['_twp_reader_not_before'] ?? 0 );
+            $buckets[$key] = $row + [ 'due' => min( $due, $buckets[$key]['due'] ?? $due ), 'n' => 1 + ( $buckets[$key]['n'] ?? 0 ) ];
+        }
+        return array_map( static fn ( array $row ): object => (object) $row, array_values( $buckets ) );
+    }
+
 	public function get_col( string $query ): array {
+        if ( 0 === strpos( $this->last_query, 'SELECT ID FROM wp_posts WHERE ID IN (' ) ) {
+            $ids=array_slice($this->prepared_args,0,-2);
+            return array_values(array_map(static fn(array $p):int=>(int)$p['ID'],array_filter($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[],static fn(array $p):bool=>in_array((int)$p['ID'],$ids,true)&&($p['post_type']??'')==='twp_index_item'&&($p['post_status']??'')==='private')));
+        }
+        if ( false !== strpos( $this->last_query, 'AS engine_id' ) || false !== strpos( $this->last_query, 'AS engine_due_id' ) ) {
+            $sql=$this->last_query;$args=$this->prepared_args;$due=strpos($sql,'AS engine_due_id')!==false;
+            $push=$due||strpos($sql,"stage.meta_value = 'push'")!==false;
+            $limit=(int)$args[count($args)-($due?1:2)];$offset=$due?0:(int)end($args);
+            $rows=[];
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[] as $post){
+                $m=$post['meta_input']??[];
+                if(($post['post_type']??'')!=='twp_index_item'||($post['post_status']??'')!=='private'){continue;}
+                if($due){if(($m['_twp_status']??'')!==$args[2]||($m['_twp_stage']??'')!==$args[3]||(int)($m['_twp_reader_not_before']??0)>(int)$args[4]){continue;}}
+                else{
+                    if(''===(string)($m['_twp_language']??'')){continue;}
+                    $visitor=($m['_twp_object_type']??'')==='miss'&&(int)($m['_twp_retranslate']??0)<=0&&(int)($m['_twp_retranslating']??0)<=0&&(int)($m['_twp_background_refresh']??0)<=0;
+                    $background=strpos($sql,'NOT (kind.meta_value')!==false;
+                    if($background===$visitor){continue;}
+                    if($push){if(($m['_twp_status']??'')!=='pending'||($m['_twp_stage']??'')!=='push'||(int)($m['_twp_reader_not_before']??0)>(int)$args[2]){continue;}}
+                    elseif(($m['_twp_status']??'')!=='done'||(int)($m['_twp_translated_at']??0)>0){continue;}
+                }
+                $rows[]=$post;
+            }
+            usort($rows,static fn(array $a,array $b):int=>($push?((int)($a['meta_input']['_twp_priority']??0)<=>(int)($b['meta_input']['_twp_priority']??0)):0)?:((int)$a['ID']<=>(int)$b['ID']));
+            $ids=array_column(array_slice($rows,$offset,$limit),'ID');
+            $GLOBALS['wp_test_engine_selects'][]=['query'=>$sql,'limit'=>$limit,'count'=>count($ids)];
+            return $ids;
+        }
+
+        if ( false !== strpos( $this->last_query, 'HAVING COUNT(DISTINCT p.ID) > 1 LIMIT 10' ) ) {
+            $groups = [];
+            foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
+                if ( 'twp_index_item' !== ( $post['post_type'] ?? '' ) ) { continue; }
+                $m=$post['meta_input'];
+                if ( 'done' !== ($m['_twp_status'] ?? '') || ( '' !== (string) ($m['_twp_language'] ?? '') && (int) ($m['_twp_translated_at'] ?? 0) <= 0 ) ) { continue; }
+                $key=implode('|', [ $m['_twp_object_type'] ?? '', $m['_twp_object_id'] ?? '', $m['_twp_language'] ?? '' ] );
+                $groups[$key][] = (int) $post['ID'];
+            }
+            return array_slice( array_map( static fn ( array $ids ): int => min( $ids ), array_values( array_filter( $groups, static fn ( array $ids ): bool => count($ids)>1 ) ) ), 0, 10 );
+        }
+
 		if ( false !== strpos( $this->last_query, 'ID > %d ORDER BY ID ASC LIMIT %d' ) ) {
 			[ $type, $after, $limit ] = $this->prepared_args;
 			$ids = array_values( array_filter( $GLOBALS[ wp_test_blog_store( 'wp_test_posts' ) ][ $type ] ?? [], static fn( $id ): bool => $id > $after ) );
@@ -298,6 +393,8 @@ class WP_Testwpdb {
 
 	public function get_var( string $query ) {
 		if ( false !== strpos( $this->last_query, 'GET_LOCK(' ) || false !== strpos( $this->last_query, 'RELEASE_LOCK(' ) ) {
+            $GLOBALS['wp_test_named_lock_calls'][] = $this->prepared_args;
+            if ( false !== strpos( $this->last_query, 'GET_LOCK(' ) && array_key_exists( 'wp_test_named_lock_result', $GLOBALS ) ) { return $GLOBALS['wp_test_named_lock_result']; }
 			return '1';
 		}
 		unset( $query );
@@ -674,6 +771,7 @@ function delete_option( $name ) {
 
 if ( ! function_exists( 'add_option' ) ) {
 	function add_option( $name, $value = '', $deprecated = '', $autoload = null ): bool {
+        if ( ! empty( $GLOBALS['wp_test_option_insert_fail'] ) && 0 === strpos( $name, 'translatewp_lock_' ) ) { return false; }
 		unset( $deprecated, $autoload );
 		if ( false !== get_option( $name, false ) ) {
 			return false;
@@ -866,7 +964,7 @@ function get_posts( array $args = [] ) {
 		usort( $ids, static fn( int $left, int $right ): int => ( (int) get_post_meta( $left, $meta_key, true ) <=> (int) get_post_meta( $right, $meta_key, true ) ) ?: ( $left <=> $right ) );
 	}
 	if ( 'twp_index_item' === $post_type && (int) ( $args['posts_per_page'] ?? -1 ) > 0 ) {
-		$ids = array_slice( $ids, 0, (int) $args['posts_per_page'] );
+		$ids = array_slice( $ids, (int) ( $args['offset'] ?? 0 ), (int) $args['posts_per_page'] );
 	}
 
 	return $ids;
@@ -1022,6 +1120,17 @@ function delete_post_meta( $post_id, $key, $value = '' ) {
 	}
 	return false;
 }
+
+function maybe_serialize( $value ) {
+    if (is_array($value)||is_object($value)) { return serialize($value); }
+    if (is_string($value)&&('b:0;'===$value||false!==@unserialize($value))) { return serialize($value); }
+    return $value;
+}
+function maybe_unserialize( $value ) {
+    if (is_string($value)&&('b:0;'===$value||false!==@unserialize($value))) { return unserialize($value, ['allowed_classes'=>false]); }
+    return $value;
+}
+function wp_cache_set_posts_last_changed(): void { $GLOBALS['qm_last_changed']=1+($GLOBALS['qm_last_changed']??0); }
 
 function update_meta_cache( $type, $ids ) {
 	unset( $type, $ids );
@@ -1245,6 +1354,11 @@ function wp_remote_request( string $url, array $args = [] ) {
 	$path   = (string) parse_url( $url, PHP_URL_PATH );
 	$method = strtoupper( (string) ( $args['method'] ?? 'GET' ) );
 	$body   = json_decode( (string) ( $args['body'] ?? '' ), true );
+
+	if ( '/v1/background/wake' === $path ) {
+        if ( (float) ( $args['timeout'] ?? 0 ) < 0.05 ) { return new WP_Error( 'http_request_failed', 'TLS handshake needs more than 50 ms' ); }
+        return $GLOBALS['wp_test_wake_response'] ?? [ 'response' => [ 'code' => 204 ], 'body' => '' ];
+    }
 
 	if ( '/v1/translation/telemetry/served' === $path ) {
 		return apply_filters( 'pre_http_request', false, $args, $url );

@@ -68,7 +68,7 @@ class CronFallback {
 			return __( 'Background translation is paused. No background work runs while it is paused.', 'translate' );
 		}
 		if ( get_transient( MutationLock::FAILURE_TRANSIENT ) ) {
-			return __( 'Background translation is waiting because the database does not support its worker lock. Ask your host to enable named database locks.', 'translate' );
+			return __( 'Background translation is waiting because its database lock could not be stored. Ask your host to check database write access.', 'translate' );
 		}
 		$reason = (string) get_option( Indexer::READER_FAILURE_OPTION, '' );
 		if ( 'page_tls_failed' === $reason ) {

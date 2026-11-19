@@ -61,6 +61,7 @@ class IndexQueue {
 
 
 	public const DUPLICATE_SWEEP_OPTION = 'translatewp_queue_duplicate_sweep';
+	public const REFILL_COMPLETIONS_OPTION = 'translatewp_refill_completions';
 
 	private const META_BACKGROUND_REFRESH = '_twp_background_refresh';
 	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
@@ -77,7 +78,7 @@ class IndexQueue {
 
 	private static bool $mutating_rows = false;
 
-	private static function mutate_rows( callable $work, $default ) {
+	private static function mutate_rows( callable $work, $default, int $timeout = 0 ) {
 		if ( self::$mutating_rows ) {
 			return $work();
 		}
@@ -88,11 +89,14 @@ class IndexQueue {
 				self::$mutating_rows = true;
 				try {
 					$result = $work();
+					if ( null !== $result && false !== $result && 0 !== $result && [] !== $result ) {
+						BackgroundEngine::mark_dirty();
+					}
 				} finally {
 					self::$mutating_rows = false;
 				}
 			},
-			0
+			$timeout
 		);
 		return $result;
 	}
@@ -171,6 +175,10 @@ class IndexQueue {
 	 * locale, whose source->source job never completes.
 	 */
 	public function delete_language_rows( string $language ): int {
+		return self::mutate_rows( fn () => $this->delete_language_rows_unlocked( $language ), 0 );
+	}
+
+	private function delete_language_rows_unlocked( string $language ): int {
 		if ( '' === $language ) {
 			return 0;
 		}
@@ -208,6 +216,10 @@ class IndexQueue {
 	 * Returns how many rows were removed.
 	 */
 	public function delete_unindexable_rows(): int {
+		return self::mutate_rows( fn () => $this->delete_unindexable_rows_unlocked(), 0 );
+	}
+
+	private function delete_unindexable_rows_unlocked(): int {
 		$deleted = 0;
 
 		foreach ( $this->all_row_ids() as $post_id ) {
@@ -436,6 +448,9 @@ class IndexQueue {
 				false
 			);
 
+			if ( $post_id && ! is_wp_error( $post_id ) ) {
+				$this->track_refill( (int) $post_id );
+			}
 			return $post_id && ! is_wp_error( $post_id ) ? 1 : 0;
 		}
 
@@ -560,6 +575,9 @@ class IndexQueue {
 	 */
 	public function list_rows( ?array $ids = null ): array {
 		$rows = [];
+		if ( $ids && function_exists( 'update_meta_cache' ) ) {
+			update_meta_cache( 'post', $ids );
+		}
 
 		foreach ( $ids ?? $this->all_row_ids() as $post_id ) {
 			if ( self::READ_LANGUAGE === (string) get_post_meta( $post_id, self::META_LANGUAGE, true ) ) {
@@ -617,37 +635,84 @@ class IndexQueue {
 	}
 
 	public function mark_translated( array $ids ): void {
+		self::mutate_rows( fn () => $this->mark_translated_unlocked( $ids ), null );
+	}
+
+	private function mark_translated_unlocked( array $ids ): void {
+		$changes = [];
 		foreach ( $ids as $id ) {
-			if ( self::STATUS_DONE !== $this->row_status( (int) $id ) ) {
-				continue;
+			if ( self::STATUS_DONE === $this->row_status( (int) $id ) && (int) get_post_meta( (int) $id, self::META_TRANSLATED_AT, true ) <= 0 ) {
+				$changes[ (int) $id ] = [ self::META_TRANSLATED_AT => $this->now() ];
 			}
-			if ( (int) get_post_meta( (int) $id, self::META_TRANSLATED_AT, true ) <= 0 ) {
-				update_post_meta( (int) $id, self::META_TRANSLATED_AT, $this->now() );
-			}
+		}
+		foreach ( array_chunk( $changes, QueueMetadata::MAX_ROWS, true ) as $batch ) {
+			if ( QueueMetadata::write( $batch ) ) {
+				BackgroundEngine::mark_dirty(); }
 		}
 		$this->settle_refills();
 	}
 
 	public function settle_refills(): void {
-		$languages = [];
-		foreach ( $this->all_row_ids() as $id ) {
-			if ( get_post_meta( $id, self::META_RETRANSLATING, true ) && ! get_post_meta( $id, self::META_REFILL_FINISHED, true ) ) {
-				$languages[ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] = true;
-			}
-		}
-		$this->finish_refills( array_keys( $languages ) );
+		self::mutate_rows( fn () => $this->settle_refills_unlocked(), null );
 	}
 
-	private function finish_refills( array $languages ): void {
+	private function settle_refills_unlocked(): void {
+		$pending = QueueExecution::is_bounded() ? ( BackgroundEngine::work_state()['refill_pending'] ?? [ '__unknown' => 1 ] ) : null;
+		do {
+			$languages = [];
+			$ids = QueueExecution::is_bounded() ? $this->refill_row_ids() : $this->all_row_ids();
+			foreach ( $ids as $id ) {
+				if ( get_post_meta( $id, self::META_RETRANSLATING, true ) && ! get_post_meta( $id, self::META_REFILL_FINISHED, true ) ) {
+					$languages[ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] = true;
+				}
+			}
+			$cleared = $this->finish_refills( array_keys( $languages ), $pending );
+		} while ( QueueExecution::is_bounded() && ! QueueExecution::expired() && $cleared > 0 );
+	}
+
+	private function refill_row_ids( ?string $language = null ): array {
+		$query = [
+			[
+				'key' => self::META_RETRANSLATING,
+				'value' => 1,
+			],
+		];
+		if ( null !== $language ) {
+			$query[] = [
+				'key' => self::META_LANGUAGE,
+				'value' => $language,
+			];
+		}
+		$ids = array_map(
+            'intval',
+            get_posts(
+                [
+					'post_type' => self::POST_TYPE,
+					'post_status' => 'private',
+					'fields' => 'ids',
+					'posts_per_page' => 50,
+					'orderby' => 'ID',
+					'order' => 'ASC',
+					'meta_query' => $query, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+                ]
+            )
+        );
+		if ( $ids ) {
+			update_meta_cache( 'post', $ids ); }
+		return $ids;
+	}
+
+	private function finish_refills( array $languages, ?array $pending_counts = null ): int {
+		$cleared = 0;
 		foreach ( $languages as $language ) {
 			MutationLock::run(
                 'refill_' . $language,
-                function () use ( $language ): void {
+                function () use ( $language, $pending_counts, &$cleared ): void {
 					$rows = [];
 					$pending = false;
 					$unannounced = false;
-					foreach ( $this->all_row_ids() as $id ) {
-						wp_cache_delete( (string) $id, 'post_meta' );
+					$ids = QueueExecution::is_bounded() ? $this->refill_row_ids( $language ) : $this->all_row_ids();
+					foreach ( $ids as $id ) {
 						if ( (string) get_post_meta( $id, self::META_LANGUAGE, true ) !== $language || ! get_post_meta( $id, self::META_RETRANSLATING, true ) ) {
 							continue;
 						}
@@ -655,18 +720,24 @@ class IndexQueue {
 						$pending = $pending || ( self::STATUS_DEAD !== $this->row_status( $id ) && ! $this->is_translated( $id ) );
 						$unannounced = $unannounced || ! get_post_meta( $id, self::META_REFILL_FINISHED, true );
 					}
+					$pending = $pending || ( null !== $pending_counts && ( ( $pending_counts[ $language ] ?? 0 ) > 0 || ! empty( $pending_counts['__unknown'] ) ) );
 					if ( ! $pending && $unannounced ) {
-						if ( ! TranslationReadiness::complete_refill( $language ) ) {
+						$completions = (array) get_option( self::REFILL_COMPLETIONS_OPTION, [] );
+						if ( empty( $completions[ $language ] ) && ! TranslationReadiness::complete_refill( $language ) ) {
 							return;
 						}
-						foreach ( $rows as $id ) {
-							update_post_meta( $id, self::META_REFILL_FINISHED, 1 );
-							delete_post_meta( $id, self::META_RETRANSLATING );
+						$completions[ $language ] = true;
+						update_option( self::REFILL_COMPLETIONS_OPTION, $completions, false );
+						$changes = array_fill_keys( $rows, [ self::META_REFILL_FINISHED => 1 ] );
+						if ( QueueMetadata::write( $changes, [ self::META_RETRANSLATING ] ) ) {
+							$cleared += count( $rows );
+							BackgroundEngine::mark_dirty();
 						}
 					}
 				}
             );
 		}
+		return $cleared;
 	}
 
 	/**
@@ -721,15 +792,15 @@ class IndexQueue {
 	 * the newest row (highest post id) per canonical URL and language and
 	 * delete the rest. Returns how many stale rows were removed.
 	 */
-	public function collapse_stale_duplicates( bool $settled_only = false ): int {
-		return self::mutate_rows( fn () => $this->collapse_stale_duplicates_unlocked( $settled_only ), 0 );
+	public function collapse_stale_duplicates( bool $settled_only = false, ?array $row_ids = null ): int {
+		return self::mutate_rows( fn () => $this->collapse_stale_duplicates_unlocked( $settled_only, $row_ids ), 0 );
 	}
 
-	private function collapse_stale_duplicates_unlocked( bool $settled_only = false ): int {
+	private function collapse_stale_duplicates_unlocked( bool $settled_only = false, ?array $row_ids = null ): int {
 		$by_key = [];
 		$snapshots = [];
 
-		foreach ( $this->all_row_ids() as $post_id ) {
+		foreach ( $row_ids ?? $this->all_row_ids() as $post_id ) {
 			$url       = (string) get_post_meta( $post_id, self::META_URL, true );
 			$language  = (string) get_post_meta( $post_id, self::META_LANGUAGE, true );
 			$canonical = TranslationUrl::canonicalize( $url );
@@ -804,6 +875,65 @@ class IndexQueue {
 		];
 	}
 
+	private function automatic_duplicate_ids(): array {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$roots = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT MIN(p.ID) FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} kind ON kind.post_id = p.ID AND kind.meta_key = '_twp_object_type'
+			INNER JOIN {$wpdb->postmeta} object_id ON object_id.post_id = p.ID AND object_id.meta_key = '_twp_object_id'
+			INNER JOIN {$wpdb->postmeta} language ON language.post_id = p.ID AND language.meta_key = '_twp_language'
+			INNER JOIN {$wpdb->postmeta} state ON state.post_id = p.ID AND state.meta_key = '_twp_status' AND state.meta_value = 'done'
+			LEFT JOIN {$wpdb->postmeta} translated ON translated.post_id = p.ID AND translated.meta_key = '_twp_translated_at'
+			WHERE (language.meta_value = '' OR COALESCE(translated.meta_value, '0') + 0 > 0) AND p.post_type = %s AND p.post_status = %s
+			GROUP BY kind.meta_value, object_id.meta_value, language.meta_value
+			HAVING COUNT(DISTINCT p.ID) > 1 LIMIT 10",
+                self::POST_TYPE,
+                'private'
+            )
+        );
+		$ids = [];
+		foreach ( $roots as $root ) {
+			$query = [];
+			foreach ( [ self::META_OBJECT_TYPE, self::META_OBJECT_ID, self::META_LANGUAGE ] as $key ) {
+				$query[] = [
+					'key' => $key,
+					'value' => get_post_meta( (int) $root, $key, true ),
+				];
+			}
+			$query[] = [
+				'key' => self::META_STATUS,
+				'value' => self::STATUS_DONE,
+			];
+			if ( self::READ_LANGUAGE !== (string) get_post_meta( (int) $root, self::META_LANGUAGE, true ) ) {
+				$query[] = [
+					'key' => self::META_TRANSLATED_AT,
+					'value' => 0,
+					'compare' => '>',
+					'type' => 'NUMERIC',
+				];
+			}
+			$copies = get_posts(
+                [
+					'post_type' => self::POST_TYPE,
+					'post_status' => 'private',
+					'fields' => 'ids',
+					'posts_per_page' => 2,
+					'orderby' => 'ID',
+					'order' => 'DESC',
+					'meta_query' => $query, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+                ]
+            );
+			$ids = array_merge( $ids, [ (int) $root ], array_map( 'intval', $copies ) );
+		}
+		$ids = array_values( array_unique( $ids ) );
+		if ( $ids ) {
+			update_meta_cache( 'post', $ids );
+		}
+		return $ids;
+	}
+
 	public function maintain_duplicates(): void {
 		if ( QueueExecution::expired() ) {
 			return;
@@ -816,7 +946,7 @@ class IndexQueue {
 					return;
 				}
 				update_option( self::DUPLICATE_SWEEP_OPTION, $this->now(), false );
-				$this->collapse_stale_duplicates( true );
+				$this->collapse_stale_duplicates( true, $this->automatic_duplicate_ids() );
 			}
 		);
 	}
@@ -833,30 +963,19 @@ class IndexQueue {
 		return $this->enqueue_push_row( $row, 'miss' === (string) $row['object_type'] );
 	}
 
-	private function enqueue_push_row( array $row, bool $visitor ) {
-		$object_type = (string) $row['object_type'];
-		$object_id   = (int) $row['object_id'];
-		$language    = (string) $row['language'];
-		$payload     = (string) $row['payload'];
-		if ( '' === trim( $payload ) ) {
-			return false;
-		}
-
-		$existing_id = $this->find_row( $object_type, $object_id, $language, $visitor );
-
-		if ( null === $existing_id ) {
+	private function insert_push_row( array $row ) {
 			$post_id = wp_insert_post(
 				[
 					'post_type'    => self::POST_TYPE,
 					'post_status'  => 'private',
-					'post_title'   => $object_type . ':' . $object_id . ':' . $language,
-					'post_content' => wp_slash( self::encode_payload( $payload ) ),
+					'post_title'   => $row['object_type'] . ':' . $row['object_id'] . ':' . $row['language'],
+					'post_content' => wp_slash( self::encode_payload( (string) $row['payload'] ) ),
 					'meta_input'   => [
-						self::META_OBJECT_TYPE => $object_type,
-						self::META_OBJECT_ID   => $object_id,
+						self::META_OBJECT_TYPE => (string) $row['object_type'],
+						self::META_OBJECT_ID   => (int) $row['object_id'],
 						self::META_URL         => (string) ( $row['url'] ?? '' ),
 						self::META_PAGE_TITLE  => (string) ( $row['page_title'] ?? '' ),
-						self::META_LANGUAGE    => $language,
+						self::META_LANGUAGE    => (string) $row['language'],
 						self::META_STAGE       => self::STAGE_PUSH,
 						self::META_STATUS      => self::STATUS_PENDING,
 						self::META_PRIORITY    => (int) $row['priority'],
@@ -869,6 +988,21 @@ class IndexQueue {
 			);
 
 			return ( $post_id && ! is_wp_error( $post_id ) ) ? (int) $post_id : false;
+	}
+
+	private function enqueue_push_row( array $row, bool $visitor ) {
+		$object_type = (string) $row['object_type'];
+		$object_id   = (int) $row['object_id'];
+		$language    = (string) $row['language'];
+		$payload     = (string) $row['payload'];
+		if ( '' === trim( $payload ) ) {
+			return false;
+		}
+
+		$existing_id = $this->find_row( $object_type, $object_id, $language, $visitor );
+
+		if ( null === $existing_id ) {
+			return $this->insert_push_row( $row );
 		}
 
 		$status = $this->row_status( $existing_id );
@@ -913,7 +1047,7 @@ class IndexQueue {
 	 * their captured payload so later arrivals cannot overwrite their manifest.
 	 */
 	public function enqueue_miss_page( array $row, array $items ) {
-		return self::mutate_rows(
+		$id = self::mutate_rows(
             function () use ( $row, $items ) {
                 $id = $this->enqueue_miss_page_unlocked( $row, $items );
                 if ( false !== $id ) {
@@ -921,8 +1055,24 @@ class IndexQueue {
                 }
                 return $id;
             },
-            false
+            false,
+            1
         );
+		if ( false !== $id ) {
+			return $id;
+		}
+		$items = self::encodable_items( $items );
+		if ( ! $items ) {
+			return false;
+		}
+		$row['payload'] = (string) wp_json_encode( array_values( $items ) );
+		// A contended mutation appends a new row; it never edits a worker's claim.
+		$id = $this->insert_push_row( $row );
+		if ( false !== $id ) {
+			BackgroundEngine::mark_dirty();
+			update_option( BackgroundEngine::VISITOR_HINT_OPTION, bin2hex( random_bytes( 8 ) ), false );
+		}
+		return $id;
 	}
 
 	private function enqueue_miss_page_unlocked( array $row, array $items ) {
@@ -1024,8 +1174,16 @@ class IndexQueue {
 
 	private function claim_rows_unlocked( array $ids ): array {
 		$claimed = [];
-		foreach ( array_map( 'intval', $ids ) as $post_id ) {
-			wp_cache_delete( (string) $post_id, 'post_meta' );
+		$changes = [];
+		$ids = array_map( 'intval', $ids );
+		foreach ( $ids as $id ) {
+			wp_cache_delete( (string) $id, 'post_meta' ); }
+		if ( $ids ) {
+			update_meta_cache( 'post', $ids );
+			if ( function_exists( '_prime_post_caches' ) ) {
+				_prime_post_caches( $ids, false, false ); }
+		}
+		foreach ( $ids as $post_id ) {
 			if ( $this->retire_unpublished_row( $post_id ) ) {
 				continue;
 			}
@@ -1033,9 +1191,13 @@ class IndexQueue {
 				continue;
 			}
 
-			update_post_meta( $post_id, self::META_STATUS, self::STATUS_CLAIMED );
-			update_post_meta( $post_id, self::META_CLAIMED_AT, $this->now() );
-			$this->mark_started( (int) $post_id );
+			$changes[ $post_id ] = [
+				self::META_STATUS => self::STATUS_CLAIMED,
+				self::META_CLAIMED_AT => $this->now(),
+			];
+			if ( (int) get_post_meta( $post_id, self::META_STARTED_AT, true ) <= 0 ) {
+				$changes[ $post_id ][ self::META_STARTED_AT ] = $this->now();
+			}
 
 			$claimed[] = [
 				'id'          => $post_id,
@@ -1053,105 +1215,43 @@ class IndexQueue {
 			];
 		}
 
+		if ( ! QueueMetadata::write( $changes ) ) {
+			foreach ( array_keys( $changes ) as $id ) {
+				update_post_meta( (int) $id, self::META_STATUS, self::STATUS_PENDING );
+			}
+			return [];
+		}
 		return $claimed;
 	}
 
 	private function due_row_ids( array $filters, int $limit ): array {
-		$meta = [
-			[
-				'key' => self::META_STATUS,
-				'value' => $filters['status'] ?? self::STATUS_PENDING,
-			],
-			[
-				'relation' => 'OR',
-				[
-					'key' => '_twp_reader_not_before',
-					'compare' => 'NOT EXISTS',
-				],
-				[
-					'key' => '_twp_reader_not_before',
-					'value' => $this->now(),
-					'type' => 'NUMERIC',
-					'compare' => '<=',
-				],
-			],
-		];
-		if ( isset( $filters['stage'] ) ) {
-			$meta[] = [
-				'key' => self::META_STAGE,
-				'value' => $filters['stage'],
-			];
-		}
-		if ( isset( $filters['claimed_before'] ) ) {
-			$meta[] = [
-				'key' => self::META_CLAIMED_AT,
-				'value' => $filters['claimed_before'],
-				'type' => 'NUMERIC',
-				'compare' => '<=',
-			];
-		}
-		return get_posts(
-			[
-				'post_type' => self::POST_TYPE,
-				'post_status' => 'private',
-				'posts_per_page' => max( 1, $limit ),
-				'fields' => 'ids',
-				'meta_key' => self::META_PRIORITY,
-				'orderby' => [
-					'meta_value_num' => 'ASC',
-					'ID' => 'ASC',
-				],
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- The result is bounded to the next due queue rows.
-				'meta_query' => $meta,
-			]
-		);
+		global $wpdb;
+		$source = $this->engine_source_sql();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		return array_map(
+            'intval',
+            $wpdb->get_col(
+                $wpdb->prepare(
+                    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Fixed joins from engine_source_sql; values use placeholders.
+                    "SELECT DISTINCT p.ID AS engine_due_id, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND state.meta_value = %s AND stage.meta_value = %s AND COALESCE(due.meta_value,'0') + 0 <= %d ORDER BY queue_priority, p.ID LIMIT %d",
+                    self::POST_TYPE,
+                    'private',
+                    $filters['status'] ?? self::STATUS_PENDING,
+                    $filters['stage'],
+                    $this->now(),
+                    max( 1, min( 50, $limit ) )
+                )
+            )
+        );
 	}
 
-	/**
-	 * Claim up to $limit pending rows of a stage. Stale claims (an extraction
-	 * tab that closed, a crashed drain) are reclaimed first.
-	 */
 	public function claim_batch( string $stage, int $limit ): array {
 		return self::mutate_rows( fn () => $this->claim_batch_unlocked( $stage, $limit ), [] );
 	}
 
 	private function claim_batch_unlocked( string $stage, int $limit ): array {
 		$this->reclaim_stale();
-
-		$candidates = $this->due_row_ids( [ 'stage' => $stage ], $limit );
-
-		$claimed = [];
-		foreach ( $candidates as $post_id ) {
-			$post_id = (int) $post_id;
-			wp_cache_delete( (string) $post_id, 'post_meta' );
-			if ( $this->retire_unpublished_row( $post_id ) ) {
-				continue;
-			}
-			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
-				continue;
-			}
-
-			update_post_meta( $post_id, self::META_STATUS, self::STATUS_CLAIMED );
-			update_post_meta( $post_id, self::META_CLAIMED_AT, $this->now() );
-			$this->mark_started( (int) $post_id );
-
-			$claimed[] = [
-				'id'          => $post_id,
-				'object_type' => (string) get_post_meta( $post_id, self::META_OBJECT_TYPE, true ),
-				'object_id'   => (int) get_post_meta( $post_id, self::META_OBJECT_ID, true ),
-				'url'         => TranslationUrl::rebase_to_home( (string) get_post_meta( $post_id, self::META_URL, true ) ),
-				'page_title'  => self::stored_title( $post_id ),
-				'language'    => (string) get_post_meta( $post_id, self::META_LANGUAGE, true ),
-				'stage'       => (string) get_post_meta( $post_id, self::META_STAGE, true ),
-				'priority'    => (int) get_post_meta( $post_id, self::META_PRIORITY, true ),
-				'payload'     => self::decode_payload( (string) get_post_field( 'post_content', $post_id ) ),
-				'attempts'    => (int) get_post_meta( $post_id, self::META_ATTEMPTS, true ),
-				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
-				'retranslating' => $this->is_refill( $post_id ),
-			];
-		}
-
-		return $claimed;
+		return $this->claim_rows_unlocked( $this->due_row_ids( [ 'stage' => $stage ], $limit ) );
 	}
 
 	/**
@@ -1180,6 +1280,10 @@ class IndexQueue {
 	}
 
 	public function store_payload( int $id, string $payload ): bool {
+		return self::mutate_rows( fn () => $this->store_payload_unlocked( $id, $payload ), false );
+	}
+
+	private function store_payload_unlocked( int $id, string $payload ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id )
 			|| self::STAGE_EXTRACT !== (string) get_post_meta( $id, self::META_STAGE, true ) ) {
 			return false;
@@ -1350,6 +1454,11 @@ class IndexQueue {
 	 * with the site's header and footer included. Empty when the page was
 	 * never read or its reading is not finished.
 	 */
+	public function read_row_for_object( string $object_type, int $object_id ): ?array {
+		$id = $this->find_row( $object_type, $object_id, self::READ_LANGUAGE );
+		return null !== $id && $this->is_finished_read_row( $id ) ? $this->read_row( $id ) : null;
+	}
+
 	public function read_items( string $object_type, int $object_id ): array {
 		$row_id = $this->find_row( $object_type, $object_id, self::READ_LANGUAGE );
 		if ( null === $row_id || self::READ_LANGUAGE !== (string) get_post_meta( $row_id, self::META_LANGUAGE, true ) ) {
@@ -1611,6 +1720,11 @@ class IndexQueue {
 	}
 
 	public function track_refill( int $id ): void {
+		$language = (string) get_post_meta( $id, self::META_LANGUAGE, true );
+		$completions = (array) get_option( self::REFILL_COMPLETIONS_OPTION, [] );
+		$completions[ $language ] = false;
+		update_option( self::REFILL_COMPLETIONS_OPTION, $completions, false );
+		BackgroundEngine::mark_dirty();
 		update_post_meta( $id, self::META_BACKGROUND_REFRESH, 1 );
 		update_post_meta( $id, self::META_RETRANSLATING, 1 );
 		delete_post_meta( $id, self::META_REFILL_FINISHED );
@@ -1622,7 +1736,98 @@ class IndexQueue {
 		update_post_meta( $id, self::META_SETTINGS_VERSION, CacheVersions::settings_version() );
 	}
 
+	public function complete_delivery( array $delivery ): int {
+		return self::mutate_rows(
+			function () use ( $delivery ): int {
+				$changes = [];
+				$clear_content = [];
+				$language = (string) $delivery['language'];
+				$job_id = (string) ( $delivery['job_id'] ?? '' );
+				$translated = ! empty( $delivery['translated'] );
+				foreach ( $delivery['rows'] as $row ) {
+					$id = (int) $row['id'];
+					if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
+						continue;
+					}
+					$changes[ $id ] = [
+						self::META_STATUS => self::STATUS_DONE,
+						self::META_FAIL_REASON => '',
+						self::META_UPDATED_AT => $this->now(),
+						'_twp_delivery_manifest' => TranslationReadiness::manifest_for(
+                            [
+								'id' => $id,
+								'language' => $language,
+								'items' => $delivery['items'][ $id ] ?? [],
+								'full_page' => ! empty( $row['retranslating'] ) || 'miss' !== $row['object_type'],
+                            ]
+                        ),
+					];
+					if ( '' !== $job_id ) {
+						$changes[ $id ][ self::META_JOB_ID ] = $job_id;
+					}
+					if ( $translated ) {
+						$changes[ $id ][ self::META_TRANSLATED_AT ] = $this->now();
+					}
+					if ( '' === get_post_meta( $id, self::META_LEXICON_VERSION, true ) ) {
+						$changes[ $id ] += $this->version_metadata( $language );
+					}
+					if ( 'miss' !== $row['object_type'] ) {
+						$clear_content[] = $id;
+					}
+				}
+				$remove = [ self::META_CLAIMED_AT, self::META_RETRANSLATE, self::META_JOB_OUTCOME ];
+				$remove[] = $translated ? self::META_JOB_ID : self::META_TRANSLATED_AT;
+				if ( ! QueueMetadata::write( $changes, $remove ) ) {
+					foreach ( array_keys( $changes ) as $id ) {
+						update_post_meta( (int) $id, self::META_STATUS, self::STATUS_PENDING );
+					}
+					return 0;
+				}
+				if ( $clear_content ) {
+					global $wpdb;
+					$places = implode( ',', array_fill( 0, count( $clear_content ), '%d' ) );
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->posts} SET post_content = '' WHERE post_type = %s AND post_status = %s AND ID IN ($places)", array_merge( [ self::POST_TYPE, 'private' ], $clear_content ) ) );
+					foreach ( $clear_content as $id ) {
+						wp_cache_delete( $id, 'posts' );
+					}
+				}
+				if ( $translated ) {
+					BackgroundEngine::mark_dirty();
+					$this->settle_refills();
+				}
+				return count( $changes );
+			},
+			0
+		);
+	}
+
+	private function version_metadata( string $language ): array {
+		return [
+			self::META_LEXICON_VERSION => CacheVersions::lexicon_version_for( $language ),
+			self::META_LOCALIZER_VERSION => CacheVersions::localizer_version(),
+			self::META_SETTINGS_VERSION => CacheVersions::settings_version(),
+		];
+	}
+
+	public function remember_batch_versions( array $ids ): bool {
+		return self::mutate_rows(
+            function () use ( $ids ): bool {
+				$changes = [];
+				foreach ( $ids as $id ) {
+					$changes[ (int) $id ] = $this->version_metadata( (string) get_post_meta( (int) $id, self::META_LANGUAGE, true ) );
+				}
+				return QueueMetadata::write( $changes );
+            },
+            false
+        );
+	}
+
 	public function complete( int $id ): bool {
+		return self::mutate_rows( fn () => $this->complete_unlocked( $id ), false );
+	}
+
+	private function complete_unlocked( int $id ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
 		}
@@ -1757,6 +1962,10 @@ class IndexQueue {
 	 * dead-letter with the reason kept for the ops log.
 	 */
 	public function fail( int $id, string $reason ): bool {
+		return self::mutate_rows( fn () => $this->fail_unlocked( $id, $reason ), false );
+	}
+
+	private function fail_unlocked( int $id, string $reason ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
 		}
@@ -1897,6 +2106,7 @@ class IndexQueue {
 	 * the row failed with its reason, once the attempts are used up.
 	 */
 	public function charge_cold_retry( int $id, int $max_attempts ): bool {
+		BackgroundEngine::mark_dirty();
 		$attempts = (int) get_post_meta( $id, self::META_COLD_RETRIES, true );
 		if ( $attempts >= $max_attempts ) {
 			update_post_meta( $id, self::META_STATUS, self::STATUS_DEAD );
@@ -1919,9 +2129,24 @@ class IndexQueue {
 		return (string) get_post_meta( $id, self::META_JOB_ID, true );
 	}
 
-	public function remembered_jobs(): array {
+	public function remembered_jobs( ?string $job_id = null ): array {
 		$jobs = [];
-		foreach ( $this->all_row_ids() as $id ) {
+		$ids = QueueExecution::is_bounded() ? get_posts(
+            [
+				'post_type' => self::POST_TYPE,
+				'post_status' => 'private',
+				'posts_per_page' => 50,
+				'fields' => 'ids',
+				'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+									[
+										'key' => self::META_JOB_ID,
+									'value' => $job_id ?? '',
+									'compare' => null === $job_id ? 'EXISTS' : '=',
+									],
+				],
+            ]
+        ) : $this->all_row_ids();
+		foreach ( $ids as $id ) {
 			$job_id = $this->job_id( $id );
 			if ( '' !== $job_id ) {
 				$jobs[ $job_id ][] = $id;
@@ -1931,9 +2156,9 @@ class IndexQueue {
 	}
 
 	public function finish_job( string $job_id, string $outcome ): void {
-		foreach ( $this->remembered_jobs()[ $job_id ] ?? [] as $id ) {
-			update_post_meta( $id, self::META_JOB_OUTCOME, $outcome );
-			delete_post_meta( $id, self::META_JOB_ID, $job_id );
+		$ids = $this->remembered_jobs( $job_id )[ $job_id ] ?? [];
+		foreach ( array_chunk( $ids, QueueMetadata::MAX_ROWS ) as $batch ) {
+			QueueMetadata::write( array_fill_keys( $batch, [ self::META_JOB_OUTCOME => $outcome ] ), [ self::META_JOB_ID ] );
 		}
 	}
 
@@ -1951,7 +2176,40 @@ class IndexQueue {
 
 	public function retry_dead_automatically( int $max_attempts, int $backoff_seconds, int $now ): int {
 		$revived = 0;
-		foreach ( $this->all_row_ids() as $post_id ) {
+		$ids = QueueExecution::is_bounded() ? get_posts(
+            [
+				'post_type' => self::POST_TYPE,
+				'post_status' => 'private',
+				'fields' => 'ids',
+				'posts_per_page' => 40,
+				'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+									[
+										'key' => self::META_STATUS,
+									'value' => self::STATUS_DEAD,
+									],
+									[
+										'key' => self::META_UPDATED_AT,
+									'value' => $now - $backoff_seconds,
+									'compare' => '<=',
+									'type' => 'NUMERIC',
+									],
+									[
+										'relation' => 'OR',
+									[
+										'key' => self::META_DEAD_RETRIES,
+									'compare' => 'NOT EXISTS',
+										],
+										[
+										'key' => self::META_DEAD_RETRIES,
+										'value' => $max_attempts,
+										'compare' => '<',
+										'type' => 'NUMERIC',
+										],
+									],
+				],
+            ]
+        ) : $this->all_row_ids();
+		foreach ( $ids as $post_id ) {
 			if ( self::STATUS_DEAD !== $this->row_status( $post_id ) || ! $this->is_target_row( $post_id )
 				|| 1 === (int) get_post_meta( $post_id, self::META_COLD_EXHAUSTED, true ) ) {
 				continue;
@@ -1974,6 +2232,8 @@ class IndexQueue {
 			delete_post_meta( $post_id, self::META_STARTED_AT );
 			++$revived;
 		}
+		if ( $revived > 0 ) {
+			BackgroundEngine::mark_dirty(); }
 		return $revived;
 	}
 
@@ -2019,6 +2279,10 @@ class IndexQueue {
 	 * were removed.
 	 */
 	public function clear_failed( ?string $language = null ): int {
+		return self::mutate_rows( fn () => $this->clear_failed_unlocked( $language ), 0 );
+	}
+
+	private function clear_failed_unlocked( ?string $language = null ): int {
 		$cleared = 0;
 
 		foreach ( $this->all_row_ids() as $post_id ) {
@@ -2063,6 +2327,9 @@ class IndexQueue {
 	 * Per-language aggregate: [ language => [ total, done, dead, pending_extract, pending_push ] ].
 	 */
 	public function counts(): array {
+		if ( QueueExecution::is_bounded() ) {
+			return BackgroundEngine::work_state()['counts'] ?? [];
+		}
 		$counts = [];
 
 		foreach ( $this->all_row_ids() as $post_id ) {
@@ -2127,13 +2394,19 @@ class IndexQueue {
 			[
 				'post_type'      => self::POST_TYPE,
 				'post_status'    => 'private',
-				'posts_per_page' => -1,
+				'posts_per_page' => 40,
 				'fields'         => 'ids',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- bounded private queue, admin/cron context.
 				'meta_query'     => [
 					[
 						'key'   => self::META_STATUS,
 						'value' => self::STATUS_CLAIMED,
+					],
+					[
+						'key' => self::META_CLAIMED_AT,
+						'value' => $cutoff,
+						'compare' => '<=',
+						'type' => 'NUMERIC',
 					],
 				],
 			]
@@ -2149,6 +2422,7 @@ class IndexQueue {
 			if ( $claimed_at > 0 && $claimed_at <= $cutoff ) {
 				update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
 				delete_post_meta( $post_id, self::META_CLAIMED_AT );
+				BackgroundEngine::mark_dirty();
 			}
 		}
 	}
@@ -2197,6 +2471,163 @@ class IndexQueue {
 			return $id;
 		}
 		return $completed;
+	}
+
+	public function rows_for_url( string $url, string $language ): array {
+		$canonical = TranslationUrl::canonicalize( $url );
+		$ids = get_posts(
+            [
+				'post_type' => self::POST_TYPE,
+				'post_status' => 'private',
+				'fields' => 'ids',
+				'posts_per_page' => 50,
+				'orderby' => 'ID',
+				'order' => 'DESC',
+				'no_found_rows' => true,
+				'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+									[
+										'key' => self::META_LANGUAGE,
+									'value' => $language,
+									],
+									[
+										'key' => self::META_URL,
+									'value' => array_values( array_unique( [ $url, $canonical, rtrim( $canonical, '/' ) . '/' ] ) ),
+									'compare' => 'IN',
+									],
+				],
+            ]
+        );
+		return $this->list_rows( array_map( 'intval', $ids ) );
+	}
+
+	public function engine_rows( string $kind, int $limit = 1, int $offset = 0 ): array {
+		if ( ! in_array( $kind, [ 'visitor_push', 'visitor_ready', 'background_push', 'background_ready' ], true ) ) {
+			return [];
+		}
+		global $wpdb;
+		$source = $this->engine_source_sql();
+		$visitor = "kind.meta_value = 'miss' AND COALESCE(retranslate.meta_value,'0') + 0 <= 0 AND COALESCE(retranslating.meta_value,'0') + 0 <= 0 AND COALESCE(refresh.meta_value,'0') + 0 <= 0";
+		$where = 0 === strpos( $kind, 'visitor' ) ? "($visitor)" : "NOT ($visitor)";
+		$push = false !== strpos( $kind, 'push' );
+		$params = [ self::POST_TYPE, 'private' ];
+		if ( $push ) {
+			$where .= " AND state.meta_value = 'pending' AND stage.meta_value = 'push' AND COALESCE(due.meta_value,'0') + 0 <= %d";
+			$params[] = $this->now();
+		} else {
+			$where .= " AND state.meta_value = 'done' AND COALESCE(translated.meta_value,'0') + 0 <= 0";
+		}
+		$order = $push ? 'queue_priority, p.ID' : 'p.ID';
+		$params[] = max( 1, min( 50, $limit ) );
+		$params[] = max( 0, $offset );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$ids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT p.ID AS engine_id, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND lang.meta_value <> '' AND $where ORDER BY $order LIMIT %d OFFSET %d", $params ) );
+		return $this->list_rows( array_map( 'intval', $ids ) );
+	}
+
+	private function engine_source_sql(): string {
+		global $wpdb;
+		return "FROM {$wpdb->posts} p
+		INNER JOIN {$wpdb->postmeta} lang ON lang.post_id = p.ID AND lang.meta_key = '_twp_language'
+		INNER JOIN {$wpdb->postmeta} state ON state.post_id = p.ID AND state.meta_key = '_twp_status'
+		INNER JOIN {$wpdb->postmeta} stage ON stage.post_id = p.ID AND stage.meta_key = '_twp_stage'
+		INNER JOIN {$wpdb->postmeta} kind ON kind.post_id = p.ID AND kind.meta_key = '_twp_object_type'
+		LEFT JOIN {$wpdb->postmeta} translated ON translated.post_id = p.ID AND translated.meta_key = '_twp_translated_at'
+		LEFT JOIN {$wpdb->postmeta} retranslate ON retranslate.post_id = p.ID AND retranslate.meta_key = '_twp_retranslate'
+		LEFT JOIN {$wpdb->postmeta} retranslating ON retranslating.post_id = p.ID AND retranslating.meta_key = '_twp_retranslating'
+		LEFT JOIN {$wpdb->postmeta} refresh ON refresh.post_id = p.ID AND refresh.meta_key = '_twp_background_refresh'
+		LEFT JOIN {$wpdb->postmeta} cold ON cold.post_id = p.ID AND cold.meta_key = '_twp_cold_retries'
+		LEFT JOIN {$wpdb->postmeta} due ON due.post_id = p.ID AND due.meta_key = '_twp_reader_not_before'
+		LEFT JOIN {$wpdb->postmeta} priority ON priority.post_id = p.ID AND priority.meta_key = '_twp_priority'";
+	}
+
+	public function engine_aggregate(): array {
+		global $wpdb;
+		$source = $this->engine_source_sql();
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$buckets = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT lang.meta_value AS language, state.meta_value AS status, stage.meta_value AS stage,
+				kind.meta_value AS object_type,
+				(COALESCE(translated.meta_value, '0') + 0 > 0) AS translated,
+				(COALESCE(retranslate.meta_value, '0') + 0 > 0 OR COALESCE(retranslating.meta_value, '0') + 0 > 0 OR COALESCE(refresh.meta_value, '0') + 0 > 0) AS background,
+				(COALESCE(retranslating.meta_value, '0') + 0 > 0) AS retranslating,
+				(COALESCE(retranslate.meta_value, '0') + 0 > 0) AS retranslate,
+				(COALESCE(cold.meta_value, '0') + 0 > 0) AS repairing,
+				MIN(COALESCE(due.meta_value, '0') + 0) AS due, COUNT(DISTINCT p.ID) AS n
+				$source
+				WHERE p.post_type = %s AND p.post_status = %s
+				GROUP BY language, status, stage, object_type, translated, background, retranslating, retranslate, repairing",
+				self::POST_TYPE,
+				'private'
+			)
+		);
+		// phpcs:enable
+		$pending = [
+			'read' => 0,
+			'push' => 0,
+			'refill' => 0,
+			'visitor' => 0,
+		];
+		$counts = [];
+		$next = null;
+		$settle = 0;
+		$refill_pending = [];
+		foreach ( (array) $buckets as $bucket ) {
+			$row = (array) $bucket;
+			$n = (int) $row['n'];
+			$language = (string) $row['language'];
+			$status = (string) $row['status'];
+			$active = in_array( $status, [ self::STATUS_PENDING, self::STATUS_CLAIMED ], true );
+			$confirming = self::STATUS_DONE === $status && ! $row['translated'] && self::READ_LANGUAGE !== $language;
+			if ( $active || $confirming ) {
+				$due = $confirming ? $this->now() : max( $this->now(), (int) $row['due'] );
+				$next = null === $next ? $due : min( $next, $due );
+			}
+			if ( self::READ_LANGUAGE === $language ) {
+				$pending['read'] += $active ? $n : 0;
+				continue;
+			}
+			if ( ! self::is_target_row_language( $language ) ) {
+				continue;
+			}
+			$count = $counts[ $language ] ?? array_fill_keys( [ 'total', 'done', 'dead', 'pending_extract', 'pending_push', 'translated', 'confirming', 'repairing', 'retranslating' ], 0 );
+			$count['total'] += $n;
+			if ( self::STATUS_DONE === $status ) {
+				$count['done'] += $n;
+				$count[ $row['translated'] ? 'translated' : ( $row['retranslating'] ? 'retranslating' : 'confirming' ) ] += $n;
+			} elseif ( self::STATUS_DEAD === $status ) {
+				$count['dead'] += $n;
+			} else {
+				$extract = self::STAGE_EXTRACT === $row['stage'];
+				$count[ $extract ? 'pending_extract' : 'pending_push' ] += $n;
+				$pending[ $extract ? 'read' : 'push' ] += $n;
+				if ( $row['repairing'] ) {
+					$count['repairing'] += $n;
+				} elseif ( $row['retranslate'] ) {
+					$count['retranslating'] += $n;
+				}
+			}
+			$pending['push'] += $confirming ? $n : 0;
+			$pending['refill'] += $count['retranslating'] - ( $counts[ $language ]['retranslating'] ?? 0 );
+			if ( 'miss' === $row['object_type'] && ! $row['background'] && ( $active || $confirming ) ) {
+				$pending['visitor'] += $n;
+			}
+			$counts[ $language ] = $count;
+			if ( $row['retranslating'] && ( $active || $confirming ) ) {
+				$refill_pending[ $language ] = ( $refill_pending[ $language ] ?? 0 ) + $n;
+			}
+			if ( $row['retranslating'] && ( $row['translated'] || self::STATUS_DEAD === $status ) ) {
+				$settle += $n;
+			}
+		}
+		$pending['refill'] += $settle > 0 ? 1 : 0;
+		return [
+			'pending' => $pending,
+			'counts' => $counts,
+			'next' => $next,
+			'refill_pending' => $refill_pending,
+			'settle' => $settle,
+		];
 	}
 
 	public function row_ids_after( int $after, int $limit ): array {

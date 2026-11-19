@@ -11,6 +11,5 @@ class BackgroundWork {
 		add_action( BackgroundEngine::CRON_HOOK, [ BackgroundEngine::class, 'cron' ] );
 		add_action( BackgroundEngine::WAKE_HOOK, [ BackgroundEngine::class, 'wake' ] );
 		add_action( BackgroundEngine::ELIGIBILITY_HOOK, [ BackgroundEngine::class, 'refresh_eligibility' ] );
-		add_action( 'admin_init', [ BackgroundEngine::class, 'install' ] );
 	}
 }

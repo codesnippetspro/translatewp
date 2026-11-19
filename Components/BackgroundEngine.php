@@ -19,6 +19,8 @@ class BackgroundEngine {
 	public const LAST_STEP_OPTION = 'translatewp_engine_last_step';
 	public const PHASE_OPTION = 'translatewp_engine_phase';
 	public const STATE_OPTION = 'translatewp_engine_state';
+	public const WORK_OPTION = 'translatewp_engine_work';
+	public const REVISION_OPTION = 'translatewp_engine_revision';
 	public const VISITOR_STREAK_OPTION = 'translatewp_engine_visitor_streak';
 	public const VISITOR_HINT_OPTION = 'translatewp_engine_visitor_pending';
 	public const VISITOR_INTERVAL_SECONDS = 20;
@@ -26,18 +28,32 @@ class BackgroundEngine {
 	public const STORE_TURN_OPTION = 'translatewp_engine_store_turn';
 	public const TASKS_OPTION = 'translatewp_engine_tasks';
 	public const LAST_WAKE_OPTION = 'translatewp_engine_last_wake';
+	public const LAST_VISITOR_WAKE_OPTION = 'translatewp_engine_last_visitor_wake';
+	public const LAST_VISITOR_ATTEMPT_OPTION = 'translatewp_engine_visitor_wake_attempt';
+	public const LAST_WAKE_ATTEMPT_OPTION = 'translatewp_engine_wake_attempt';
 	public const FALLBACK_SECONDS = 300;
 	public const INTERVAL_SECONDS = 60;
 	public const STALLED_SECONDS = 900;
 	private const HEARTBEAT_SECONDS = 900;
 	private const PHASE_COUNT = 2;
+	private static bool $servicing = false;
+	private static string $trace_phase = 'idle';
+	private static int $trace_rows = 0;
 
 	public static function install(): void {
-		if ( ! get_option( self::STARTED_OPTION, false ) ) {
-			update_option( self::STARTED_OPTION, time(), false );
+		if ( ! SiteConnection::is_connected() ) {
+			return;
 		}
-		if ( ! BackgroundSwitch::off() ) {
-			self::schedule();
+		$first = ! get_option( self::STARTED_OPTION, false );
+		if ( $first ) {
+			update_option( self::STARTED_OPTION, time(), false );
+			wp_clear_scheduled_hook( ReadinessReconcile::HOOK );
+			wp_clear_scheduled_hook( \TranslateWP\Functionality\TranslationStoreSync::BACKFILL_HOOK );
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+			self::mark_dirty();
+			if ( ! get_option( LexiconChanges::SEEDED_OPTION, false ) || ! get_option( Indexer::SPINE_CHECKED_OPTION, false ) ) {
+				wp_schedule_single_event( time() + self::FALLBACK_SECONDS, self::CRON_HOOK );
+			}
 			self::schedule_wake();
 		}
 		if ( ! wp_next_scheduled( self::ELIGIBILITY_HOOK ) ) {
@@ -45,27 +61,34 @@ class BackgroundEngine {
 		}
 	}
 
+	public static function mark_dirty(): void {
+		update_option( self::REVISION_OPTION, bin2hex( random_bytes( 8 ) ), false );
+	}
+
 	public static function schedule( int $delay = self::INTERVAL_SECONDS ): void {
-		$due = time() + max( self::INTERVAL_SECONDS, $delay );
-		$next = wp_next_scheduled( self::CRON_HOOK );
-		if ( false === $next || $due < (int) $next ) {
-			if ( false !== $next ) {
-				wp_unschedule_event( (int) $next, self::CRON_HOOK );
-			}
-			wp_schedule_single_event( $due, self::CRON_HOOK );
+		if ( ! SiteConnection::is_connected() || BackgroundSwitch::off() ) {
+			return;
 		}
+		$last = (int) get_option( self::LAST_SERVICE_OPTION, 0 );
+		$due = max( time() + max( self::INTERVAL_SECONDS, $delay ), $last + self::FALLBACK_SECONDS );
+		$next = wp_next_scheduled( self::CRON_HOOK );
+		if ( false !== $next && (int) $next <= $due ) {
+			return;
+		}
+		if ( false !== $next ) {
+			wp_unschedule_event( (int) $next, self::CRON_HOOK );
+		}
+		wp_schedule_single_event( $due, self::CRON_HOOK );
 	}
 
 	public static function schedule_wake(): void {
-		if ( ! wp_next_scheduled( self::WAKE_HOOK ) ) {
+		if ( ! self::$servicing && ! QueueExecution::is_bounded() && ! wp_next_scheduled( self::WAKE_HOOK ) ) {
 			wp_schedule_single_event( time(), self::WAKE_HOOK );
 		}
 	}
 
 	public static function wake(): void {
-		if ( self::claim_wake( self::INTERVAL_SECONDS ) ) {
-			SiteRequests::post( '/v1/background/wake', (object) [], 3 );
-		}
+		self::send_wake( self::LAST_WAKE_OPTION, self::INTERVAL_SECONDS );
 	}
 
 	public static function refresh_eligibility(): void {
@@ -78,26 +101,69 @@ class BackgroundEngine {
 	}
 
 	public static function cron(): void {
-		if ( BackgroundSwitch::off() ) {
+		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() || 0 === array_sum( self::pending() ) ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
 			return;
 		}
 		$last = (int) get_option( self::LAST_SERVICE_OPTION, 0 );
 		if ( $last <= time() - self::FALLBACK_SECONDS && ! BackgroundSwitch::off() ) {
 			self::step();
+			return;
 		}
 		self::schedule();
 	}
 
 	public static function service_step( array $body ): array {
-		update_option( self::LAST_SERVICE_OPTION, time(), false );
-		BackgroundSwitch::set_paused( true === ( $body['pause'] ?? false ) );
-		return self::step( is_array( $body['pages'] ?? null ) ? $body['pages'] : [] );
+		self::$servicing = true;
+		try {
+			update_option( self::LAST_SERVICE_OPTION, time(), false );
+			BackgroundSwitch::set_paused( true === ( $body['pause'] ?? false ) );
+			return self::step( is_array( $body['pages'] ?? null ) ? $body['pages'] : [] );
+		} finally {
+			self::$servicing = false;
+		}
 	}
 
 	public static function step( array $pages = [] ): array {
+		global $wpdb;
+		$tracing = defined( 'TRANSLATEWP_ENGINE_TRACE' );
+		$started = microtime( true );
+		$queries = (int) ( $wpdb->num_queries ?? 0 );
+		self::$trace_phase = 'idle';
+		self::$trace_rows = 0;
+		QueueExecution::reset_trace();
+		$response = self::run_step( $pages );
+		if ( $tracing ) {
+			$response['trace'] = [
+				'phase' => self::$trace_phase,
+				'rows' => self::$trace_rows,
+				'queries' => max( 0, (int) ( $wpdb->num_queries ?? 0 ) - $queries ),
+				'ms' => round( ( microtime( true ) - $started ) * 1000, 2 ),
+				'remote' => QueueExecution::trace_remote(),
+			];
+		}
+		return $response;
+	}
+
+	private static function run_step( array $pages ): array {
 		if ( BackgroundSwitch::off() ) {
+			self::$trace_phase = 'paused';
 			return self::snapshot( 'paused' );
 		}
+		if ( ! SiteConnection::is_connected() || 0 === array_sum( self::pending() ) ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+			return [
+				'state' => 'done',
+				'pending' => [
+					'read' => 0,
+					'push' => 0,
+					'refill' => 0,
+					'visitor' => 0,
+				],
+				'v' => 1,
+			];
+		}
+		self::$trace_phase = 'busy';
 		$response = self::snapshot( 'busy' );
 		$visitor_hint = self::visitor_hint();
 		QueueExecution::run(
@@ -113,16 +179,29 @@ class BackgroundEngine {
 				$budget = QueueExecution::budget();
 				$is_visitor = false;
 				if ( $visitor_turn && $work['visitorPush'] ) {
+					self::$trace_phase = 'visitor_push';
+					self::$trace_rows = count( $work['visitorPush'] );
 					$is_visitor = true;
 					$indexer->step_push( $budget, $work['visitorPush'] );
 				} elseif ( $visitor_turn && $work['visitorReady'] ) {
+					self::$trace_phase = 'visitor_ready';
+					self::$trace_rows = 0;
 					$is_visitor = true;
 					self::complete( $indexer, $budget, $work['visitorKeys'] );
 				} elseif ( $work['backgroundPush'] ) {
+					self::$trace_phase = 'background_push';
+					self::$trace_rows = count( $work['backgroundPush'] );
 					$indexer->step_push( $budget, $work['backgroundPush'] );
+				} elseif ( $work['backgroundReady'] ) {
+					self::$trace_phase = 'background_ready';
+					self::$trace_rows = 0;
+					self::complete( $indexer, $budget );
 				} elseif ( $work['read'] ) {
+					self::$trace_phase = 'read';
+					self::$trace_rows = 1;
 					$indexer->step_read( $budget, $pages );
 				} else {
+					self::$trace_phase = 'maintenance';
 					$phase = max( 0, (int) get_option( self::PHASE_OPTION, 1 ) ) % self::PHASE_COUNT;
 					update_option( self::PHASE_OPTION, ( $phase + 1 ) % self::PHASE_COUNT, false );
 					if ( 0 === $phase ) {
@@ -180,7 +259,11 @@ class BackgroundEngine {
 				$response['state'] = 'more';
 			}
 		}
-		self::schedule( 'done' === $response['state'] ? self::HEARTBEAT_SECONDS : self::INTERVAL_SECONDS );
+		if ( 'done' === $response['state'] ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+		} else {
+			self::schedule();
+		}
 		return BackgroundSwitch::off() ? self::snapshot( 'paused' ) : $response;
 	}
 
@@ -191,39 +274,38 @@ class BackgroundEngine {
 	}
 
 	public static function visitor_wake(): void {
-		if ( self::claim_wake( self::VISITOR_INTERVAL_SECONDS ) ) {
-			SiteRequests::notify( '/v1/background/wake', (object) [] );
-		}
+		self::send_wake( self::LAST_VISITOR_WAKE_OPTION, self::VISITOR_INTERVAL_SECONDS );
 	}
 
-	private static function claim_wake( int $interval ): bool {
-		if ( ! SiteConnection::is_connected() ) {
-			return false;
+	private static function send_wake( string $option, int $interval ): void {
+		if ( ! SiteConnection::is_connected() || self::$servicing || QueueExecution::is_bounded() ) {
+			return;
 		}
-		$send = false;
 		MutationLock::run(
-            'engine_wake',
-            static function () use ( $interval, &$send ): void {
-				wp_cache_delete( self::LAST_WAKE_OPTION, 'options' );
+			$option,
+			static function () use ( $option, $interval ): void {
+				$attempt = self::LAST_VISITOR_WAKE_OPTION === $option ? self::LAST_VISITOR_ATTEMPT_OPTION : self::LAST_WAKE_ATTEMPT_OPTION;
+				wp_cache_delete( $attempt, 'options' );
+				wp_cache_delete( $option, 'options' );
 				wp_cache_delete( 'notoptions', 'options' );
-				if ( (int) get_option( self::LAST_WAKE_OPTION, 0 ) > time() - $interval ) {
+				if ( max( (int) get_option( $option, 0 ), (int) get_option( $attempt, 0 ) ) > time() - $interval ) {
 					return;
 				}
-				update_option( self::LAST_WAKE_OPTION, time(), false );
-				$send = true;
+				update_option( $attempt, time(), false );
+				if ( SiteRequests::notify( '/v1/background/wake', (object) [] ) ) {
+					update_option( $option, time(), false );
+				}
 			},
-            0
-        );
-		return $send;
+			0
+		);
 	}
 
 	private static function complete( Indexer $indexer, ReadinessBudget $budget, ?array $visitor_keys = null ): void {
-		$store_turn = (bool) get_option( self::STORE_TURN_OPTION, false );
-		update_option( self::STORE_TURN_OPTION, ! $store_turn, false );
-		if ( $store_turn ) {
+		$reconcile = new ReadinessReconcile( '', '', $indexer, null, null, false );
+		$reconcile->step_run( $budget, null !== $visitor_keys );
+		self::$trace_rows = $reconcile->step_rows_seen();
+		if ( ! QueueExecution::expired() ) {
 			TranslationStore::run_backfill_batch( 1, null, $visitor_keys );
-		} else {
-			( new ReadinessReconcile( '', '', $indexer, null, null, false ) )->step_run( $budget, null !== $visitor_keys );
 		}
 		if ( ! QueueExecution::expired() ) {
 			$indexer->report_completion();
@@ -233,37 +315,22 @@ class BackgroundEngine {
 	private static function phase_work(): array {
 		$queue = new IndexQueue();
 		$queue->reclaim_stale();
-		$work = [
-			'visitorPush' => [],
-			'visitorReady' => false,
-			'visitorKeys' => [],
-			'backgroundPush' => [],
-			'read' => false,
-			'background' => false,
-		];
-		foreach ( $queue->list_rows() as $row ) {
-			$visitor = 'miss' === $row['object_type'] && ! $queue->requires_background_refresh( $row['id'] );
-			if ( IndexQueue::STAGE_PUSH === $row['stage'] && IndexQueue::STATUS_PENDING === $row['status']
-				&& (int) get_post_meta( $row['id'], '_twp_reader_not_before', true ) <= time() ) {
-				$work[ $visitor ? 'visitorPush' : 'backgroundPush' ][] = $row['id'];
-			}
-			if ( $visitor && IndexQueue::STATUS_DONE === $row['status'] && ! $row['translated'] ) {
-				$work['visitorReady'] = true;
-				$work['visitorKeys'][] = TranslationUrl::canonicalize( $row['url'] ) . '|' . $row['language'];
-			}
-			if ( ! $visitor && IndexQueue::STATUS_DEAD !== $row['status'] && ! $row['translated'] ) {
-				$work['background'] = true;
-			}
-		}
-		foreach ( [ 'visitorPush', 'backgroundPush' ] as $kind ) {
-			usort( $work[ $kind ], static fn ( int $left, int $right ): int => (int) get_post_meta( $left, '_twp_priority', true ) <=> (int) get_post_meta( $right, '_twp_priority', true ) );
-			$work[ $kind ] = array_slice( $work[ $kind ], 0, Indexer::drain_batch_size() );
-		}
-		$work['read'] = (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
+		$visitor_ready = $queue->engine_rows( 'visitor_ready', 1 );
+		$background_ready = $queue->engine_rows( 'background_ready', 1 );
+		$visitor = $queue->engine_rows( 'visitor_push', Indexer::drain_batch_size() );
+		$background = $queue->engine_rows( 'background_push', Indexer::drain_batch_size() );
+		$read = (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
 			|| ( (int) get_option( Indexer::NEXT_READER_OPTION, 0 ) <= time() && [] !== $queue->pending_read_rows() );
 		$pending = self::pending();
-		$work['background'] = $work['background'] || $work['read'] || $pending['refill'] > 0;
-		return $work;
+		return [
+			'visitorPush' => array_column( $visitor, 'id' ),
+			'visitorReady' => [] !== $visitor_ready,
+			'visitorKeys' => array_map( static fn ( array $row ): string => TranslationUrl::canonicalize( $row['url'] ) . '|' . $row['language'], $visitor_ready ),
+			'backgroundPush' => array_column( $background, 'id' ),
+			'backgroundReady' => [] !== $background_ready || (int) ( self::work_state()['settle'] ?? 0 ) > 0,
+			'read' => $read,
+			'background' => [] !== $background || [] !== $background_ready || $read || $pending['refill'] > 0,
+		];
 	}
 
 	public static function defer_task( string $hook, array $args = [] ): void {
@@ -353,25 +420,7 @@ class BackgroundEngine {
 	}
 
 	public static function pending( bool $include_hint = true ): array {
-		$queue = new IndexQueue();
-		$pending = [
-			'read' => (int) $queue->read_counts()['pending'],
-			'push' => 0,
-			'refill' => 0,
-			'visitor' => 0,
-		];
-		foreach ( $queue->counts() as $counts ) {
-			$pending['read'] += (int) $counts['pending_extract'];
-			$pending['push'] += (int) $counts['pending_push'] + (int) $counts['confirming'];
-			$pending['refill'] += (int) $counts['retranslating'];
-		}
-		foreach ( $queue->list_rows() as $row ) {
-			if ( 'miss' === $row['object_type'] && IndexQueue::STAGE_PUSH === $row['stage']
-				&& in_array( $row['status'], [ IndexQueue::STATUS_PENDING, IndexQueue::STATUS_CLAIMED ], true )
-				&& ! $queue->requires_background_refresh( $row['id'] ) ) {
-				$pending['visitor']++;
-			}
-		}
+		$pending = self::work_state()['pending'];
 		$pending['refill'] += (int) ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) )
 			+ (int) ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) )
 			+ (int) ( ! get_option( LexiconChanges::SEEDED_OPTION, false ) )
@@ -385,5 +434,33 @@ class BackgroundEngine {
 			$pending['push'] = max( $pending['push'], $pending['visitor'] );
 		}
 		return $pending;
+	}
+
+	public static function work_state(): array {
+		wp_cache_delete( self::REVISION_OPTION, 'options' );
+		wp_cache_delete( self::WORK_OPTION, 'options' );
+		$revision = get_option( self::REVISION_OPTION, '' );
+		$state = get_option( self::WORK_OPTION, [] );
+		if ( is_array( $state ) && isset( $state['pending'] ) && ( $state['revision'] ?? null ) === $revision ) {
+			return $state;
+		}
+		$locked = MutationLock::run(
+            'queue_rows',
+            static function () use ( &$state ): void {
+				wp_cache_delete( self::REVISION_OPTION, 'options' );
+				$state = ( new IndexQueue() )->engine_aggregate();
+				$state['revision'] = get_option( self::REVISION_OPTION, '' );
+				update_option( self::WORK_OPTION, $state, false );
+			}
+        );
+		return $locked ? $state : [
+			'pending' => [
+				'read' => 0,
+				'push' => 1,
+				'refill' => 0,
+				'visitor' => 0,
+			],
+			'next' => time(),
+		];
 	}
 }

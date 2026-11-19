@@ -56,7 +56,7 @@ function check_upgrade( bool $ok, string $message ): void {
 
 /** A site as released 1.1.1 left it: its markers set and its own events scheduled. */
 function released_site( string $stored ): void {
-	wp_test_reset( [] );
+	wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'test-token' ] ] );
 	$GLOBALS['wpdb']                         = new EngineUpgradeCountingWpdb();
 	$GLOBALS['wp_test_get_posts_calls']      = [];
 	$GLOBALS['wp_test_remote_request_calls'] = [];
@@ -104,11 +104,11 @@ Migrations::maybe_run();
 check_upgrade( [] === $GLOBALS['wp_test_scheduled_log'], 'Update from 1.1.1: the second request must not install the engine again' );
 check_upgrade( $started === get_option( BackgroundEngine::STARTED_OPTION ), 'Update from 1.1.1: the second request must keep the engine start time' );
 
-// --- The drain event of 1.1.1 keeps its hook name, now served by the engine ---
+// --- An obsolete minute drain becomes one bootstrap fallback after the service grace ---
 released_site( '1.1.1' );
 $drain_due = wp_next_scheduled( BackgroundEngine::CRON_HOOK );
 Migrations::maybe_run();
-check_upgrade( $drain_due === wp_next_scheduled( BackgroundEngine::CRON_HOOK ), 'Update from 1.1.1: the earlier drain event must stay as the engine fallback step' );
+check_upgrade( wp_next_scheduled( BackgroundEngine::CRON_HOOK ) >= time() + BackgroundEngine::FALLBACK_SECONDS, 'Update from 1.1.1: bootstrap waits for the service grace instead of preserving an obsolete minute loop' );
 
 // --- A stored version above the code version (a development build): engine still installed ---
 released_site( '9.9.9' );
@@ -148,6 +148,7 @@ $GLOBALS['wp_test_multisite'] = true;
 Migrations::maybe_run();
 check_upgrade( engine_installed(), 'Multisite: the main site must install the engine' );
 switch_to_blog( 2 );
+\TranslateWP\Components\Options::update( 'site', [ 'id' => '00000000-0000-4000-8000-000000000002', 'token' => 'subsite-token' ] );
 update_option( Migrations::VERSION_OPTION, '1.1.1' );
 update_option( Migrations::JOB_CLEANUP_OPTION, [], false );
 update_option( Migrations::TRANSLATED_MARKS_OPTION, time(), false );

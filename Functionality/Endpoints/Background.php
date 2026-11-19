@@ -8,6 +8,8 @@ use TranslateWP\Components\BackgroundSignature;
 
 class Background extends BaseApiEndpoints {
 
+	private bool $nonce_busy = false;
+
 	public function __construct( $plugin_name = '', $plugin_version = '' ) {
 		parent::__construct( $plugin_name, $plugin_version, 'translatewp/v1/background' );
 	}
@@ -20,14 +22,21 @@ class Background extends BaseApiEndpoints {
 	}
 
 	public function step_permissions_check( $request ) {
-		if ( BackgroundSignature::verify( $request ) ) {
+		$verified = BackgroundSignature::verify( $request );
+		$this->nonce_busy = null === $verified;
+		if ( true === $verified || $this->nonce_busy ) {
 			return true;
 		}
-		BackgroundSignature::refresh_after_failure();
+		if ( preg_match( '/^v2=[a-f0-9]{64}$/D', (string) $request->get_header( 'X-TranslateWP-Signature' ) ) ) {
+			BackgroundSignature::refresh_after_failure();
+		}
 		return new \WP_Error( 'background_unauthorized', 'Unauthorized.', [ 'status' => 401 ] );
 	}
 
 	public function step( $request ): array {
+		if ( $this->nonce_busy ) {
+			return BackgroundEngine::snapshot( 'busy' );
+		}
 		$body = json_decode( $request->get_body(), true );
 		$pages = [];
 		if ( BackgroundEngine::service_reads() && is_array( $body['pages'] ?? null ) ) {

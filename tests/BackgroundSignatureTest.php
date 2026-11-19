@@ -67,4 +67,23 @@ $error = $admin->get_data( new WP_REST_Request( 'GET', '', [ 'option' => 'engine
 check_signature( is_wp_error( $error ) && 403 === $error->get_error_data()['status'], 'The admin data endpoint cannot read the private key option' );
 \TranslateWP\Components\SiteConnection::disconnect();
 check_signature( false === get_option( BackgroundSignature::KEY_OPTION, false ), 'Disconnect deletes the private signing key' );
+
+wp_test_reset( [] );
+$GLOBALS['wp_test_named_lock_calls'] = [];
+$unsigned = new WP_REST_Request( 'POST', '/translatewp/v1/background/step', [], [], '{}' );
+$endpoint->step_permissions_check( $unsigned );
+check_signature( [] === $GLOBALS['wp_test_named_lock_calls'], 'An unsigned request never acquires a lock or evicts shared options' );
+
+wp_test_reset( [] );
+BackgroundSignature::observe( [ 'engineKey' => $key ] );
+$GLOBALS['wp_test_named_lock_result'] = null;
+check_signature( true === BackgroundSignature::verify( $vector, 1763574300 ), 'An unsupported GET_LOCK uses the atomic option lock' );
+check_signature( ! BackgroundSignature::verify( $vector, 1763574300 ), 'The option-lock path still rejects a replay' );
+unset( $GLOBALS['wp_test_named_lock_result'] );
+
+wp_test_reset( [] ); BackgroundSignature::observe( [ 'engineKey' => $key ] );
+$GLOBALS['wp_test_named_lock_result'] = '0';
+check_signature( true === $endpoint->step_permissions_check( $valid ), 'A valid signature with a contended nonce lock is accepted as busy, not 401' );
+check_signature( 'busy' === $endpoint->step( $valid )['state'], 'Nonce contention answers the busy contract without running work' );
+unset( $GLOBALS['wp_test_named_lock_result'] );
 fwrite( STDOUT, "BackgroundSignatureTest: all assertions passed\n" );

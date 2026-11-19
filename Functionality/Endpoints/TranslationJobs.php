@@ -346,8 +346,14 @@ class TranslationJobs extends BaseApiEndpoints {
 				$queued_ids[] = (int) $queued_row;
 			} else {
 				TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
-				$deduped += count( $items );
-				$subscription_hashes = array_values( array_diff( $subscription_hashes, $hashes ) );
+				return new \WP_Error(
+                    'translation_queue_busy',
+                    __( 'Translation is busy. Please try again shortly.', 'translate' ),
+                    [
+						'status' => 503,
+						'retryAfterSeconds' => 1,
+					]
+                );
 			}
 		}
 		if ( count( $raw_items ) === $skipped ) {
@@ -356,8 +362,7 @@ class TranslationJobs extends BaseApiEndpoints {
 
 		if ( $accepted > 0 ) {
 			\TranslateWP\Functionality\Indexer::schedule_drain();
-			\TranslateWP\Components\BackgroundEngine::visitor_wake();
-			$mode = $subscribe ? \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids ) : 'cron';
+			$mode = \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids, $subscribe );
 			if ( 'inline' !== $mode && function_exists( 'spawn_cron' ) ) {
 				spawn_cron();
 			}

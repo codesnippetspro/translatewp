@@ -1,0 +1,130 @@
+{
+    "_twp_delivery_manifest": {
+        "scope": "53e307f179a1bb5f1b63369b0528c739abcaa6d5273a01d324a195adfb791888",
+        "groups": {
+            "be52b8770867682945eeaaada18cfdbd3cdef34248cb5870e79155975244c939": [
+                "item_0001"
+            ],
+            "ee04b3cc2e131253bbcc8994e818705e91e1a2bc1c849608ac69ec28817ff4c2": [
+                "item_0001"
+            ],
+            "2ad9bd44d0e422692b15f1f0384cf963859d8c0a4a6bd91149de11d9b64beb82": [
+                "item_0001"
+            ],
+            "d3a9360d6a0069ec46194cd52ace973795261e463913bc9c08d2d41885eb2d36": [
+                "item_0001"
+            ],
+            "87959b8dcf3d2bfb1e3e3130139efd18f5cdd5305704aa94026190c4b02d53b0": [
+                "item_0001"
+            ],
+            "eb82bc4cc913c8b9a1376fcc5eac25a380fb01916e6e9f2f8e88455b88be0d1a": [
+                "item_0001"
+            ],
+            "582765ee78abb2bb1eb53ffd81b1bbeb902a777fb1f496967b943d6be695b3fe": [
+                "item_0001"
+            ],
+            "d09b1e4b6ffa303bd8da6dbebb57542ee0425085c21666f9c3d06bef9c6ec373": [
+                "item_0001",
+                "item_0002"
+            ],
+            "dfc1f001ef962dfc35af05fa6711dfffd06a55ab0cb5bc346829a8fff5b886e9": [
+                "item_0001",
+                "item_0002"
+            ],
+            "182065f5f8509a60f0dad268c05a3c22ee730c6a34df2b0919a75684214a4cd5": [
+                "item_0001",
+                "item_0002"
+            ],
+            "d16c1cf848d6f0c82c1f24859b6246d66844e8308b074e7e5be535f842c8b577": [
+                "item_0001"
+            ],
+            "01fde4e9edb14c547dafef4b8c6b0fcdf44c3615bbc2ea8bc5e0aff57294ed7e": [
+                "item_0001"
+            ],
+            "00977b0635117c63cd51ff620c21e4ae8cc44645f688b6432620da079794bb36": [
+                "item_0001"
+            ],
+            "58ba375bb76a65c38e88ac35b262363b1d5b3319cb3017e8be48a4655dc995b6": [
+                "item_0001"
+            ],
+            "f803b65f4ccbd4c6988e3bd1909c204f6c79ca1e7962ecd3b1b10fca94366312": [
+                "item_0001"
+            ],
+            "48a8efc68ce00328bbd7bae4ec3447d056af69576fe504d9dcdcebd326ddc25f": [
+                "item_0001"
+            ],
+            "b3971d3806ced711e0670af59a53fce87c4405766a400c3e45bd0aca1940325a": [
+                "item_0001"
+            ],
+            "65489157dc663b5eb07a57f3d6eae72e4cc9d536212c8066b877a2d35a2549c3": [
+                "item_0001"
+            ],
+            "29438737acde506a040c5e8f4e2798cd0ea421f42edd5f069301319d3f2e9433": [
+                "item_0001"
+            ],
+            "6711a5ea3d87552eba127f332267b0622d6866ec894e00208cc594f0e85bd146": [
+                "item_0001"
+            ],
+            "a35869396aacfb7433bfbd772c7d7ca6024ffe2a4a9c0db9cdc08f9d30dbaba8": [
+                "item_0001"
+            ],
+            "b2184b571fa157b8d15b5ee061e0ce041175c28568267be12f8dc51e4843fd4d": [
+                "item_0001"
+            ],
+            "864f18cc7a77f16e89a70ee2efe4089971c4780637745774a49c50b8d7102896": [
+                "item_0001"
+            ],
+            "ef7cda5cf79f9289f09bd8a736d6a3fc5a8258804420448a0ac8e19c2e5ecb16": [
+                "item_0001"
+            ],
+            "3b2263034c6a236efc8009bb19205a885c727ed5d2f5928b6e33097705075bdd": [
+                "item_0001",
+                "item_0002",
+                "item_0003",
+                "item_0004",
+                "item_0005"
+            ],
+            "5ccf296df209897e38e1aa6eeab9f998a19d548213fc503114f44491bd1f3410": [
+                "item_0001"
+            ],
+            "eaa75e551c0911bbff8c6496414ab9f43f229858ca1b4eeb8a309fc4daefc5dd": [
+                "item_0001"
+            ],
+            "77c529eb1bb5fcd9c1321eeb8f905063070c4c30b4e2b7becb50e1aadfc2a2ed": [
+                "item_0001"
+            ],
+            "ef8e27f761b7a88fbd23818f50e4729584264499325c23216a964151a2c5de16": [
+                "item_0001"
+            ],
+            "85c783d3a81e2d785ed5fe26186cea19117b0add2269e4f99145553d9f3dd099": [
+                "item_0001"
+            ],
+            "adebd942ea0d9a8fd0a741aac211588fec95a24616138d6025ee6d8e9c4bdd8e": [
+                "item_0001"
+            ],
+            "c194256d58b78eee75db31b69ee173a565e7d89c3291bac28667f558d719d0b3": [
+                "item_0001"
+            ]
+        },
+        "title": true
+    },
+    "_twp_job_id": "00000000-0000-4000-8000-000000000001",
+    "_twp_language": "es",
+    "_twp_lexicon_version": "8",
+    "_twp_object_id": "10",
+    "_twp_object_type": "page",
+    "_twp_retranslating": "1",
+    "_twp_settings_version": "0",
+    "_twp_stage": "push",
+    "_twp_status": "done",
+    "_twp_url": "http://example.com/my-account/",
+    "_twp_page_title": "My account",
+    "_twp_priority": "100",
+    "_twp_cold_retries": "1",
+    "_twp_background_refresh": "1",
+    "_twp_attempts": "0",
+    "_twp_localizer_version": "0",
+    "_twp_fail_reason": "",
+    "_twp_started_at": "1795117206",
+    "_twp_updated_at": "1795117208"
+}
