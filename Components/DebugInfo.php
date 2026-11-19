@@ -40,6 +40,7 @@ class DebugInfo {
 		$settings   = Options::get( 'translations.settings', [] );
 		$probe      = get_option( 'translatewp_last_connection_probe', null );
 		$theme      = wp_get_theme();
+		$blocked    = ServiceBlockNotice::current();
 		$list       = is_array( $languages ) ? array_map(
 			static fn ( $language ) => is_array( $language ) ? sprintf( '%s%s%s', (string) ( $language['locale'] ?? '' ), ! empty( $language['default'] ) ? ' (default)' : '', empty( $language['active'] ) ? ' (off)' : '' ) : (string) $language,
 			$languages
@@ -62,6 +63,7 @@ class DebugInfo {
 				'Settings scope'   => is_multisite() ? self::scope_summary( SettingsScope::subsite_scope() ) : 'single site',
 				'Cache plugins'    => implode( ', ', CachePluginNotice::detected() ),
 				'Other translators' => implode( ', ', PluginCoexistence::detected() ),
+				'Blocked by CSP'   => null === $blocked ? 'no' : sprintf( '%s on %s at %s UTC', $blocked['origin'], $blocked['path'], gmdate( 'Y-m-d H:i', $blocked['time'] ) ),
 			],
 			'WordPress'   => [
 				'Version'          => get_bloginfo( 'version' ),

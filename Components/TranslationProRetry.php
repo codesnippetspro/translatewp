@@ -132,6 +132,7 @@ class TranslationProRetry {
 
 		delete_transient( self::NOTICE_TRANSIENT );
 
+		AdminNotices::mark_action_required();
 		echo '<div class="notice notice-warning is-dismissible"><p>'
 			. esc_html__( 'A Pro setting was not applied because this account is not on Pro.', 'translate' )
 			. '</p></div>';

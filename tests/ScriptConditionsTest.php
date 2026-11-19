@@ -64,6 +64,13 @@ $script = new TranslateWP( 'translatewp', TRANSLATEWP_VERSION );
 $data   = $script->frontend_data();
 assert_true( false !== strpos( $data, '"connected":false' ), 'Frontend context must carry connected=false, got ' . $data );
 
+// --- Frontend context carries the site name as document titles print it ---
+wp_test_reset( $connected_options );
+update_option( 'translatewp_setup', [ 'ended' => true ] );
+$GLOBALS['wp_test_bloginfo']['name'] = 'Ben&#8217;s &amp; Co';
+$data = ( new TranslateWP( 'translatewp', TRANSLATEWP_VERSION ) )->frontend_data();
+assert_true( false !== strpos( $data, '"site_name":"Ben’s \\u0026 Co"' ), 'Frontend context must carry the decoded site name, got ' . $data );
+
 // --- Every visitor learns whether the site is Orbital, nothing more of the Pro state ---
 wp_test_reset( $connected_options );
 update_option( 'translatewp_setup', [ 'ended' => true ] );

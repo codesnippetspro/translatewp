@@ -55,7 +55,7 @@ export const DEFAULT_NO_TRANSLATE_CLASS = 'translatewp-no-translate';
 
 export const ADMIN_ONLY_CLASSES = Object.freeze(['post-edit-link', 'comment-edit-link', 'qm', 'xdebug-error', 'php-error', 'wp-die-message']);
 export const ADMIN_ONLY_IDS = Object.freeze([
-    'wpadminbar', 'query-monitor-main', 'query-monitor', 'debug-bar', 'querylist', 'error-page',
+    'wpadminbar', 'query-monitor-main', 'query-monitor', 'query-monitor-container', 'debug-bar', 'querylist', 'error-page',
 ]);
 
 /**

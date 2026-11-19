@@ -31,6 +31,7 @@ const BUNDLE_PATHS = [
 	'Functionality',
 	'Includes',
 	'Utils',
+	'assets',
 	'languages',
 	'vendor',
 ]

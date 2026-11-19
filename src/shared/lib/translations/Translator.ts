@@ -60,6 +60,14 @@ export type TranslateBatchOptions = {
     preferRemote?: boolean;
 };
 
+// lookupOnly: looked up, never reported as a miss. coveredBy: the source of
+// another request whose served translation makes this one unnecessary.
+export type SeoStringRequest = {
+    source: string;
+    lookupOnly?: boolean;
+    coveredBy?: string;
+};
+
 export type TranslationGroupFailure = {
     groupId: string;
     error: string;
@@ -171,48 +179,96 @@ export class Translator
         options: TranslateBatchOptions = {}
     ): Promise<string | null>
     {
-        const value = source.trim();
-        if (!hasTranslationLetters(value))
+        const [translated] = await this.translateSeoStrings([{ source }], contextKey, options);
+
+        return translated;
+    }
+
+    /**
+     * Translates several SEO strings in one plan: one lookup, one miss report.
+     * The first string keeps the group and entry ids a single string has.
+     */
+    async translateSeoStrings(
+        requests: SeoStringRequest[],
+        contextKey: string,
+        options: TranslateBatchOptions = {}
+    ): Promise<(string | null)[]>
+    {
+        const values = requests.map(request => request.source.trim());
+        const unique = [...new Set(values.filter(value => hasTranslationLetters(value)))];
+        if (!unique.length)
         {
-            return null;
+            return values.map(() => null);
         }
 
-        const node = globalThis.document?.createTextNode?.(value) ?? ({ nodeType: 3 } as unknown as Node);
-        const entry = new TranslatableEntry({ id: 'seo', type: EntryType.TEXT, node, attributeName: null, value });
-        const canonicalEntries = [
-            new TranslatableEntry({ id: 'item_0001', type: EntryType.TEXT, node, attributeName: null, value }),
-        ];
-        const markerPayload = ContextGrouping.serializeWithMarkers(canonicalEntries);
-        const group: ContextGroup = {
-            id: `seo:${contextKey}`,
-            kind: 'attribute',
-            contextKey,
-            entries: [entry],
-            markerPayload,
-        };
-
         const cacheClient = this._createCacheClient();
-        const hash = await computeFingerprintHash({
-            markerPayload,
-            sourceLang: this.sourceLang,
-            targetLang: this.targetLang,
-            contextKind: 'attribute',
-            settings: cacheClient.aiSettings,
+        const entryIdByValue = new Map<string, string>();
+        const hashByValue = new Map<string, string>();
+        const built = await Promise.all(unique.map(async (value, index) =>
+        {
+            const entryId = 0 === index ? 'seo' : `seo_${index}`;
+            const node = globalThis.document?.createTextNode?.(value) ?? ({ nodeType: 3 } as unknown as Node);
+            const entry = new TranslatableEntry({ id: entryId, type: EntryType.TEXT, node, attributeName: null, value });
+            const canonicalEntries = [
+                new TranslatableEntry({ id: 'item_0001', type: EntryType.TEXT, node, attributeName: null, value }),
+            ];
+            const markerPayload = ContextGrouping.serializeWithMarkers(canonicalEntries);
+            const group: ContextGroup = {
+                id: 0 === index ? `seo:${contextKey}` : `seo:${contextKey}:${index}`,
+                kind: 'attribute',
+                contextKey,
+                entries: [entry],
+                markerPayload,
+            };
+            const hash = await computeFingerprintHash({
+                markerPayload,
+                sourceLang: this.sourceLang,
+                targetLang: this.targetLang,
+                contextKind: 'attribute',
+                settings: cacheClient.aiSettings,
+            });
+            entryIdByValue.set(value, entryId);
+            hashByValue.set(value, hash);
+
+            return { value, group, canonicalEntries, markerPayload, hash };
+        }));
+
+        const groupsForCache: TranslationCachePlan['groupsForCache'] = built.map((
+            { value, group, canonicalEntries, markerPayload, hash }
+        ) =>
+        {
+            const asked = requests.filter(request => request.source.trim() === value);
+            const coveredBy = asked.every(request => request.coveredBy)
+                ? hashByValue.get(asked[0].coveredBy?.trim() ?? '') : undefined;
+
+            return {
+                group,
+                canonicalEntries,
+                markerPayload,
+                hash,
+                siteId: cacheClient.siteId,
+                ...(asked.every(request => request.lookupOnly) ? { lookupOnly: true } : {}),
+                ...(coveredBy ? { coveredBy } : {}),
+            };
         });
 
         const plan: TranslationCachePlan = {
-            groups: [group],
-            groupsForCache: [{ group, canonicalEntries, markerPayload, hash, siteId: cacheClient.siteId }],
+            groups: groupsForCache.map(groupCache => groupCache.group),
+            groupsForCache,
         };
 
         // The title follows the same local-first rule as every page entry:
         // a store hit under the current cache generation is authoritative.
         const { translatedById } = await this._translateContextGroups(plan, cacheClient, { ...options });
-        const translated = translatedById.get('seo');
 
-        return (typeof translated === 'string' && '' !== translated.trim() && translated !== value)
-            ? translated
-            : null;
+        return values.map((value) =>
+        {
+            const translated = translatedById.get(entryIdByValue.get(value) ?? '');
+
+            return (typeof translated === 'string' && '' !== translated.trim() && translated !== value)
+                ? translated
+                : null;
+        });
     }
 
     /**
@@ -439,7 +495,8 @@ export class Translator
             this._applyGroupTranslation(groupCache, cachedPayload, translatedById, emitOptions);
         }
 
-        const groupsForTranslation = groupsForCache.filter(group => !translatedGroupIds.has(group.group.id));
+        const groupsForTranslation = groupsForCache.filter(group => !translatedGroupIds.has(group.group.id)
+            && this._needsMissReport(group, groupsForCache, translatedById));
         if (groupsForTranslation.length)
         {
             throwIfAborted();
@@ -714,6 +771,24 @@ export class Translator
     ): boolean
     {
         return groupCache.group.entries.some(entry => translatedById.has(entry.id));
+    }
+
+    _needsMissReport(
+        groupCache: TranslationCachePlan['groupsForCache'][number],
+        groupsForCache: TranslationCachePlan['groupsForCache'],
+        translatedById: Map<string, string>
+    ): boolean
+    {
+        if (groupCache.lookupOnly) return false;
+        if (!groupCache.coveredBy) return true;
+
+        const covering = groupsForCache.find(candidate => candidate.hash === groupCache.coveredBy);
+
+        return !covering?.group.entries.some((entry) =>
+        {
+            const translated = translatedById.get(entry.id);
+            return undefined !== translated && translated !== entry.value;
+        });
     }
 
     _applyGroupTranslation(

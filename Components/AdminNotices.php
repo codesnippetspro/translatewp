@@ -9,6 +9,16 @@ namespace TranslateWP\Components;
  */
 class AdminNotices {
 
+	private static bool $action_required_shown = false;
+
+	public static function mark_action_required(): void {
+		self::$action_required_shown = true;
+	}
+
+	public static function has_action_required(): bool {
+		return self::$action_required_shown;
+	}
+
 	/** True on TranslateWP's own admin screens (page=translatewp*). */
 	public static function on_plugin_screen(): bool {
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page scoping for a notice.
@@ -18,6 +28,9 @@ class AdminNotices {
 
 	/** Opening tag of a dismissible notice whose X posts $action to admin-ajax. */
 	public static function open( string $class_name, string $action ): string {
+		if ( 'notice-error' === $class_name ) {
+			self::mark_action_required();
+		}
 		return sprintf(
 			'<div class="notice %s is-dismissible" data-translatewp-dismiss="%s" data-nonce="%s">',
 			esc_attr( $class_name ),

@@ -7,6 +7,7 @@ use TranslateWP\Components\LanguageUrl;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\PageAreas;
 use TranslateWP\Components\PageExclusion;
+use TranslateWP\Components\PlainText;
 use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\RemoteApi;
 use TranslateWP\Components\SiteConnection;
@@ -156,6 +157,9 @@ class TranslateWP extends Script {
 						// The translation language the address names, '' on a plain address.
 						'requested_locale' => LanguageUrl::requested_locale(),
 						'orbital'          => (bool) ( ProEligibility::cached()['entitled'] ?? false ),
+						'can_administer'   => \TranslateWP\Components\Access::can_administer(),
+						// The site name as document titles print it.
+						'site_name'        => PlainText::decode( (string) get_bloginfo( 'name', 'display' ) ),
 					],
                     $this->setup_notice(),
                     self::opens_edit_mode() ? [

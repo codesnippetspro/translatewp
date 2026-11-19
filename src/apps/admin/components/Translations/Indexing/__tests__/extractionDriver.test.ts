@@ -227,6 +227,52 @@ describe('extractRowItems', () =>
         expect(titleItem?.cache.hash).toBe(expected);
     });
 
+    it('warms the title and share tags an SEO plugin printed, and the description tags only with Pro', async () =>
+    {
+        const head = '<html><head><title>Horario y precios | Tienda Sol</title>'
+            + '<meta name="description" content="Abierto todos los días.">'
+            + '<meta property="og:title" content="Horario y precios de la tienda">'
+            + '<meta property="og:description" content="Abierto todos los días.">'
+            + '<meta name="twitter:title" content="Horario y precios | Tienda Sol">'
+            + '<meta property="og:site_name" content="Tienda Sol">'
+            + '</head><body><h1>Horario</h1></body></html>';
+        const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html');
+        const seoPayloads = (items: IndexPushItem[]) => items
+            .filter(item => item.contextKey.startsWith('seo:'))
+            .map(item => [item.contextKey, item.markerPayload.replace('\u27EAitem_0001\u27EB', '')]);
+
+        const free = await extractRowItems(ROW, parse, async () => head);
+        expect(seoPayloads(free)).toEqual([
+            ['seo:title', 'Horario y precios | Tienda Sol'],
+            ['seo:title', 'Horario y precios de la tienda'],
+        ]);
+
+        (window as unknown as { translatewpPro?: unknown }).translatewpPro = { connected: true, entitled: true, installed: true, active: true, version: '1.0.0', upgradeUrl: '' };
+        try
+        {
+            const pro = await extractRowItems(ROW, parse, async () => head);
+            expect(seoPayloads(pro)).toEqual([
+                ['seo:title', 'Horario y precios | Tienda Sol'],
+                ['seo:title', 'Horario y precios de la tienda'],
+                ['seo:meta_description', 'Abierto todos los días.'],
+            ]);
+            const description = pro.find(item => item.contextKey === 'seo:meta_description')!;
+            expect(description.contextKind).toBe('attribute');
+            expect(description.cache.hash).toBe(await computeFingerprintHash({
+                markerPayload: description.markerPayload,
+                sourceLang: 'en',
+                targetLang: 'es',
+                contextKind: 'attribute',
+                contextKey: 'seo:meta_description',
+                settings: basicFixture.settings,
+            }));
+        }
+        finally
+        {
+            delete (window as unknown as { translatewpPro?: unknown }).translatewpPro;
+        }
+    });
+
     it('adds no title item when the page has no title', async () =>
     {
         const items = await extractRowItems(

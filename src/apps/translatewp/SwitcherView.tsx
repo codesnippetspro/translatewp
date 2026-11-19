@@ -406,6 +406,7 @@ export function SwitcherView({
                     }
                 }
                 .twp-inline {
+                    --twp-list-room: calc(100vw - 2 * ${ LIST_SCREEN_MARGIN });
                     position: relative !important;
                     display: inline-block !important;
                     z-index: 999999 !important;
