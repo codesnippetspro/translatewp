@@ -10,11 +10,15 @@ let blocked = false;
 const waiters = new Set<VoidFunction>();
 let onBlocked: ((origin: string) => void) | undefined;
 
+const BLOCKING_DIRECTIVES = ['connect-src', 'default-src'];
+
+// An opaque origin ('null') never names the service.
 const originOf = (url: string): string =>
 {
     try
     {
-        return new URL(url).origin;
+        const origin = new URL(url).origin;
+        return origin === 'null' ? '' : origin;
     }
     catch
     {
@@ -25,8 +29,11 @@ const originOf = (url: string): string =>
 function handleViolation(event: Event): void
 {
     const violation = event as SecurityPolicyViolationEvent;
-    // A report-only policy lets the request through.
-    if (blocked || violation.disposition === 'report' || originOf(violation.blockedURI) !== serviceOrigin) return;
+    const directive = violation.effectiveDirective || violation.violatedDirective || '';
+    // Only an enforced policy stops the request; a report-only one lets it through.
+    if (blocked || '' === serviceOrigin || violation.disposition !== 'enforce'
+        || !BLOCKING_DIRECTIVES.some(name => directive.startsWith(name))
+        || originOf(violation.blockedURI) !== serviceOrigin) return;
     blocked = true;
     for (const resolve of [...waiters]) resolve();
     onBlocked?.(serviceOrigin);

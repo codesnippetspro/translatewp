@@ -23,9 +23,14 @@ class EmptyBackend implements HydrationBackend
     async estimateBytes(): Promise<number> { return 0; }
 }
 
+const dispatchViolation = (fields: Record<string, string>): void =>
+{
+    document.dispatchEvent(Object.assign(new Event('securitypolicyviolation'), fields));
+};
+
 const violation = (blockedURI: string, disposition: 'enforce' | 'report' = 'enforce'): void =>
 {
-    document.dispatchEvent(Object.assign(new Event('securitypolicyviolation'), { blockedURI, disposition, effectiveDirective: 'connect-src' }));
+    dispatchViolation({ blockedURI, disposition, effectiveDirective: 'connect-src' });
 };
 
 const loadingElements = (): Element[] => Array.from(document.querySelectorAll('.translatewp-translating, [aria-busy], [data-translatewp-loading-count]'));
@@ -146,6 +151,45 @@ describe('a security policy that blocks the service', () =>
     it('ignores a report-only policy, which lets the request through', () =>
     {
         violation(`${API_BASE}/v1/translation/cache/lookup`, 'report');
+
+        expect(isServiceBlocked()).toBe(false);
+        expect(onBlocked).not.toHaveBeenCalled();
+    });
+
+    it('counts a violation that names only the service origin', () =>
+    {
+        violation(API_BASE);
+
+        expect(isServiceBlocked()).toBe(true);
+        expect(onBlocked).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts a default-src violation for a request to the service', () =>
+    {
+        dispatchViolation({ blockedURI: `${API_BASE}/v1/translation/cache/lookup`, disposition: 'enforce', violatedDirective: 'default-src' });
+
+        expect(isServiceBlocked()).toBe(true);
+    });
+
+    it.each([
+        ['without a disposition', { blockedURI: `${API_BASE}/v1/x`, effectiveDirective: 'connect-src' }],
+        ['for an image from the service origin', { blockedURI: `${API_BASE}/flag.png`, disposition: 'enforce', effectiveDirective: 'img-src' }],
+        ['without a directive', { blockedURI: `${API_BASE}/v1/x`, disposition: 'enforce' }],
+    ])('ignores a violation %s', (_label, fields) =>
+    {
+        dispatchViolation(fields);
+
+        expect(isServiceBlocked()).toBe(false);
+        expect(onBlocked).not.toHaveBeenCalled();
+    });
+
+    it.each(['', 'not a url', 'data:text/plain,x'])('never counts a block when the service origin is %p', async (base) =>
+    {
+        unwatch();
+        unwatch = watchServiceBlock(base, onBlocked);
+
+        dispatchViolation({ blockedURI: 'inline', disposition: 'enforce', effectiveDirective: 'connect-src' });
+        dispatchViolation({ blockedURI: 'data:text/plain,y', disposition: 'enforce', effectiveDirective: 'connect-src' });
 
         expect(isServiceBlocked()).toBe(false);
         expect(onBlocked).not.toHaveBeenCalled();

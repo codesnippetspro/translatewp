@@ -96,7 +96,7 @@ beforeEach(() =>
         const url = String(input);
         if (!url.startsWith(API_BASE)) throw new Error(`Unexpected fetch: ${url}`);
         serviceRequests += 1;
-        document.dispatchEvent(Object.assign(new Event('securitypolicyviolation'), { blockedURI: url, disposition: 'enforce' }));
+        document.dispatchEvent(Object.assign(new Event('securitypolicyviolation'), { blockedURI: url, disposition: 'enforce', effectiveDirective: 'connect-src' }));
         throw new TypeError('Failed to fetch');
     }) as unknown as typeof fetch;
 });
