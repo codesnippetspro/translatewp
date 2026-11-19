@@ -7,7 +7,10 @@ class BlackFridayNotice {
 	public const DISMISS_ACTION = 'translatewp_dismiss_black_friday_notice';
 	public const DISMISSED_META = 'translatewp_black_friday_2026_dismissed';
 	private const ENDS_AT = '2026-12-07T22:59:00Z';
+	private const CODE_SNIPPETS_STARTS_AT = '2026-11-23T00:00:00Z';
+	private const CODE_SNIPPETS_ENDS_AT = '2026-12-01T00:00:00Z';
 	private const OFFER_URL = 'https://translatewp.ai/black-friday/';
+	private const CODE_SNIPPETS_OFFER_URL = 'https://codesnippets.pro/black-friday/';
 
 	private static function can_manage(): bool {
 		if ( Access::can_administer() ) {
@@ -21,23 +24,52 @@ class BlackFridayNotice {
 		return false;
 	}
 
+	private static function has_orbital(): bool {
+		return SiteConnection::has_credentials() && 'invalidated' !== SiteConnection::connection_status()
+			&& ! empty( ProEligibility::cached()['entitled'] );
+	}
+
+	private static function button( string $url, string $label ): string {
+		return sprintf(
+			'<a class="button button-secondary" href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+			esc_url( $url ),
+			esc_html( $label )
+		);
+	}
+
+	public static function register(): void {
+		add_action( 'admin_notices', [ self::class, 'render' ], 10, 0 );
+		add_action( 'network_admin_notices', [ self::class, 'render' ], 10, 0 );
+	}
+
 	public static function render( ?int $now = null ): void {
-		if ( ! AdminNotices::on_plugin_screen() || ! self::can_manage()
-			|| ( $now ?? time() ) >= strtotime( self::ENDS_AT ) || AdminNotices::has_action_required()
+		$now = $now ?? time();
+		if ( ! AdminNotices::on_plugin_screen() || ! self::can_manage() || AdminNotices::has_action_required()
 			|| get_user_meta( get_current_user_id(), self::DISMISSED_META, true ) ) {
 			return;
 		}
-		if ( SiteConnection::has_credentials() && 'invalidated' !== SiteConnection::connection_status()
-			&& ! empty( ProEligibility::cached()['entitled'] ) ) {
+
+		$lines   = [];
+		$buttons = [];
+		if ( $now < strtotime( self::ENDS_AT ) && ! self::has_orbital() ) {
+			$lines[]   = esc_html__( 'Lock in Orbital at $59 a year (instead of $119), or Lifetime at $249. Ends 7 December.', 'translate' );
+			$buttons[] = self::button( self::OFFER_URL, __( 'See the TranslateWP offer', 'translate' ) );
+		}
+		if ( $now >= strtotime( self::CODE_SNIPPETS_STARTS_AT ) && $now < strtotime( self::CODE_SNIPPETS_ENDS_AT )
+			&& ! ( defined( 'CODE_SNIPPETS_PRO' ) && constant( 'CODE_SNIPPETS_PRO' ) ) ) {
+			$lines[]   = esc_html__( 'Code Snippets Pro: save up to 40% this Black Friday, until 1 December.', 'translate' );
+			$buttons[] = self::button( self::CODE_SNIPPETS_OFFER_URL, __( 'See the Code Snippets offer', 'translate' ) );
+		}
+		if ( ! $lines ) {
 			return;
 		}
 
 		printf(
-			'%s<p>%s <a class="button button-secondary" href="%s" target="_blank" rel="noopener noreferrer">%s</a></p></div>',
-			AdminNotices::open( 'notice-info', self::DISMISS_ACTION ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attributes escaped by AdminNotices::open().
-			esc_html__( 'Black Friday: lock in Orbital at $59 a year (instead of $119), or Lifetime at $249. Ends 7 December.', 'translate' ),
-			esc_url( self::OFFER_URL ),
-			esc_html__( 'See the offer', 'translate' )
+			'%s<p><strong>%s</strong> %s</p><p>%s</p></div>',
+			AdminNotices::open( 'notice-info', self::DISMISS_ACTION ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attributes escaped in AdminNotices::open().
+			esc_html__( 'Black Friday', 'translate' ),
+			implode( '<br>', $lines ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each line escaped above.
+			implode( ' ', $buttons ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each button escaped in button().
 		);
 	}
 

@@ -8,8 +8,9 @@ class BlackFridayNotice {
 
 	public function __construct( $plugin_name = '', $plugin_version = '' ) {
 		unset( $plugin_name, $plugin_version );
-		add_action( 'admin_notices', [ NoticeComponent::class, 'render' ], PHP_INT_MAX, 0 );
-		add_action( 'network_admin_notices', [ NoticeComponent::class, 'render' ], PHP_INT_MAX, 0 );
+		// Hooked once every TranslateWP notice is hooked, at their priority: it prints last among them
+		// and right after them, and it sees whether one of them asked for action.
+		add_action( 'translatewp_loaded', [ NoticeComponent::class, 'register' ] );
 		add_action( 'wp_ajax_' . NoticeComponent::DISMISS_ACTION, [ NoticeComponent::class, 'handle_ajax_dismiss' ] );
 	}
 }
