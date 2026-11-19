@@ -276,6 +276,8 @@ export type AdminExtractionConfig = {
     aiSettings: TranslateWPAiSettings;
     siteId: string;
     remoteApiBase: string;
+    /** Whether the description tags are read for translation; translating them is a Pro feature. */
+    seoMetadata?: boolean;
 };
 
 /**
@@ -329,6 +331,7 @@ export function readAdminExtractionConfig(): AdminExtractionConfig
         },
         siteId: window.TranslateWP?.context?.site_id ?? '',
         remoteApiBase: window.TranslateWP?.context?.remote_api_base ?? '',
+        seoMetadata: isProActive(getProState()),
     };
 }
 
@@ -442,7 +445,37 @@ export async function extractRowItems(
     const titleItem = await buildTitleWarmItem(parsed, cacheClient, seenHashes);
     if (titleItem) items.push(titleItem);
 
+    // The share and search tags as printed, whichever SEO plugin wrote them,
+    // so the crawler page and the Pro head find them stored.
+    for (const [contextKey, value] of headMetaStrings(parsed, config.seoMetadata ?? false))
+    {
+        const item = await buildSeoWarmItem(value, contextKey, parsed, cacheClient, seenHashes);
+        if (item) items.push(item);
+    }
+
     return items;
+}
+
+const HEAD_META_CONTEXT_KEYS: ReadonlyArray<[name: string, contextKey: string, pro: boolean]> = [
+    ['og:title', SEO_TITLE_CONTEXT_KEY, false],
+    ['twitter:title', SEO_TITLE_CONTEXT_KEY, false],
+    ['description', 'seo:meta_description', true],
+    ['og:description', 'seo:og_description', true],
+    ['twitter:description', 'seo:twitter_description', true],
+];
+
+/** The head meta strings to warm, as [context key, text]; the description tags only when Pro translates them. */
+export function headMetaStrings(parsed: Document, includeDescriptions: boolean): Array<[string, string]>
+{
+    const strings: Array<[string, string]> = [];
+    for (const [name, contextKey, pro] of HEAD_META_CONTEXT_KEYS)
+    {
+        if (pro && !includeDescriptions) continue;
+        const value = parsed.head?.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.getAttribute('content')?.trim() ?? '';
+        if ('' !== value) strings.push([contextKey, value]);
+    }
+
+    return strings;
 }
 
 export async function buildTitleWarmItem(
@@ -451,7 +484,18 @@ export async function buildTitleWarmItem(
     seenHashes: Set<string>,
 ): Promise<IndexPushItem | null>
 {
-    const value = (parsed.title ?? '').trim();
+    return buildSeoWarmItem(parsed.title ?? '', SEO_TITLE_CONTEXT_KEY, parsed, cacheClient, seenHashes);
+}
+
+async function buildSeoWarmItem(
+    source: string,
+    contextKey: string,
+    parsed: Document,
+    cacheClient: TranslationCacheClient,
+    seenHashes: Set<string>,
+): Promise<IndexPushItem | null>
+{
+    const value = source.trim();
     if ('' === value) return null;
 
     const node = parsed.createTextNode(value);
@@ -470,9 +514,9 @@ export async function buildTitleWarmItem(
     seenHashes.add(hash);
 
     return {
-        groupId: `seo:${SEO_TITLE_CONTEXT_KEY}`,
+        groupId: `seo:${contextKey}`,
         markerPayload,
-        contextKey: SEO_TITLE_CONTEXT_KEY,
+        contextKey,
         contextKind: 'attribute',
         cache: { siteId: cacheClient.siteId, hash },
     };
