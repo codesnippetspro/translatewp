@@ -332,4 +332,38 @@ if ( in_array( $case, [ 'legacy-cart', 'all' ], true ) ) {
     foreach ( $batches as $batch ) { check_lifecycle( true === ( $batch['body']['retranslate'] ?? false ), 'The existing forced-retranslation intent is preserved on delivery' ); }
     check_lifecycle( [] === ( $GLOBALS['wp_test_remote_get_urls'] ?? [] ), 'Language rows reuse the completed source read rather than fetching Cart again' );
 }
+if ( in_array( $case, [ 'lost-drain', 'all' ], true ) ) {
+    foreach ( [ 'cron', 'worker' ] as $driver ) {
+        [ $queue, $indexer ] = lifecycle_fixture();
+        $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 8, 'url' => 'https://example.com/cart/', 'page_title' => 'Cart', 'language' => 'it', 'priority' => 100 ] ] );
+        $id = $queue->list_rows()[0]['id'];
+        update_post_meta( $id, '_twp_retranslate', 1 ); update_post_meta( $id, '_twp_retranslating', 1 );
+        update_post_meta( $id, '_twp_translated_at', 1795008977 );
+        wp_schedule_single_event( time() - 60, Indexer::DRAIN_HOOK );
+        wp_unschedule_event( time() - 60, Indexer::DRAIN_HOOK );
+        $database = $GLOBALS['wpdb'];
+        $GLOBALS['wpdb'] = new class() extends WP_Testwpdb { public function get_var( string $query ) { return '0'; } };
+        try { if ( 'cron' === $driver ) { $indexer->drain_tick(); } else { $indexer->drain_now(); } }
+        finally { $GLOBALS['wpdb'] = $database; }
+        check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'A consumed ' . $driver . ' drain retries after lock contention' );
+        wp_unschedule_event( (int) wp_next_scheduled( Indexer::DRAIN_HOOK ), Indexer::DRAIN_HOOK );
+        $cron = new CronFallback();
+        check_lifecycle( $cron->is_behind(), 'Pending extraction is detected when its drain event is missing' );
+        \TranslateWP\Components\LoopbackKick::acknowledge();
+        $cron->maybe_run_on_front_end();
+        check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'A visitor restores the missing drain schedule without processing queue work' );
+        check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'] && [] === ( $GLOBALS['wp_test_remote_posts'] ?? [] ) && [] === ( $GLOBALS['wp_test_remote_get_urls'] ?? [] ), 'Missing-event recovery schedules background work without draining before the response' );
+    }
+}
+if ( in_array( $case, [ 'deferred-recovery', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 );
+    $queue->defer_until( $id, time() + 7200 );
+    check_lifecycle( ! $queue->has_due_work() && ! ( new CronFallback() )->is_behind(), 'Missing-event recovery respects future retry backoff and stays quiet' );
+}
+if ( in_array( $case, [ 'stale-claim-recovery', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 ); $queue->claim_rows( [ $id ] );
+    check_lifecycle( ! $queue->has_due_work(), 'Missing-event recovery does not steal a fresh claim' );
+    update_post_meta( $id, '_twp_claimed_at', time() - IndexQueue::STALE_CLAIM_SECONDS - 1 );
+    check_lifecycle( $queue->has_due_work() && ( new CronFallback() )->is_behind(), 'An abandoned claim can restore its missing worker event' );
+}
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";

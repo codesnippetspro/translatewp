@@ -53,6 +53,9 @@ class CronFallback {
 
 		$this->throttle();
 		$this->announced_late = true;
+		if ( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) ) {
+			Indexer::schedule_drain( Indexer::RESCHEDULE_DELAY_SECONDS );
+		}
 
 		LoopbackKick::fire();
 		if ( LoopbackKick::unhealthy() && self::can_finish_response() ) {
@@ -248,11 +251,15 @@ class CronFallback {
 			}
 		}
 
+		if ( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) && ( new IndexQueue() )->has_due_work() ) {
+			return true;
+		}
+
 		// An overdue drain event counts only while push work waits in the
 		// queue; a stale event on a queue the loopback kick already emptied
 		// is cleared instead.
 		if ( $this->scheduled_is_late( Indexer::DRAIN_HOOK ) ) {
-			if ( self::queue_has_push_work() ) {
+			if ( ( new IndexQueue() )->has_due_work() ) {
 				return true;
 			}
 			$this->clear_if_late( Indexer::DRAIN_HOOK );
@@ -272,10 +279,6 @@ class CronFallback {
 		return false;
 	}
 
-	private static function queue_has_push_work(): bool {
-		$next = ( new IndexQueue() )->next_due_at();
-		return null !== $next && $next <= time();
-	}
 
 	private function should_kick(): bool {
 		if ( ! $this->is_behind() ) {

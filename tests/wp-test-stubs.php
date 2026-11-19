@@ -711,6 +711,37 @@ function wp_test_blog_store( string $name ): string {
 	return 1 === $blog_id ? $name : $name . '_blog_' . $blog_id;
 }
 
+function wp_test_matches_meta( array $meta, array $query ): bool {
+	if ( isset( $query['key'] ) ) {
+		$key = (string) $query['key'];
+		$exists = array_key_exists( $key, $meta );
+		$compare = strtoupper( $query['compare'] ?? '=' );
+		if ( 'NOT EXISTS' === $compare ) { return ! $exists; }
+		if ( 'EXISTS' === $compare ) { return $exists; }
+		if ( ! $exists ) { return false; }
+		$actual = $meta[$key]; $expected = $query['value'] ?? '';
+		if ( 'IN' === $compare || 'NOT IN' === $compare ) {
+			$found = in_array( (string) $actual, array_map( 'strval', (array) $expected ), true );
+			return 'IN' === $compare ? $found : ! $found;
+		}
+		$actual = 'NUMERIC' === ( $query['type'] ?? '' ) ? (float) $actual : (string) $actual;
+		$expected = 'NUMERIC' === ( $query['type'] ?? '' ) ? (float) $expected : (string) $expected;
+		switch ( $compare ) {
+			case '<=': return $actual <= $expected;
+			case '>=': return $actual >= $expected;
+			case '<': return $actual < $expected;
+			case '>': return $actual > $expected;
+			case '!=': return $actual !== $expected;
+			default: return $actual === $expected;
+		}
+	}
+	$results = [];
+	foreach ( $query as $clause ) {
+		if ( is_array( $clause ) ) { $results[] = wp_test_matches_meta( $meta, $clause ); }
+	}
+	return 'OR' === ( $query['relation'] ?? 'AND' ) ? in_array( true, $results, true ) : ! in_array( false, $results, true );
+}
+
 function get_posts( array $args = [] ) {
 	$GLOBALS['wp_test_get_posts_calls'][] = $args;
 	$post_type = $args['post_type'] ?? 'post';
@@ -816,19 +847,7 @@ function get_posts( array $args = [] ) {
 								continue;
 							}
 
-							foreach ( $meta_query as $clause ) {
-								$key   = (string) ( $clause['key'] ?? '' );
-								$value = $clause['value'] ?? null;
-								if ( '' === $key ) {
-									continue;
-								}
-
-								if ( (string) ( $post['meta_input'][ $key ] ?? '' ) !== (string) $value ) {
-									return false;
-								}
-							}
-
-							return true;
+							return wp_test_matches_meta( $post['meta_input'] ?? [], $meta_query );
 						}
 
 						return false;

@@ -914,6 +914,67 @@ class IndexQueue {
 		return $claimed;
 	}
 
+	public function has_due_work(): bool {
+		return [] !== $this->due_row_ids( [], 1 ) || [] !== $this->due_row_ids(
+			[
+				'status' => self::STATUS_CLAIMED,
+				'claimed_before' => $this->now() - self::STALE_CLAIM_SECONDS,
+			],
+			1
+		);
+	}
+
+	private function due_row_ids( array $filters, int $limit ): array {
+		$meta = [
+			[
+				'key' => self::META_STATUS,
+				'value' => $filters['status'] ?? self::STATUS_PENDING,
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key' => '_twp_reader_not_before',
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key' => '_twp_reader_not_before',
+					'value' => $this->now(),
+					'type' => 'NUMERIC',
+					'compare' => '<=',
+				],
+			],
+		];
+		if ( isset( $filters['stage'] ) ) {
+			$meta[] = [
+				'key' => self::META_STAGE,
+				'value' => $filters['stage'],
+			];
+		}
+		if ( isset( $filters['claimed_before'] ) ) {
+			$meta[] = [
+				'key' => self::META_CLAIMED_AT,
+				'value' => $filters['claimed_before'],
+				'type' => 'NUMERIC',
+				'compare' => '<=',
+			];
+		}
+		return get_posts(
+			[
+				'post_type' => self::POST_TYPE,
+				'post_status' => 'private',
+				'posts_per_page' => max( 1, $limit ),
+				'fields' => 'ids',
+				'meta_key' => self::META_PRIORITY,
+				'orderby' => [
+					'meta_value_num' => 'ASC',
+					'ID' => 'ASC',
+				],
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- The result is bounded to the next due queue rows.
+				'meta_query' => $meta,
+			]
+		);
+	}
+
 	/**
 	 * Claim up to $limit pending rows of a stage. Stale claims (an extraction
 	 * tab that closed, a crashed drain) are reclaimed first.
@@ -921,43 +982,7 @@ class IndexQueue {
 	public function claim_batch( string $stage, int $limit ): array {
 		$this->reclaim_stale();
 
-		$candidates = get_posts(
-			[
-				'post_type'      => self::POST_TYPE,
-				'post_status'    => 'private',
-				'posts_per_page' => max( 1, $limit ),
-				'fields'         => 'ids',
-				'meta_key'       => self::META_PRIORITY,
-				'orderby'        => [
-					'meta_value_num' => 'ASC',
-					'ID'             => 'ASC',
-				],
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- bounded private queue, admin/cron context.
-				'meta_query'     => [
-					[
-						'key'   => self::META_STATUS,
-						'value' => self::STATUS_PENDING,
-					],
-					[
-						'key'   => self::META_STAGE,
-						'value' => $stage,
-					],
-					[
-						'relation' => 'OR',
-						[
-							'key' => '_twp_reader_not_before',
-							'compare' => 'NOT EXISTS',
-						],
-						[
-							'key' => '_twp_reader_not_before',
-							'value' => $this->now(),
-							'type' => 'NUMERIC',
-							'compare' => '<=',
-						],
-					],
-				],
-			]
-		);
+		$candidates = $this->due_row_ids( [ 'stage' => $stage ], $limit );
 
 		$claimed = [];
 		foreach ( $candidates as $post_id ) {

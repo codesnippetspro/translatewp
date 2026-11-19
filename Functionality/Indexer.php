@@ -352,6 +352,9 @@ class Indexer {
 				do_action( CronFallback::MAINTENANCE_HOOK );
 			}
 		);
+		if ( ! $ran ) {
+			self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
+		}
 		$result['ran'] = $ran;
 
 		return $result;
@@ -1052,12 +1055,15 @@ class Indexer {
 			'failed' => 0,
 			'released' => 0,
 		];
-		QueueExecution::run(
+		$ran = QueueExecution::run(
             function () use ( &$result ): void {
 				$result = $this->drain_tick_unlocked();
 			},
             0
         );
+		if ( ! $ran ) {
+			self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
+		}
 		return $result;
 	}
 
