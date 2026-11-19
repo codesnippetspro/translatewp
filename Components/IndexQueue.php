@@ -2542,20 +2542,18 @@ class IndexQueue {
 
 	public function engine_aggregate(): array {
 		global $wpdb;
-		$source = $this->engine_source_sql();
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$buckets = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT lang.meta_value AS language, state.meta_value AS status, stage.meta_value AS stage,
-				kind.meta_value AS object_type,
-				(COALESCE(translated.meta_value, '0') + 0 > 0) AS translated,
-				(COALESCE(retranslate.meta_value, '0') + 0 > 0 OR COALESCE(retranslating.meta_value, '0') + 0 > 0 OR COALESCE(refresh.meta_value, '0') + 0 > 0) AS background,
-				(COALESCE(retranslating.meta_value, '0') + 0 > 0) AS retranslating,
-				(COALESCE(retranslate.meta_value, '0') + 0 > 0) AS retranslate,
-				(COALESCE(cold.meta_value, '0') + 0 > 0) AS repairing,
-				MIN(COALESCE(due.meta_value, '0') + 0) AS due, COUNT(DISTINCT p.ID) AS n
-				$source
-				WHERE p.post_type = %s AND p.post_status = %s
+				"SELECT q.m_lang AS language, q.m_state AS status, q.m_stage AS stage,
+				q.m_kind AS object_type,
+				(COALESCE(q.m_translated, 0) > 0) AS translated,
+				(COALESCE(q.m_retranslate, 0) > 0 OR COALESCE(q.m_retranslating, 0) > 0 OR COALESCE(q.m_refresh, 0) > 0) AS background,
+				(COALESCE(q.m_retranslating, 0) > 0) AS retranslating,
+				(COALESCE(q.m_retranslate, 0) > 0) AS retranslate,
+				(COALESCE(q.m_cold, 0) > 0) AS repairing,
+				MIN(COALESCE(q.m_due, 0)) AS due, COUNT(DISTINCT q.ID) AS n
+				FROM (SELECT pm.post_id AS ID, MAX(CASE WHEN pm.meta_key = '_twp_language' THEN pm.meta_value END) AS m_lang, MAX(CASE WHEN pm.meta_key = '_twp_status' THEN pm.meta_value END) AS m_state, MAX(CASE WHEN pm.meta_key = '_twp_stage' THEN pm.meta_value END) AS m_stage, MAX(CASE WHEN pm.meta_key = '_twp_object_type' THEN pm.meta_value END) AS m_kind, MAX(CASE WHEN pm.meta_key = '_twp_translated_at' THEN pm.meta_value + 0 END) AS m_translated, MAX(CASE WHEN pm.meta_key = '_twp_retranslate' THEN pm.meta_value + 0 END) AS m_retranslate, MAX(CASE WHEN pm.meta_key = '_twp_retranslating' THEN pm.meta_value + 0 END) AS m_retranslating, MAX(CASE WHEN pm.meta_key = '_twp_background_refresh' THEN pm.meta_value + 0 END) AS m_refresh, MAX(CASE WHEN pm.meta_key = '_twp_cold_retries' THEN pm.meta_value + 0 END) AS m_cold, MAX(CASE WHEN pm.meta_key = '_twp_reader_not_before' THEN pm.meta_value + 0 END) AS m_due, MAX(CASE WHEN pm.meta_key = '_twp_priority' THEN pm.meta_value + 0 END) AS m_priority FROM {$wpdb->posts} p STRAIGHT_JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID WHERE p.post_type = %s AND p.post_status = %s AND pm.meta_key IN ('_twp_language', '_twp_status', '_twp_stage', '_twp_object_type', '_twp_translated_at', '_twp_retranslate', '_twp_retranslating', '_twp_background_refresh', '_twp_cold_retries', '_twp_reader_not_before', '_twp_priority') GROUP BY pm.post_id) q WHERE q.m_lang IS NOT NULL AND q.m_state IS NOT NULL AND q.m_stage IS NOT NULL AND q.m_kind IS NOT NULL
 				GROUP BY language, status, stage, object_type, translated, background, retranslating, retranslate, repairing",
 				self::POST_TYPE,
 				'private'
