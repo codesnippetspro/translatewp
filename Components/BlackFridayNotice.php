@@ -41,15 +41,21 @@ class BlackFridayNotice {
 			return;
 		}
 
+		$lead    = esc_html__( 'TranslateWP Black Friday offer is here!', 'translate' );
 		$lines   = [];
 		$buttons = [];
 		if ( $now < strtotime( self::ENDS_AT ) && ! self::has_orbital() ) {
-			$lines[]   = esc_html__( 'Lock in Orbital at $59 a year (instead of $119), or Lifetime at $249. Ends 7 December.', 'translate' );
+			$lines[]   = esc_html__( 'Until 7 December, lock in Orbital at $59 a year (instead of $119), or Lifetime at $249.', 'translate' );
 			$buttons[] = self::button( self::OFFER_URL, __( 'See the TranslateWP offer', 'translate' ) );
 		}
 		if ( $now >= strtotime( self::CODE_SNIPPETS_STARTS_AT ) && $now < strtotime( self::CODE_SNIPPETS_ENDS_AT )
 			&& ! ( defined( 'CODE_SNIPPETS_PRO' ) && constant( 'CODE_SNIPPETS_PRO' ) ) ) {
-			$lines[]   = esc_html__( 'Code Snippets Pro: save up to 40% this Black Friday, until 1 December.', 'translate' );
+			if ( $lines ) {
+				$lines[] = esc_html__( 'Get your Code Snippets Pro discount too: up to 40% off until 1 December.', 'translate' );
+			} else {
+				$lead    = esc_html__( 'Black Friday:', 'translate' );
+				$lines[] = esc_html__( 'Code Snippets Pro is up to 40% off until 1 December.', 'translate' );
+			}
 			$buttons[] = self::button( self::CODE_SNIPPETS_OFFER_URL, __( 'See the Code Snippets offer', 'translate' ) );
 		}
 		if ( ! $lines ) {
@@ -59,7 +65,7 @@ class BlackFridayNotice {
 		printf(
 			'%s<p><strong>%s</strong> %s</p><p>%s</p></div>',
 			AdminNotices::open( 'notice-info', self::DISMISS_ACTION ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attributes escaped in AdminNotices::open().
-			esc_html__( 'Black Friday', 'translate' ),
+			$lead, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above.
 			implode( '<br>', $lines ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each line escaped above.
 			implode( ' ', $buttons ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each button escaped in button().
 		);
