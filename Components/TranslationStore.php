@@ -418,7 +418,7 @@ class TranslationStore {
 
 		if ( '' !== $url ) {
 			$urls = self::read_url_option();
-			$key  = self::url_key( $url );
+			$key  = self::stored_url_key( $urls, $url );
 			if ( isset( $urls[ $key ]['locales'][ $locale ] ) ) {
 				$entry  = self::normalize_entry( $urls[ $key ]['locales'][ $locale ] );
 				$hashes = array_merge( $hashes, array_keys( $entry['pending'] ) );
@@ -446,23 +446,26 @@ class TranslationStore {
 	 *
 	 * @return array{resolved:int,remaining:int}
 	 */
-	public static function run_backfill_batch( int $limit, ?callable $lookup = null, ?array $page_keys = null ): array {
+	public static function run_backfill_batch( int $limit, ?callable $lookup = null, ?array $page_keys = null, bool $pace = false ): array {
 		$result = [
 			'resolved' => 0,
 			'remaining' => count( self::read_work() ),
 		];
 		QueueExecution::run(
-            static function () use ( &$result, $limit, $lookup, $page_keys ): void {
-				$result = self::run_backfill_batch_unlocked( $limit, $lookup, $page_keys );
+            static function () use ( &$result, $limit, $lookup, $page_keys, $pace ): void {
+				$result = self::run_backfill_batch_unlocked( $limit, $lookup, $page_keys, $pace );
 			}
         );
 		return $result;
 	}
 
-	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup, ?array $page_keys ): array {
+	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup, ?array $page_keys, bool $pace ): array {
 		$work = self::read_work();
 		if ( null !== $page_keys ) {
 			$work = array_filter( $work, static fn ( array $item ): bool => in_array( TranslationUrl::canonicalize( $item['url'] ) . '|' . $item['locale'], $page_keys, true ) );
+		}
+		if ( $pace ) {
+			$work = array_filter( $work, static fn ( array $item ): bool => (int) ( $item['not_before'] ?? 0 ) <= time() );
 		}
 		$batch = array_slice( $work, 0, max( 1, $limit ), true );
 		$resolved = 0;
@@ -496,22 +499,29 @@ class TranslationStore {
 				continue;
 			}
 
+			if ( $pace ) {
+				$item['not_before'] = time() + min( 3600, 60 * $item['attempts'] );
+			}
 			$carry[ $key ] = $item;
 		}
 
 		// Work recorded by other requests during this pass is kept: the queue is
 		// re-read and only this pass's rows are removed or moved behind the rest.
 		$remaining = (int) self::locked(
-			static function () use ( $done, $carry ): int {
+			static function () use ( $done, $carry, $batch ): int {
 				$work = self::read_work();
 
 				foreach ( $done as $key => $item ) {
-					if ( 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
+					if ( ( $work[ $key ] ?? null ) === $batch[ $key ] || 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
 						unset( $work[ $key ] );
 					}
 				}
 
 				foreach ( array_keys( $carry ) as $key ) {
+					if ( ( $work[ $key ] ?? null ) !== $batch[ $key ] ) {
+						unset( $carry[ $key ] );
+						continue;
+					}
 					unset( $work[ $key ] );
 				}
 
@@ -911,6 +921,21 @@ class TranslationStore {
 		return md5( TranslationUrl::canonicalize( $url ) );
 	}
 
+	private static function stored_url_key( array $urls, string $url ): string {
+		$key = self::url_key( $url );
+		if ( isset( $urls[ $key ] ) || is_multisite() || 0 !== strcasecmp( (string) wp_parse_url( $url, PHP_URL_HOST ), (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) ) {
+			return $key;
+		}
+		$canonical = TranslationUrl::canonicalize( $url );
+		foreach ( $urls as $old_key => $entry ) {
+			$old = (string) ( $entry['url'] ?? '' );
+			if ( $old && TranslationUrl::canonicalize( TranslationUrl::rebase_to_home( $old ) ) === $canonical ) {
+				return (string) $old_key;
+			}
+		}
+		return $key;
+	}
+
 	private static function empty_entry(): array {
 		return [
 			'v'           => self::SCHEMA_VERSION,
@@ -959,7 +984,7 @@ class TranslationStore {
 		}
 
 		$urls = self::read_url_option();
-		$key  = self::url_key( $target['url'] );
+		$key  = self::stored_url_key( $urls, $target['url'] );
 
 		return self::normalize_entry( $urls[ $key ]['locales'][ $locale ] ?? null );
 	}
@@ -976,7 +1001,7 @@ class TranslationStore {
 		}
 
 		$urls = self::read_url_option();
-		$key  = self::url_key( $target['url'] );
+		$key  = self::stored_url_key( $urls, $target['url'] );
 		if ( ! isset( $urls[ $key ] ) || ! is_array( $urls[ $key ] ) ) {
 			$urls[ $key ] = [
 				'url'     => $target['url'],
@@ -1021,6 +1046,7 @@ class TranslationStore {
 				$key  = $target['cache_key'] . '|' . $locale;
 
 				$work[ $key ] = [
+					'revision' => wp_generate_uuid4(),
 					'post_id' => (int) $target['post_id'],
 					'url'     => (string) $target['url'],
 					'locale'  => $locale,

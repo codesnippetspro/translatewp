@@ -81,6 +81,7 @@ foreach ( [ 'fr', 'de', 'it' ] as $language ) {
 
 $rows = $queue->list_rows();
 $target = $rows[1];
+delete_post_meta( (int) $target['id'], '_twp_translated_at' );
 $seen = [];
 $lookup = static function ( string $language, array $hashes ) use ( &$seen ): array {
     $seen[] = $language;

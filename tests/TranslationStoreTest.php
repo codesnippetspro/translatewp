@@ -178,6 +178,17 @@ $second = TranslationStore::run_backfill_batch( 10 );
 assert_true( 1 === $second['resolved'], 'A later pass must resolve once the cache is warm' );
 assert_true( 'Preise' === TranslationStore::translated_string( 'Pricing', 'Pricing', $miss_url, 'de_DE', $miss_id ), 'The later pass must fill the map' );
 
+wp_test_reset( connected_options() );
+$previous = 'https://previous.example/classes/?day=1';
+$current = 'https://example.com/classes/?day=1';
+TranslationStore::record_pending( $previous, 0, 'de_DE', 'en_US', [ [ 'hash' => 'moved', 'markerPayload' => '⟪item_0001⟫Class schedule' ] ] );
+$GLOBALS['wp_test_cache_lookup_items']['moved'] = '⟪item_0001⟫Kursplan';
+TranslationStore::run_backfill_batch( 1 );
+assert_true( 'Kursplan' === TranslationStore::translated_string( 'Class schedule', 'Class schedule', $current, 'de_DE' ), 'An old host URL-keyed translation is readable at the same path and query on the new home' );
+assert_true( [] === TranslationStore::for_url( 'https://example.com/classes/?day=2', 'de_DE' ), 'A different query never borrows the old host translation' );
+TranslationStore::clear_entry( $current, 0, 'de_DE' );
+assert_true( [] === TranslationStore::for_url( $current, 'de_DE' ), 'Clearing a rebased translation clears the old URL key too' );
+
 // --- Sync records pushed rows and skips miss-proxy rows; the seam filter reads it ---
 wp_test_reset( connected_options() );
 $news_id  = make_post( 'post', 'News' );

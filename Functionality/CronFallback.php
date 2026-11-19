@@ -25,6 +25,9 @@ class CronFallback {
 		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() || QueueExecution::expired() ) {
 			return false;
 		}
+		if ( false !== get_option( IndexQueue::NORMALIZE_CURSOR_OPTION, false ) ) {
+			return ( new IndexQueue() )->normalize_legacy_rows();
+		}
 		if ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) ) {
 			( new IndexQueue() )->resume_deferred_refills();
 			return true;
@@ -69,6 +72,9 @@ class CronFallback {
 		}
 		if ( get_transient( MutationLock::FAILURE_TRANSIENT ) ) {
 			return __( 'Background translation is waiting because its database lock could not be stored. Ask your host to check database write access.', 'translate' );
+		}
+		if ( ! empty( get_option( BackgroundEngine::STATE_OPTION, [] )['stalled'] ) ) {
+			return __( 'Background translation could not advance the same queue rows in three attempts. Open Indexing to review them.', 'translate' );
 		}
 		$reason = (string) get_option( Indexer::READER_FAILURE_OPTION, '' );
 		if ( 'page_tls_failed' === $reason ) {

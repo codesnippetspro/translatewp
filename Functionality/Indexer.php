@@ -1031,17 +1031,38 @@ class Indexer {
 		return $result;
 	}
 
-	public function step_read( ReadinessBudget $budget, array $pages = [] ): void {
+	public function step_read( ReadinessBudget $budget, array $pages = [] ): int {
 		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
-			return;
+			return 0;
 		}
 		if ( get_option( self::SPINE_PENDING_OPTION, false ) ) {
 			delete_option( self::SPINE_PENDING_OPTION );
 			$this->enqueue_read_rows( true );
 		}
-		if ( $budget->remaining_seconds() > 0 ) {
-			$this->extract_pending_page( $pages );
+		$supplied = \TranslateWP\Components\BackgroundEngine::service_reads();
+		if ( ! $supplied && (int) get_option( self::NEXT_READER_OPTION, 0 ) > time() ) {
+			return 0;
 		}
+		$by_url = array_column( $pages, null, 'url' );
+		$processed = 0;
+		foreach ( $this->queue->pending_read_rows() as $candidate ) {
+			if ( $budget->remaining_seconds() <= 0 ) {
+				break;
+			}
+			$url = TranslationUrl::rebase_to_home( $candidate['url'] );
+			if ( $supplied && $this->public_read_row( array_merge( $candidate, [ 'url' => $url ] ) ) && ! isset( $by_url[ $url ] ) ) {
+				continue;
+			}
+			$rows = $this->queue->claim_stage_rows( [ $candidate['id'] ], IndexQueue::STAGE_EXTRACT );
+			if ( ! $rows ) {
+				continue;
+			}
+			if ( ! $supplied && 0 === $processed ) {
+				update_option( self::NEXT_READER_OPTION, time() + self::RESCHEDULE_DELAY_SECONDS, false );
+			}
+			$processed += $this->extract_pending_page( $rows[0], $by_url[ $url ] ?? [] );
+		}
+		return $processed;
 	}
 
 	public function step_push( ReadinessBudget $budget, ?array $ids = null ): array {
@@ -1082,47 +1103,37 @@ class Indexer {
 		return $result;
 	}
 
-	private function extract_pending_page( array $pages = [] ): void {
-		if ( (int) get_option( self::NEXT_READER_OPTION, 0 ) > time() ) {
-			return;
-		}
-		$rows = $this->claim_extract_batch( 1 );
-		if ( ! $rows ) {
-			return;
-		}
-		$row = $rows[0];
-		if ( self::MISS_OBJECT_TYPE === $row['object_type'] && empty( $row['retranslate'] ) ) {
+	private function extract_pending_page( array $row, array $page ): int {
+		if ( self::MISS_OBJECT_TYPE === $row['object_type'] ) {
 			if ( json_decode( (string) $row['payload'], true ) ) {
 				$this->queue->store_payload( (int) $row['id'], (string) $row['payload'] );
 			} else {
 				$this->queue->fail( (int) $row['id'], 'missing_source_groups' );
 			}
-			return;
+			return 1;
 		}
-		update_option( self::NEXT_READER_OPTION, time() + self::RESCHEDULE_DELAY_SECONDS, false );
-		$html = null;
 		if ( \TranslateWP\Components\BackgroundEngine::service_reads() ) {
-			if ( ! $this->public_read_row( $row ) ) {
-				$this->queue->fail( (int) $row['id'], 'page_redirected' );
-				return;
-			}
-			foreach ( $pages as $page ) {
-				if ( $this->public_read_row( $row ) && ( $page['url'] ?? '' ) === $row['url'] && ( 200 === ( $page['status'] ?? 0 ) || ( 404 === ( $page['status'] ?? 0 ) && self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] ) ) ) {
-					$html = (string) $page['html'];
-					break;
-				}
-			}
-			if ( null === $html ) {
-				$this->queue->release( (int) $row['id'] );
-				return;
+			$status = (int) ( $page['status'] ?? 0 );
+			if ( ! $this->public_read_row( $row ) || 'redirected_away' === ( $page['error'] ?? '' ) ) {
+				$html = new \WP_Error( 'page_redirected', 'page_redirected' );
+			} elseif ( ! empty( $page['error'] ) ) {
+				$reason = $status >= 400 ? 'page_fetch_' . $status : 'page_' . sanitize_key( $page['error'] );
+				$html = new \WP_Error( $reason, $reason );
+			} elseif ( 200 !== $status && ! ( 404 === $status && self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] ) ) {
+				$html = new \WP_Error( 'page_fetch_' . $status, 'page_fetch_failed' );
+			} else {
+				$html = (string) ( $page['html'] ?? '' );
 			}
 		} else {
 			$html = $this->fetch_page( (string) $row['url'], self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] );
 		}
+		if ( is_string( $html ) && '' === trim( $html ) ) {
+			$html = new \WP_Error( 'page_not_html', 'page_not_html' );
+		}
 		if ( is_wp_error( $html ) ) {
 			if ( QueueExecution::is_budget_error( $html ) ) {
 				$this->queue->release( (int) $row['id'] );
-				return;
+				return 1;
 			}
 			$this->reader_failed( $html->get_error_code() );
 			if ( preg_match( '/^(?:page_tls_failed|page_fetch_(?:timeout|failed|401|403|408|429|5[0-9]{2}))$/', $html->get_error_code() ) ) {
@@ -1130,10 +1141,17 @@ class Indexer {
 			} else {
 				$this->queue->fail( (int) $row['id'], $html->get_error_code() );
 			}
-			return;
+			return 1;
 		}
 		try {
-			$this->submit_extraction( (int) $row['id'], RenderedPageExtraction::extract( $html ) );
+			if ( ! $this->submit_extraction( (int) $row['id'], RenderedPageExtraction::extract( $html ) ) ) {
+				$this->queue->fail( (int) $row['id'], 'page_store_failed' );
+				return 1;
+			}
+			$old_url = (string) get_post_meta( $row['id'], '_twp_url', true );
+			if ( $old_url !== $row['url'] ) {
+				update_post_meta( $row['id'], '_twp_url', $row['url'], $old_url );
+			}
 			delete_post_meta( (int) $row['id'], '_twp_reader_not_before' );
 			delete_post_meta( (int) $row['id'], '_twp_reader_retries' );
 			delete_transient( self::LOOPBACK_ERROR_TRANSIENT );
@@ -1142,6 +1160,7 @@ class Indexer {
 			$this->reader_failed( $error->getMessage() );
 			$this->queue->fail( (int) $row['id'], $error->getMessage() );
 		}
+		return 1;
 	}
 
 	public function report_completion(): void {

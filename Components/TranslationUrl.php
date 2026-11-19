@@ -66,6 +66,13 @@ class TranslationUrl {
 		if ( ! is_array( $parts ) || empty( $parts['host'] ) || ! is_array( $home ) || empty( $home['host'] ) ) {
 			return $url;
 		}
+		if ( is_multisite() || isset( $parts['user'] ) || isset( $parts['pass'] ) || ! in_array( strtolower( (string) ( $parts['scheme'] ?? '' ) ), [ 'http', 'https' ], true ) ) {
+			return $url;
+		}
+		$site_host = wp_parse_url( (string) get_option( 'siteurl', '' ), PHP_URL_HOST );
+		if ( $site_host && 0 !== strcasecmp( (string) $site_host, $home['host'] ) && 0 === strcasecmp( (string) $site_host, $parts['host'] ) ) {
+			return $url;
+		}
 		$scheme = (string) ( $home['scheme'] ?? 'https' );
 		if ( strtolower( (string) $parts['host'] ) === strtolower( (string) $home['host'] )
 			&& strtolower( (string) ( $parts['scheme'] ?? $scheme ) ) === strtolower( $scheme ) ) {

@@ -4,7 +4,7 @@ namespace TranslateWP\Components;
 
 class TranslationReadiness {
 
-	private const META = '_twp_delivery_manifest';
+	public const META = '_twp_delivery_manifest';
 	public const COMPLETED_SCOPES_OPTION = 'translatewp_completed_readiness_scopes';
 	private const MAX_COMPLETED_SCOPES = 128;
 	// Long enough for one full check cycle of a larger site under the service's
@@ -132,7 +132,7 @@ class TranslationReadiness {
 		return false;
 	}
 
-	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null, ?ReadinessBudget $work_budget = null ): array {
+	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null, ?ReadinessBudget $work_budget = null, bool $all_batches = false ): array {
 		$by_language = [];
 		$hash_rows = [];
 		$legacy_rows = [];
@@ -193,6 +193,7 @@ class TranslationReadiness {
 		// Nothing is judged while look-ups are paused, so no row is reported
 		// for self-heal either.
 		$paused = [
+			'lookupUnavailable' => true,
 			'cursor' => $index,
 			'language' => '',
 			'hashes' => [],
@@ -206,11 +207,12 @@ class TranslationReadiness {
 		// site with thousands of segments needs dozens of passes before its
 		// pages can be reported ready, which is what makes the last stretch of
 		// a first pass take longer than the rest of it.
-		$per_pass = max( 1, (int) apply_filters( 'translatewp_readiness_batches_per_pass', 1 ) );
+		$per_pass = $all_batches ? count( $batches ) : max( 1, (int) apply_filters( 'translatewp_readiness_batches_per_pass', 1 ) );
 		// A pass also stops once it has spent its time budget, so a scheduled
 		// run never outlasts its slot whatever the site's size.
 		$budget  = (float) apply_filters( 'translatewp_readiness_pass_seconds', 0.0 );
 		$started = microtime( true );
+		$answers = [];
 		$missing_all = [];
 		$row_ids_all = [];
 		$last_language = '';
@@ -223,25 +225,19 @@ class TranslationReadiness {
 			$language = $batch['language'];
 			$timeout = null === $work_budget ? SiteRequests::DEFAULT_TIMEOUT_SECONDS : $work_budget->remaining_seconds();
 			if ( $timeout <= 0 ) {
-				return $paused;
+				$index = ( $index + count( $batches ) - 1 ) % count( $batches );
+				break;
 			}
 			$items = null === $lookup
 			? TranslationStore::remote_lookup_result( $language, array_keys( $batch['groups'] ), $timeout )
 			: $lookup( $language, array_keys( $batch['groups'] ) );
 			if ( is_wp_error( $items ) ) {
-				if ( null !== $work_budget && $work_budget->remaining_seconds() <= 0 ) {
-					return $paused;
-				}
 				$data = (array) $items->get_error_data();
-				if ( 429 === (int) ( $data['status'] ?? 0 ) ) {
-					// A refused look-up says nothing about the cache: keep what is
-					// proven and wait out the service's retry window.
-					$retry_after = (int) ( $data['payload']['retryAfterSeconds'] ?? self::BACKOFF_DEFAULT_SECONDS );
-					set_transient( self::BACKOFF, 1, max( 1, min( self::PROOF_TTL, $retry_after ) ) );
-					return $paused;
-				}
-				$items = [];
+				$wait = (int) ( $data['payload']['retryAfterSeconds'] ?? self::BACKOFF_DEFAULT_SECONDS );
+				set_transient( self::BACKOFF, 1, max( 1, min( self::PROOF_TTL, $wait ) ) );
+				return $paused;
 			}
+			$answers[ $language ] = (array) ( $answers[ $language ] ?? [] ) + (array) $items;
 			$missing = [];
 			$row_ids = [];
 			$proofs = self::proofs( $language );
@@ -283,6 +279,7 @@ class TranslationReadiness {
 			'hashes' => $missing_all,
 			'rowIds' => array_values( array_unique( $row_ids_all ) ),
 			'legacyRowIds' => 0 === $index ? array_values( array_unique( $legacy_rows ) ) : [],
+			'answers' => $answers,
 		];
 	}
 

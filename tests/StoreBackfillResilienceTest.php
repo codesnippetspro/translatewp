@@ -150,6 +150,16 @@ assert_true(
 	'After the overwrite lands the back-fill must record the fresh translation, got ' . wp_json_encode( TranslationStore::translated_string( 'Salle principale', 'Salle principale', $room_url, 'zh', $room_id ) )
 );
 
+wp_test_reset( connected_options() );
+$replacement_url = 'https://example.com/class/';
+TranslationStore::record_pending( $replacement_url, 0, 'de', 'en', [ [ 'hash' => 'replacement', 'markerPayload' => '⟪item_0001⟫Class' ] ], true );
+TranslationStore::hold_overwrite( $replacement_url, 0, 'de', 7200 );
+for ( $pass = 0; $pass < TranslationStore::MAX_BACKFILL_ATTEMPTS; ++$pass ) {
+	TranslationStore::run_backfill_batch( 1 );
+}
+assert_true( ! TranslationStore::has_pending_work(), 'A replacement at its retry cap leaves the active work list' );
+assert_true( 1 === TranslationStore::pending_count( $replacement_url, 'de' ), 'The unresolved replacement retains its hash and hold for a later explicit retry' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "StoreBackfillResilienceTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

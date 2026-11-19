@@ -62,6 +62,7 @@ class IndexQueue {
 
 	public const DUPLICATE_SWEEP_OPTION = 'translatewp_queue_duplicate_sweep';
 	public const REFILL_COMPLETIONS_OPTION = 'translatewp_refill_completions';
+	public const NORMALIZE_CURSOR_OPTION = 'translatewp_engine_normalize_cursor';
 
 	private const META_BACKGROUND_REFRESH = '_twp_background_refresh';
 	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
@@ -301,7 +302,7 @@ class IndexQueue {
 
 			if ( self::STATUS_DEAD === $this->row_status( $existing_id ) ) {
 				update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
-				update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
+				self::mark_pending( $existing_id );
 				update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
 				update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 				update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
@@ -358,7 +359,7 @@ class IndexQueue {
 
 			$this->track_refill( $existing_id );
 			update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
-			update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
+			self::mark_pending( $existing_id );
 			update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
 			update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
@@ -409,6 +410,14 @@ class IndexQueue {
 			$queued += $this->retranslate_row( $row, $force );
 		}
 		return $queued;
+	}
+
+	private static function mark_pending( int $id ): void {
+		delete_post_meta( $id, self::META_TRANSLATED_AT );
+		delete_post_meta( $id, self::META_JOB_OUTCOME );
+		delete_post_meta( $id, self::META_REFILL_FINISHED );
+		delete_post_meta( $id, '_twp_confirmation_attempts' );
+		update_post_meta( $id, self::META_STATUS, self::STATUS_PENDING );
 	}
 
 	private function retranslate_row( array $row, bool $force ): int {
@@ -485,7 +494,7 @@ class IndexQueue {
 		}
 
 		update_post_meta( $existing_id, self::META_STAGE, $replay_items ? self::STAGE_PUSH : self::STAGE_EXTRACT );
-		update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
+		self::mark_pending( $existing_id );
 		update_post_meta( $existing_id, self::META_PRIORITY, $priority );
 		update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 		update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
@@ -753,7 +762,7 @@ class IndexQueue {
 				'id' => (int) $id,
 				'object_type' => (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ),
 				'object_id' => (int) get_post_meta( $id, self::META_OBJECT_ID, true ),
-				'url' => (string) get_post_meta( $id, self::META_URL, true ),
+				'url' => TranslationUrl::rebase_to_home( (string) get_post_meta( $id, self::META_URL, true ) ),
 				'status' => $this->row_status( (int) $id ),
 				'stage' => self::STAGE_EXTRACT,
 			];
@@ -1024,7 +1033,7 @@ class IndexQueue {
 		}
 
 		update_post_meta( $existing_id, self::META_STAGE, self::STAGE_PUSH );
-		update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
+		self::mark_pending( $existing_id );
 		update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
 		update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 		update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
@@ -1172,7 +1181,11 @@ class IndexQueue {
 		return self::mutate_rows( fn () => $this->claim_rows_unlocked( $ids ), [] );
 	}
 
-	private function claim_rows_unlocked( array $ids ): array {
+	public function claim_stage_rows( array $ids, string $stage ): array {
+		return self::mutate_rows( fn () => $this->claim_rows_unlocked( $ids, $stage ), [] );
+	}
+
+	private function claim_rows_unlocked( array $ids, ?string $stage = null ): array {
 		$claimed = [];
 		$changes = [];
 		$ids = array_map( 'intval', $ids );
@@ -1187,7 +1200,7 @@ class IndexQueue {
 			if ( $this->retire_unpublished_row( $post_id ) ) {
 				continue;
 			}
-			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
+			if ( ( null !== $stage && get_post_meta( $post_id, self::META_STAGE, true ) !== $stage ) || self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
 
@@ -1217,7 +1230,7 @@ class IndexQueue {
 
 		if ( ! QueueMetadata::write( $changes ) ) {
 			foreach ( array_keys( $changes ) as $id ) {
-				update_post_meta( (int) $id, self::META_STATUS, self::STATUS_PENDING );
+				self::mark_pending( (int) $id );
 			}
 			return [];
 		}
@@ -1233,7 +1246,7 @@ class IndexQueue {
             $wpdb->get_col(
                 $wpdb->prepare(
                     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Fixed joins from engine_source_sql; values use placeholders.
-                    "SELECT DISTINCT p.ID AS engine_due_id, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND state.meta_value = %s AND stage.meta_value = %s AND COALESCE(due.meta_value,'0') + 0 <= %d ORDER BY queue_priority, p.ID LIMIT %d",
+                    "SELECT DISTINCT p.ID AS engine_due_id, COALESCE(due.meta_value,0) + 0 AS queue_due, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND state.meta_value = %s AND stage.meta_value = %s AND COALESCE(due.meta_value,'0') + 0 <= %d ORDER BY queue_due, queue_priority, p.ID LIMIT %d",
                     self::POST_TYPE,
                     'private',
                     $filters['status'] ?? self::STATUS_PENDING,
@@ -1315,7 +1328,7 @@ class IndexQueue {
 		}
 
 		update_post_meta( $id, self::META_STAGE, self::STAGE_PUSH );
-		update_post_meta( $id, self::META_STATUS, self::STATUS_PENDING );
+		self::mark_pending( $id );
 		update_post_meta( $id, self::META_ATTEMPTS, 0 );
 		update_post_meta( $id, self::META_FAIL_REASON, '' );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
@@ -1354,7 +1367,7 @@ class IndexQueue {
 				update_post_meta( $existing_id, self::META_PREVIOUS_READ, (string) get_post_field( 'post_content', $existing_id ) );
 			}
 			update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
-			update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
+			self::mark_pending( $existing_id );
 			update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
 			update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
@@ -1779,7 +1792,7 @@ class IndexQueue {
 				$remove[] = $translated ? self::META_JOB_ID : self::META_TRANSLATED_AT;
 				if ( ! QueueMetadata::write( $changes, $remove ) ) {
 					foreach ( array_keys( $changes ) as $id ) {
-						update_post_meta( (int) $id, self::META_STATUS, self::STATUS_PENDING );
+						self::mark_pending( (int) $id );
 					}
 					return 0;
 				}
@@ -1922,7 +1935,7 @@ class IndexQueue {
 			return false;
 		}
 
-		update_post_meta( $id, self::META_STATUS, self::STATUS_PENDING );
+		self::mark_pending( $id );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 
 		return true;
@@ -1972,13 +1985,21 @@ class IndexQueue {
 
 		$attempts = (int) get_post_meta( $id, self::META_ATTEMPTS, true ) + 1;
 
+		if ( QueueExecution::is_bounded() && $attempts < self::MAX_ATTEMPTS ) {
+			update_post_meta( $id, '_twp_reader_not_before', $this->now() + 60 * $attempts );
+		}
 		update_post_meta( $id, self::META_ATTEMPTS, $attempts );
-		update_post_meta( $id, self::META_STATUS, $attempts >= self::MAX_ATTEMPTS ? self::STATUS_DEAD : self::STATUS_PENDING );
+		$permanent = in_array( $reason, [ 'page_redirected', 'missing_source_groups' ], true );
+		$terminal = $attempts >= self::MAX_ATTEMPTS || $permanent;
+		if ( $permanent || ( $terminal && 'page_fetch_404' === $reason ) ) {
+			update_post_meta( $id, self::META_COLD_EXHAUSTED, 1 );
+		}
+		update_post_meta( $id, self::META_STATUS, $terminal ? self::STATUS_DEAD : self::STATUS_PENDING );
 		update_post_meta( $id, self::META_FAIL_REASON, substr( $reason, 0, 255 ) );
 		update_post_meta( $id, self::META_UPDATED_AT, $this->now() );
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 
-		if ( $attempts >= self::MAX_ATTEMPTS && get_post_meta( $id, self::META_RETRANSLATING, true ) ) {
+		if ( $terminal && get_post_meta( $id, self::META_RETRANSLATING, true ) ) {
 			$this->finish_refills( [ (string) get_post_meta( $id, self::META_LANGUAGE, true ) ] );
 		}
 		return true;
@@ -2060,7 +2081,7 @@ class IndexQueue {
 			$payload      = self::decode_payload( (string) get_post_field( 'post_content', $post_id ) );
 			$has_payload  = '' !== trim( $payload );
 			update_post_meta( $post_id, self::META_STAGE, $has_payload ? self::STAGE_PUSH : self::STAGE_EXTRACT );
-			update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			self::mark_pending( $post_id );
 			if ( $this->requires_background_refresh( (int) $post_id ) ) {
 				$this->track_refill( (int) $post_id );
 			}
@@ -2216,13 +2237,13 @@ class IndexQueue {
 			}
 			$attempts = (int) get_post_meta( $post_id, self::META_DEAD_RETRIES, true );
 			$updated  = (int) get_post_meta( $post_id, self::META_UPDATED_AT, true );
-			if ( $max_attempts <= $attempts || $now - $backoff_seconds < $updated ) {
+			if ( $max_attempts <= $attempts || $now - $backoff_seconds * ( 2 ** min( 6, $attempts ) ) < $updated ) {
 				continue;
 			}
 			update_post_meta( $post_id, self::META_DEAD_RETRIES, $attempts + 1 );
 			$payload = self::decode_payload( (string) get_post_field( 'post_content', $post_id ) );
 			update_post_meta( $post_id, self::META_STAGE, 0 < strlen( trim( $payload ) ) ? self::STAGE_PUSH : self::STAGE_EXTRACT );
-			update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			self::mark_pending( $post_id );
 			if ( $this->requires_background_refresh( (int) $post_id ) ) {
 				$this->track_refill( (int) $post_id );
 			}
@@ -2403,10 +2424,17 @@ class IndexQueue {
 						'value' => self::STATUS_CLAIMED,
 					],
 					[
-						'key' => self::META_CLAIMED_AT,
-						'value' => $cutoff,
-						'compare' => '<=',
-						'type' => 'NUMERIC',
+						'relation' => 'OR',
+						[
+							'key' => self::META_CLAIMED_AT,
+							'compare' => 'NOT EXISTS',
+						],
+						[
+							'key' => self::META_CLAIMED_AT,
+							'value' => $cutoff,
+							'compare' => '<=',
+							'type' => 'NUMERIC',
+						],
 					],
 				],
 			]
@@ -2419,8 +2447,8 @@ class IndexQueue {
 			wp_cache_delete( (string) $post_id, 'post_meta' );
 			$post_id    = (int) $post_id;
 			$claimed_at = (int) get_post_meta( $post_id, self::META_CLAIMED_AT, true );
-			if ( $claimed_at > 0 && $claimed_at <= $cutoff ) {
-				update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			if ( $claimed_at <= $cutoff ) {
+				self::mark_pending( $post_id );
 				delete_post_meta( $post_id, self::META_CLAIMED_AT );
 				BackgroundEngine::mark_dirty();
 			}
@@ -2500,7 +2528,37 @@ class IndexQueue {
 		return $this->list_rows( array_map( 'intval', $ids ) );
 	}
 
-	public function engine_rows( string $kind, int $limit = 1, int $offset = 0 ): array {
+	public function defer_confirmations( array $rows ): int {
+		return self::mutate_rows(
+			function () use ( $rows ): int {
+				$changes = [];
+				foreach ( $rows as $row ) {
+					$id = (int) $row['id'];
+					if ( self::STATUS_DONE !== $this->row_status( $id ) || get_post_meta( $id, self::META_TRANSLATED_AT, true ) ) {
+						continue;
+					}
+					$attempt = (int) get_post_meta( $id, '_twp_confirmation_attempts', true ) + 1;
+					if ( $attempt >= 30 ) {
+						$changes[ $id ] = [
+							self::META_STATUS => self::STATUS_DEAD,
+							self::META_FAIL_REASON => 'delivery_confirmation_expired',
+							self::META_COLD_EXHAUSTED => 1,
+							self::META_UPDATED_AT => $this->now(),
+						];
+						continue;
+					}
+					$changes[ $id ] = [
+						'_twp_confirmation_attempts' => $attempt,
+						'_twp_reader_not_before' => $this->now() + min( 120, 5 * $attempt ),
+					];
+				}
+				return QueueMetadata::write( $changes ) ? count( $changes ) : 0;
+			},
+			0
+		);
+	}
+
+	public function engine_rows( string $kind, int $limit = 1, int $offset = 0, ?int $row_id = null ): array {
 		if ( ! in_array( $kind, [ 'visitor_push', 'visitor_ready', 'background_push', 'background_ready' ], true ) ) {
 			return [];
 		}
@@ -2514,13 +2572,18 @@ class IndexQueue {
 			$where .= " AND state.meta_value = 'pending' AND stage.meta_value = 'push' AND COALESCE(due.meta_value,'0') + 0 <= %d";
 			$params[] = $this->now();
 		} else {
-			$where .= " AND state.meta_value = 'done' AND COALESCE(translated.meta_value,'0') + 0 <= 0";
+			$where .= " AND state.meta_value = 'done' AND COALESCE(translated.meta_value,'0') + 0 <= 0 AND COALESCE(due.meta_value,'0') + 0 <= %d";
+			$params[] = $this->now();
 		}
-		$order = $push ? 'queue_priority, p.ID' : 'p.ID';
+		if ( null !== $row_id ) {
+			$where .= ' AND p.ID = %d';
+			$params[] = $row_id;
+		}
+		$order = $push ? 'queue_due, queue_priority, p.ID' : 'queue_due, p.ID';
 		$params[] = max( 1, min( 50, $limit ) );
 		$params[] = max( 0, $offset );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$ids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT p.ID AS engine_id, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND lang.meta_value <> '' AND $where ORDER BY $order LIMIT %d OFFSET %d", $params ) );
+		$ids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT p.ID AS engine_id, COALESCE(due.meta_value,0) + 0 AS queue_due, COALESCE(priority.meta_value,0) + 0 AS queue_priority $source WHERE p.post_type = %s AND p.post_status = %s AND lang.meta_value <> '' AND $where ORDER BY $order LIMIT %d OFFSET %d", $params ) );
 		return $this->list_rows( array_map( 'intval', $ids ) );
 	}
 
@@ -2552,9 +2615,10 @@ class IndexQueue {
 				(COALESCE(q.m_retranslating, 0) > 0) AS retranslating,
 				(COALESCE(q.m_retranslate, 0) > 0) AS retranslate,
 				(COALESCE(q.m_cold, 0) > 0) AS repairing,
-				MIN(COALESCE(q.m_due, 0)) AS due, COUNT(DISTINCT q.ID) AS n
-				FROM (SELECT pm.post_id AS ID, MAX(CASE WHEN pm.meta_key = '_twp_language' THEN pm.meta_value END) AS m_lang, MAX(CASE WHEN pm.meta_key = '_twp_status' THEN pm.meta_value END) AS m_state, MAX(CASE WHEN pm.meta_key = '_twp_stage' THEN pm.meta_value END) AS m_stage, MAX(CASE WHEN pm.meta_key = '_twp_object_type' THEN pm.meta_value END) AS m_kind, MAX(CASE WHEN pm.meta_key = '_twp_translated_at' THEN pm.meta_value + 0 END) AS m_translated, MAX(CASE WHEN pm.meta_key = '_twp_retranslate' THEN pm.meta_value + 0 END) AS m_retranslate, MAX(CASE WHEN pm.meta_key = '_twp_retranslating' THEN pm.meta_value + 0 END) AS m_retranslating, MAX(CASE WHEN pm.meta_key = '_twp_background_refresh' THEN pm.meta_value + 0 END) AS m_refresh, MAX(CASE WHEN pm.meta_key = '_twp_cold_retries' THEN pm.meta_value + 0 END) AS m_cold, MAX(CASE WHEN pm.meta_key = '_twp_reader_not_before' THEN pm.meta_value + 0 END) AS m_due, MAX(CASE WHEN pm.meta_key = '_twp_priority' THEN pm.meta_value + 0 END) AS m_priority FROM {$wpdb->posts} p STRAIGHT_JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID WHERE p.post_type = %s AND p.post_status = %s AND pm.meta_key IN ('_twp_language', '_twp_status', '_twp_stage', '_twp_object_type', '_twp_translated_at', '_twp_retranslate', '_twp_retranslating', '_twp_background_refresh', '_twp_cold_retries', '_twp_reader_not_before', '_twp_priority') GROUP BY pm.post_id) q WHERE q.m_lang IS NOT NULL AND q.m_state IS NOT NULL AND q.m_stage IS NOT NULL AND q.m_kind IS NOT NULL
-				GROUP BY language, status, stage, object_type, translated, background, retranslating, retranslate, repairing",
+				(COALESCE(q.m_dead_retries, 0) < 3 AND COALESCE(q.m_exhausted, 0) = 0) AS recoverable,
+				MIN(CASE WHEN q.m_state = 'dead' THEN COALESCE(q.m_updated, 0) + 600 * POW(2, LEAST(3, COALESCE(q.m_dead_retries, 0))) ELSE COALESCE(q.m_due, 0) END) AS due, COUNT(DISTINCT q.ID) AS n
+				FROM (SELECT pm.post_id AS ID, MAX(CASE WHEN pm.meta_key = '_twp_language' THEN pm.meta_value END) AS m_lang, MAX(CASE WHEN pm.meta_key = '_twp_status' THEN pm.meta_value END) AS m_state, MAX(CASE WHEN pm.meta_key = '_twp_stage' THEN pm.meta_value END) AS m_stage, MAX(CASE WHEN pm.meta_key = '_twp_object_type' THEN pm.meta_value END) AS m_kind, MAX(CASE WHEN pm.meta_key = '_twp_translated_at' THEN pm.meta_value + 0 END) AS m_translated, MAX(CASE WHEN pm.meta_key = '_twp_retranslate' THEN pm.meta_value + 0 END) AS m_retranslate, MAX(CASE WHEN pm.meta_key = '_twp_retranslating' THEN pm.meta_value + 0 END) AS m_retranslating, MAX(CASE WHEN pm.meta_key = '_twp_background_refresh' THEN pm.meta_value + 0 END) AS m_refresh, MAX(CASE WHEN pm.meta_key = '_twp_cold_retries' THEN pm.meta_value + 0 END) AS m_cold, MAX(CASE WHEN pm.meta_key = '_twp_reader_not_before' THEN pm.meta_value + 0 END) AS m_due, MAX(CASE WHEN pm.meta_key = '_twp_priority' THEN pm.meta_value + 0 END) AS m_priority, MAX(CASE WHEN pm.meta_key = '_twp_dead_retries' THEN pm.meta_value + 0 END) AS m_dead_retries, MAX(CASE WHEN pm.meta_key = '_twp_cold_exhausted' THEN pm.meta_value + 0 END) AS m_exhausted, MAX(CASE WHEN pm.meta_key = '_twp_updated_at' THEN pm.meta_value + 0 END) AS m_updated FROM {$wpdb->posts} p STRAIGHT_JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID WHERE p.post_type = %s AND p.post_status = %s AND pm.meta_key IN ('_twp_language', '_twp_status', '_twp_stage', '_twp_object_type', '_twp_translated_at', '_twp_retranslate', '_twp_retranslating', '_twp_background_refresh', '_twp_cold_retries', '_twp_reader_not_before', '_twp_priority', '_twp_dead_retries', '_twp_cold_exhausted', '_twp_updated_at') GROUP BY pm.post_id) q WHERE q.m_lang IS NOT NULL AND q.m_state IS NOT NULL AND q.m_stage IS NOT NULL AND q.m_kind IS NOT NULL
+				GROUP BY language, status, stage, object_type, translated, background, retranslating, retranslate, repairing, recoverable",
 				self::POST_TYPE,
 				'private'
 			)
@@ -2569,6 +2633,7 @@ class IndexQueue {
 		$counts = [];
 		$next = null;
 		$settle = 0;
+		$needs_normalization = false;
 		$refill_pending = [];
 		foreach ( (array) $buckets as $bucket ) {
 			$row = (array) $bucket;
@@ -2576,9 +2641,10 @@ class IndexQueue {
 			$language = (string) $row['language'];
 			$status = (string) $row['status'];
 			$active = in_array( $status, [ self::STATUS_PENDING, self::STATUS_CLAIMED ], true );
+			$needs_normalization = $needs_normalization || ( self::STATUS_PENDING === $status && $row['translated'] );
 			$confirming = self::STATUS_DONE === $status && ! $row['translated'] && self::READ_LANGUAGE !== $language;
 			if ( $active || $confirming ) {
-				$due = $confirming ? $this->now() : max( $this->now(), (int) $row['due'] );
+				$due = max( $this->now(), (int) $row['due'] );
 				$next = null === $next ? $due : min( $next, $due );
 			}
 			if ( self::READ_LANGUAGE === $language ) {
@@ -2595,6 +2661,11 @@ class IndexQueue {
 				$count[ $row['translated'] ? 'translated' : ( $row['retranslating'] ? 'retranslating' : 'confirming' ) ] += $n;
 			} elseif ( self::STATUS_DEAD === $status ) {
 				$count['dead'] += $n;
+				if ( ! empty( $row['recoverable'] ) ) {
+					$due = max( $this->now(), (int) $row['due'] );
+					$next = null === $next ? $due : min( $next, $due );
+					$pending['refill'] += $n;
+				}
 			} else {
 				$extract = self::STAGE_EXTRACT === $row['stage'];
 				$count[ $extract ? 'pending_extract' : 'pending_push' ] += $n;
@@ -2614,7 +2685,7 @@ class IndexQueue {
 			if ( $row['retranslating'] && ( $active || $confirming ) ) {
 				$refill_pending[ $language ] = ( $refill_pending[ $language ] ?? 0 ) + $n;
 			}
-			if ( $row['retranslating'] && ( $row['translated'] || self::STATUS_DEAD === $status ) ) {
+			if ( $row['retranslating'] && ( ( self::STATUS_DONE === $status && $row['translated'] ) || self::STATUS_DEAD === $status ) ) {
 				$settle += $n;
 			}
 		}
@@ -2625,7 +2696,36 @@ class IndexQueue {
 			'next' => $next,
 			'refill_pending' => $refill_pending,
 			'settle' => $settle,
+			'needs_normalization' => $needs_normalization,
 		];
+	}
+
+	public function normalize_legacy_rows(): bool {
+		$cursor = get_option( self::NORMALIZE_CURSOR_OPTION, false );
+		if ( false === $cursor || QueueExecution::expired() ) {
+			return false;
+		}
+		return self::mutate_rows(
+			function () use ( $cursor ): bool {
+				$ids = $this->row_ids_after( (int) $cursor, QueueMetadata::MAX_ROWS );
+				$changes = [];
+				foreach ( $ids as $id ) {
+					if ( self::STATUS_PENDING === $this->row_status( $id ) ) {
+						$changes[ $id ] = [];
+					}
+				}
+				if ( ! QueueMetadata::write( $changes, [ self::META_TRANSLATED_AT, self::META_JOB_OUTCOME, TranslationReadiness::META, self::META_REFILL_FINISHED ] ) ) {
+					return false;
+				}
+				if ( count( $ids ) < QueueMetadata::MAX_ROWS ) {
+					delete_option( self::NORMALIZE_CURSOR_OPTION );
+				} else {
+					update_option( self::NORMALIZE_CURSOR_OPTION, max( $ids ), false );
+				}
+				return true;
+			},
+			false
+		);
 	}
 
 	public function row_ids_after( int $after, int $limit ): array {

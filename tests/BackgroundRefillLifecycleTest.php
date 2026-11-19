@@ -148,6 +148,8 @@ if ( in_array( $case, [ 'routing', 'all' ], true ) ) {
     foreach ( [ 'service', 'cron', 'admin' ] as $driver ) {
       foreach ( [ true, false ] as $echo ) {
         [ $queue, $indexer ] = lifecycle_fixture();
+        update_option( LexiconChanges::SEEDED_OPTION, true, false );
+        update_option( Indexer::SPINE_CHECKED_OPTION, true, false );
         $id = lifecycle_row( $queue, 321 );
         $queue->track_refill( $id );
         for ( $attempt = 0; $attempt < 3; ++$attempt ) { $queue->claim_rows( [ $id ] ); $queue->fail( $id, 'temporary_provider_failure' ); }

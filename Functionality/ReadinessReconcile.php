@@ -20,15 +20,16 @@ class ReadinessReconcile {
 	public const MAX_DEAD_ATTEMPTS = 3;
 
 	private const GRACE_SECONDS = 120;
+	private const MAX_JOB_AGE_SECONDS = 900;
 	private const DEAD_BACKOFF_SECONDS = 600;
 
-	private ?int $step_row_id = null;
 	private int $rows_seen = 0;
 
 	public function step_rows_seen(): int {
 		return $this->rows_seen;
 	}
 	private ?array $step_translated = null;
+	private ?array $step_batch = null;
 	private Indexer $indexer;
 	private $lookup;
 	private $clock;
@@ -37,7 +38,7 @@ class ReadinessReconcile {
 		unset( $plugin_name, $plugin_version, $register_hooks );
 		$this->indexer = $indexer ?? new Indexer( '', '', null, null, false );
 		$this->lookup  = $lookup;
-		$this->clock   = $clock ?? 'time';
+		$this->clock   = $clock ?? static fn (): int => time();
 	}
 
 	public function maybe_schedule(): void {
@@ -52,11 +53,7 @@ class ReadinessReconcile {
         );
 	}
 
-	public function step_run( ReadinessBudget $budget, bool $visitor_only = false ): void {
-		$this->rows_seen = 0;
-		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
-			return;
-		}
+	public static function step_rows( bool $visitor_only = false ): array {
 		$queue = new IndexQueue();
 		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
 		$position = (array) get_option( $option, [] );
@@ -67,40 +64,50 @@ class ReadinessReconcile {
 			$rows = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 50 );
 		}
 		if ( (int) ( $position['cursor'] ?? 0 ) > 0 ) {
-			$resume = $queue->list_rows( [ (int) $position['row'] ] );
+			$resume = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 1, 0, (int) $position['row'] );
 			$rows = array_merge( $resume, array_values( array_filter( $rows, static fn ( array $row ): bool => (int) $row['id'] !== (int) $position['row'] ) ) );
 		}
+		return array_slice( $rows, 0, 50 );
+	}
+
+	public function step_run( ReadinessBudget $budget, bool $visitor_only = false, ?array $selected = null ): void {
+		$this->rows_seen = 0;
+		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
+			return;
+		}
+		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
+		$position = (array) get_option( $option, [] );
+		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) );
+		$rows = $selected ?? self::step_rows( $visitor_only );
+		$this->step_batch = $rows;
+		$this->rows_seen = 0;
 		$this->step_translated = [];
-		foreach ( $rows as $row ) {
-			if ( $budget->remaining_seconds() <= 0 ) {
-				break;
-			}
-			++$this->rows_seen;
-			$this->step_row_id = (int) $row['id'];
-			$cursor = (int) ( $position['row'] ?? 0 ) === $this->step_row_id ? (int) ( $position['cursor'] ?? 0 ) : 0;
-			try {
-				$result = $this->reconcile( $cursor, $budget );
-			} finally {
-				$this->step_row_id = null;
-			}
-			$next = (int) ( $result['cursor'] ?? 0 );
-			update_option(
-                $option,
-                [
-					'offset' => 0 === $next ? ++$offset : $offset,
-					'row' => (int) $row['id'],
-					'cursor' => $next,
-				],
-                false
-            );
-			if ( $next > 0 ) {
-				break;
-			}
+		try {
+			$result = $this->reconcile( (int) ( $position['cursor'] ?? 0 ), $budget );
+		} finally {
+			$this->step_batch = null;
 		}
 		$translated = $this->step_translated;
 		$this->step_translated = null;
 		if ( $translated ) {
-			$this->indexer->mark_translated( array_values( array_unique( $translated ) ) ); }
+			$this->indexer->mark_translated( array_values( array_unique( $translated ) ) );
+		}
+		if ( empty( $result['lookupUnavailable'] ) && ! QueueExecution::expired() ) {
+			$this->rows_seen += ( new IndexQueue() )->defer_confirmations( $rows );
+		}
+		$this->rows_seen += count( $translated ) + $result['requeued'] + $result['failed'] + $result['retried'];
+		$next = (int) ( $result['cursor'] ?? 0 );
+		if ( $rows ) {
+			update_option(
+                $option,
+                [
+					'offset' => 0,
+					'row' => (int) $rows[ 0 === $next ? count( $rows ) - 1 : 0 ]['id'],
+					'cursor' => $next,
+				],
+                false
+            );
+		}
 	}
 
 	public static function batches_per_pass( int $batches ): int {
@@ -129,9 +136,17 @@ class ReadinessReconcile {
 
 	private function reconcile_unlocked( int $cursor, ?ReadinessBudget $budget ): array {
 		$budget = $budget ?? new ReadinessBudget();
-		$rows = null === $this->step_row_id ? $this->indexer->page_rows() : ( new IndexQueue() )->list_rows( [ $this->step_row_id ] );
-		$jobs = $this->indexer->poll_remembered_jobs( $budget, null === $this->step_row_id ? null : $rows );
-		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
+		$rows = $this->step_batch ?? $this->indexer->page_rows();
+		$jobs = $this->indexer->poll_remembered_jobs( $budget, $this->step_batch );
+		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget, null !== $this->step_batch );
+		if ( ! empty( $result['lookupUnavailable'] ) ) {
+			return $result + [
+				'requeued' => 0,
+				'failed' => 0,
+				'retried' => 0,
+				'translated' => 0,
+			];
+		}
 		$now    = (int) call_user_func( $this->clock );
 		$ids    = array_unique( array_merge( $result['rowIds'], $result['legacyRowIds'] ) );
 		$by_id  = [];
@@ -150,12 +165,12 @@ class ReadinessReconcile {
 			// A finished job is evidence; so are proven segments. A cancelled,
 			// forgotten or unrecorded job is not: the proofs decide for those.
 			if ( ! empty( $row['retranslating'] ) ) {
-				if ( 'done' !== $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) || ! TranslationReadiness::is_ready( $row ) ) {
+				if ( 'open' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) || ! TranslationReadiness::is_ready( $row ) ) {
 					continue;
 				}
 				$object_id = 'miss' === $row['object_type'] ? 0 : (int) $row['object_id'];
 				TranslationStore::hold_overwrite( $row['url'], $object_id, $row['language'], 0 );
-				TranslationStore::resolve_pending( $row['url'], $object_id, $row['language'], null, $budget );
+				TranslationStore::resolve_pending( $row['url'], $object_id, $row['language'], static fn ( string $language, array $hashes ): array => array_intersect_key( $result['answers'][ $language ] ?? [], array_fill_keys( $hashes, true ) ), $budget );
 				if ( TranslationStore::pending_count( $row['url'], $row['language'], $object_id ) > 0 ) {
 					continue;
 				}
@@ -174,7 +189,9 @@ class ReadinessReconcile {
 			if ( ! is_array( $row ) || (int) $row['updated'] > $now - self::GRACE_SECONDS ) {
 				continue;
 			}
-			if ( TranslationReadiness::is_ready( $row ) ) {
+			if ( 'open' === $this->indexer->job_outcome_for_row( (int) $id, $jobs, false ) && (int) $row['updated'] <= $now - self::MAX_JOB_AGE_SECONDS ) {
+				$cold[] = $row + [ 'priority' => Indexer::PRIORITY_DEFAULT ];
+			} elseif ( TranslationReadiness::is_ready( $row ) ) {
 				$ready[] = (int) $id;
 			} elseif ( $this->indexer->job_finished_for_row( (int) $id, $jobs, false )
 				&& ! TranslationReadiness::sweep_incomplete( $row ) ) {

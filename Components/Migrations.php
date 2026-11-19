@@ -43,9 +43,6 @@ class Migrations {
 		}
 
 		if ( '' !== $stored && version_compare( $stored, TRANSLATEWP_VERSION, '>=' ) ) {
-			if ( ! get_option( BackgroundEngine::STARTED_OPTION, false ) ) {
-				self::install_engine();
-			}
 			return;
 		}
 
@@ -66,6 +63,12 @@ class Migrations {
 	 * install is also keyed to its own marker. Readiness and store backfill
 	 * events left by an earlier version have no handler and are cleared.
 	 */
+	public static function install_engine_if_needed(): void {
+		if ( SiteConnection::has_credentials() && ! get_option( BackgroundEngine::STARTED_OPTION, false ) ) {
+			self::install_engine();
+		}
+	}
+
 	private static function install_engine(): void {
 		wp_clear_scheduled_hook( \TranslateWP\Functionality\ReadinessReconcile::HOOK );
 		wp_clear_scheduled_hook( \TranslateWP\Functionality\TranslationStoreSync::BACKFILL_HOOK );

@@ -102,11 +102,11 @@ for ( $i = 1; $i <= 3; $i++ ) {
     check_engine( $i === BackgroundEngine::pending()['visitor'], 'Visitor count includes unconfirmed visitor deliveries and excludes background work' );
     BackgroundEngine::step();
     check_engine( IndexQueue::STATUS_DONE === get_post_meta( $visitor, '_twp_status', true ), 'Due visitor pushes win over background priority pins' );
-    check_engine( IndexQueue::STATUS_PENDING === get_post_meta( $background, '_twp_status', true ), 'A visitor phase does not push background rows as a second phase' );
+    check_engine( IndexQueue::STATUS_DONE === get_post_meta( $background, '_twp_status', true ), 'A background push uses the remaining budget after visitor work' );
 }
 $waiting = $queue->enqueue_push( [ 'object_type' => 'miss', 'object_id' => 104, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10, 'payload' => $payload( 104 ) ] );
 $result = BackgroundEngine::step();
-check_engine( IndexQueue::STATUS_DONE === get_post_meta( $background, '_twp_status', true ) && IndexQueue::STATUS_PENDING === get_post_meta( $waiting, '_twp_status', true ), 'After three visitor phases one background phase prevents starvation' );
+check_engine( IndexQueue::STATUS_DONE === get_post_meta( $background, '_twp_status', true ) && IndexQueue::STATUS_DONE === get_post_meta( $waiting, '_twp_status', true ), 'Both due pushes progress in budget' );
 check_engine( 4 === $result['pending']['visitor'], 'The response keeps the fast service pace while visitor pushes or confirmations wait' );
 
 engine_fixture();
@@ -143,7 +143,7 @@ wp_test_set_filter( 'translatewp_site_request_headers', static function ( array 
 } );
 $result = BackgroundEngine::step();
 check_engine( 'more' === $result['state'] && $result['pending']['visitor'] > 0, 'The active push reports visitor work that arrived during its own request' );
-check_engine( $late !== $first && IndexQueue::STATUS_PENDING === get_post_meta( $late, '_twp_status', true ), 'Completing the captured push leaves the late group pending' );
+check_engine( $late !== $first && IndexQueue::STATUS_DONE === get_post_meta( $late, '_twp_status', true ), 'The late group is pushed independently in the remaining budget' );
 BackgroundEngine::step();
 check_engine( IndexQueue::STATUS_DONE === get_post_meta( $late, '_twp_status', true ), 'The next step actually pushes the late group instead of merely counting a hint' );
 

@@ -118,7 +118,7 @@ $indexer = new Indexer( 'translatewp', TRANSLATEWP_VERSION, $queue );
 $row     = self_heal_done_row( $queue, 4, 'lv' );
 update_post_meta( (int) $row['id'], '_twp_status', IndexQueue::STATUS_DEAD );
 update_post_meta( (int) $row['id'], '_twp_fail_reason', 'Provider unavailable' );
-$heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, static fn (): array => [], static fn (): int => 1000, false );
+$heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, static fn (): array => [], static fn (): int => 3600, false );
 $dead_retries = 0;
 for ( $attempt = 0; $attempt < 4; ++$attempt ) {
 	$result = $heal->reconcile( 0 );

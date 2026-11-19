@@ -59,13 +59,14 @@ foreach ( $GLOBALS['wp_test_inserted_posts'] as $post ) {
 	if ( 'twp_index_item' === ( $post['post_type'] ?? '' ) && get_post_meta( (int) $post['ID'], '_twp_translate_on_read', true ) ) { ++$marked; }
 }
 check_repair( 50 === $marked, 'Only the capped repair pages are marked for automatic translation' );
+$read_start = count( $GLOBALS['wp_test_remote_get_urls'] ?? [] );
 $indexer->step_read( new ReadinessBudget() );
 $read = $queue->read_rows();
-check_repair( 1 === count( $read ), 'One reader unit reads one page' );
-check_repair( 1 === $read[0]['object_id'], 'The front page stays first even when an addon enumerates pages in reverse order' );
+check_repair( 3 === count( $read ), 'One reader unit reads up to three pages sequentially' );
+check_repair( get_permalink( 1 ) === $GLOBALS['wp_test_remote_get_urls'][ $read_start ], 'The front page stays first even when an addon enumerates pages in reverse order' );
 check_repair( (int) get_option( Indexer::NEXT_READER_OPTION ) >= time() + 59, 'The next page cannot be read until a minute has passed' );
 $indexer->step_read( new ReadinessBudget() );
-check_repair( 1 === count( $queue->read_rows() ), 'A second reader unit in the same minute reads no extra page' );
+check_repair( 3 === count( $queue->read_rows() ), 'A second reader unit in the same minute reads no extra page' );
 $indexer->step_push( new ReadinessBudget() );
 $created = creates();
 check_repair( 1 === count( $created ) && 'background_refresh' === ( $created[0]['body']['purpose'] ?? '' ), 'Automatic main-page repair creates a dedicated background refresh job' );

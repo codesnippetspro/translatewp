@@ -18,6 +18,7 @@ class BackgroundEngine {
 	public const STARTED_OPTION = 'translatewp_engine_started';
 	public const LAST_STEP_OPTION = 'translatewp_engine_last_step';
 	public const PHASE_OPTION = 'translatewp_engine_phase';
+	public const PROGRESS_OPTION = 'translatewp_engine_progress';
 	public const STATE_OPTION = 'translatewp_engine_state';
 	public const WORK_OPTION = 'translatewp_engine_work';
 	public const REVISION_OPTION = 'translatewp_engine_revision';
@@ -36,17 +37,19 @@ class BackgroundEngine {
 	public const STALLED_SECONDS = 900;
 	private const HEARTBEAT_SECONDS = 900;
 	private const PHASE_COUNT = 2;
+	private const MAX_UNITS_PER_STEP = 64;
 	private static bool $servicing = false;
 	private static string $trace_phase = 'idle';
 	private static int $trace_rows = 0;
 
 	public static function install(): void {
-		if ( ! SiteConnection::is_connected() ) {
+		if ( ! SiteConnection::has_credentials() ) {
 			return;
 		}
 		$first = ! get_option( self::STARTED_OPTION, false );
 		if ( $first ) {
-			update_option( self::STARTED_OPTION, time(), false );
+			update_option( self::STARTED_OPTION, time(), true );
+			add_option( IndexQueue::NORMALIZE_CURSOR_OPTION, 0, '', false );
 			wp_clear_scheduled_hook( ReadinessReconcile::HOOK );
 			wp_clear_scheduled_hook( \TranslateWP\Functionality\TranslationStoreSync::BACKFILL_HOOK );
 			wp_clear_scheduled_hook( self::CRON_HOOK );
@@ -116,6 +119,7 @@ class BackgroundEngine {
 	public static function service_step( array $body ): array {
 		self::$servicing = true;
 		try {
+			Migrations::install_engine_if_needed();
 			update_option( self::LAST_SERVICE_OPTION, time(), false );
 			BackgroundSwitch::set_paused( true === ( $body['pause'] ?? false ) );
 			return self::step( is_array( $body['pages'] ?? null ) ? $body['pages'] : [] );
@@ -172,50 +176,83 @@ class BackgroundEngine {
 					$response = self::snapshot( 'done' );
 					return;
 				}
-				$work = self::phase_work();
-				$streak = (int) get_option( self::VISITOR_STREAK_OPTION, 0 );
-				$visitor_turn = ! $work['background'] || $streak < self::MAX_VISITOR_STREAK;
 				$indexer = new Indexer( '', '', null, null, false );
 				$budget = QueueExecution::budget();
-				$is_visitor = false;
-				if ( $visitor_turn && $work['visitorPush'] ) {
-					self::$trace_phase = 'visitor_push';
-					self::$trace_rows = count( $work['visitorPush'] );
-					$is_visitor = true;
-					$indexer->step_push( $budget, $work['visitorPush'] );
-				} elseif ( $visitor_turn && $work['visitorReady'] ) {
-					self::$trace_phase = 'visitor_ready';
+				if ( ! empty( self::work_state()['needs_normalization'] ) ) {
+					add_option( IndexQueue::NORMALIZE_CURSOR_OPTION, 0, '', false );
+					( new IndexQueue() )->normalize_legacy_rows();
+				}
+				$total_rows = $pages && self::service_reads() ? $indexer->step_read( $budget, $pages ) : 0;
+				$queue = new IndexQueue();
+				$queue->reclaim_stale();
+				$work = [
+					'visitorPush' => [],
+					'visitorReady' => [],
+					'backgroundPush' => [],
+					'backgroundReady' => [],
+					'read' => false,
+				];
+				$idle_turns = 0;
+				for ( $unit = 0; $unit < self::MAX_UNITS_PER_STEP && ! QueueExecution::expired() && ! BackgroundSwitch::off(); ++$unit ) {
 					self::$trace_rows = 0;
-					$is_visitor = true;
-					self::complete( $indexer, $budget, $work['visitorKeys'] );
-				} elseif ( $work['backgroundPush'] ) {
-					self::$trace_phase = 'background_push';
-					self::$trace_rows = count( $work['backgroundPush'] );
-					$indexer->step_push( $budget, $work['backgroundPush'] );
-				} elseif ( $work['backgroundReady'] ) {
-					self::$trace_phase = 'background_ready';
-					self::$trace_rows = 0;
-					self::complete( $indexer, $budget );
-				} elseif ( $work['read'] ) {
-					self::$trace_phase = 'read';
-					self::$trace_rows = 1;
-					$indexer->step_read( $budget, $pages );
-				} else {
-					self::$trace_phase = 'maintenance';
-					$phase = max( 0, (int) get_option( self::PHASE_OPTION, 1 ) ) % self::PHASE_COUNT;
-					update_option( self::PHASE_OPTION, ( $phase + 1 ) % self::PHASE_COUNT, false );
-					if ( 0 === $phase ) {
-						self::complete( $indexer, $budget );
-					} else {
-						$changes = new LexiconChanges( '', '', false );
-						$changes->seed();
-						$indexer->ensure_spine();
-						if ( ! CronFallback::run_refill_maintenance() && ! QueueExecution::expired() ) {
-							( new IndexQueue() )->maintain_duplicates();
+					$work = self::phase_work( $queue );
+					$streak = (int) get_option( self::VISITOR_STREAK_OPTION, 0 );
+					$visitor_turn = ! $work['background'] || $streak < self::MAX_VISITOR_STREAK;
+					$is_visitor = false;
+					$worked = false;
+					$phases = [
+						'visitor_push' => $visitor_turn ? $work['visitorPush'] : [],
+						'visitor_ready' => $visitor_turn ? $work['visitorReady'] : [],
+						'background_push' => $work['backgroundPush'],
+						'background_ready' => $work['backgroundReady'],
+					];
+					foreach ( $phases as $phase => $rows ) {
+						if ( ! $rows || QueueExecution::expired() ) {
+							continue;
+						}
+						self::$trace_phase = $phase;
+						if ( false !== strpos( $phase, '_push' ) ) {
+							$result = $indexer->step_push( $budget, $rows );
+							self::$trace_rows = array_sum( $result );
+						} else {
+							self::complete( $indexer, $budget, 'visitor_ready' === $phase ? $work['visitorKeys'] : null, $rows );
+						}
+						if ( self::$trace_rows > 0 ) {
+							$worked = true;
+							$is_visitor = 0 === strpos( $phase, 'visitor_' );
+							break;
 						}
 					}
+					if ( ! $worked && ! QueueExecution::expired() && $work['read'] ) {
+						self::$trace_phase = 'read';
+						self::$trace_rows = $indexer->step_read( $budget, $pages );
+						$worked = self::$trace_rows > 0;
+					}
+					if ( ! $worked && ! QueueExecution::expired() ) {
+						self::$trace_phase = 'maintenance';
+						$phase = max( 0, (int) get_option( self::PHASE_OPTION, 1 ) ) % self::PHASE_COUNT;
+						update_option( self::PHASE_OPTION, ( $phase + 1 ) % self::PHASE_COUNT, false );
+						if ( 0 === $phase ) {
+							self::complete( $indexer, $budget );
+							$worked = self::$trace_rows > 0;
+						} else {
+							$changes = new LexiconChanges( '', '', false );
+							$changes->seed();
+							$indexer->ensure_spine();
+							$worked = CronFallback::run_refill_maintenance();
+							if ( ! $worked && ! QueueExecution::expired() ) {
+								( new IndexQueue() )->maintain_duplicates();
+							}
+						}
+					}
+					update_option( self::VISITOR_STREAK_OPTION, $is_visitor ? min( self::MAX_VISITOR_STREAK, $streak + 1 ) : 0, false );
+					$total_rows += self::$trace_rows;
+					$idle_turns = $worked ? 0 : $idle_turns + 1;
+					if ( $idle_turns >= self::PHASE_COUNT || 0 === array_sum( self::pending( false ) ) ) {
+						break;
+					}
 				}
-				update_option( self::VISITOR_STREAK_OPTION, $is_visitor ? min( self::MAX_VISITOR_STREAK, $streak + 1 ) : 0, false );
+				self::$trace_rows = $total_rows;
 				update_option( self::LAST_STEP_OPTION, time(), false );
 				update_option( Indexer::LAST_DRAIN_OPTION, time(), false );
 				$pending = self::pending( false );
@@ -239,6 +276,15 @@ class BackgroundEngine {
 					'pending' => $pending,
 					'v' => 1,
 				];
+				$next_due = (int) ( self::work_state()['next'] ?? 0 );
+				if ( 'more' === $response['state'] && $next_due > time() ) {
+					$response['nextDue'] = $next_due;
+				}
+				$actionable = array_merge( $work['visitorPush'], array_column( $work['visitorReady'], 'id' ), $work['backgroundPush'], array_column( $work['backgroundReady'], 'id' ) );
+				if ( ! $actionable && $work['read'] ) {
+					$actionable = array_column( ( new IndexQueue() )->pending_read_rows(), 'id' );
+				}
+				self::record_progress( $response, $actionable, $total_rows );
 				$error = sanitize_key( (string) get_option( Indexer::READER_FAILURE_OPTION, '' ) );
 				if ( '' !== $error ) {
 					$response['error'] = [
@@ -265,6 +311,30 @@ class BackgroundEngine {
 			self::schedule();
 		}
 		return BackgroundSwitch::off() ? self::snapshot( 'paused' ) : $response;
+	}
+
+	private static function record_progress( array &$response, array $ids, int $changes ): void {
+		if ( 'done' === $response['state'] || $changes > 0 || ! $ids || isset( $response['nextDue'] ) ) {
+			delete_option( self::PROGRESS_OPTION );
+			return;
+		}
+		$rows = array_slice( array_values( array_unique( $ids ) ), 0, 8 );
+		$previous = (array) get_option( self::PROGRESS_OPTION, [] );
+		$count = ( $previous['rows'] ?? [] ) === $rows ? (int) $previous['count'] + 1 : 1;
+		update_option(
+            self::PROGRESS_OPTION,
+            [
+				'rows' => $rows,
+				'count' => $count,
+			],
+            false
+        );
+		if ( $count >= 3 ) {
+			$response['stalled'] = [
+				'phase' => self::$trace_phase,
+				'rows' => $rows,
+			];
+		}
 	}
 
 	private static function visitor_hint(): string {
@@ -300,34 +370,32 @@ class BackgroundEngine {
 		);
 	}
 
-	private static function complete( Indexer $indexer, ReadinessBudget $budget, ?array $visitor_keys = null ): void {
+	private static function complete( Indexer $indexer, ReadinessBudget $budget, ?array $visitor_keys = null, ?array $rows = null ): void {
 		$reconcile = new ReadinessReconcile( '', '', $indexer, null, null, false );
-		$reconcile->step_run( $budget, null !== $visitor_keys );
+		$reconcile->step_run( $budget, null !== $visitor_keys, $rows );
 		self::$trace_rows = $reconcile->step_rows_seen();
 		if ( ! QueueExecution::expired() ) {
-			TranslationStore::run_backfill_batch( 1, null, $visitor_keys );
+			TranslationStore::run_backfill_batch( QueueMetadata::MAX_ROWS, null, $visitor_keys, true );
 		}
 		if ( ! QueueExecution::expired() ) {
 			$indexer->report_completion();
 		}
 	}
 
-	private static function phase_work(): array {
-		$queue = new IndexQueue();
-		$queue->reclaim_stale();
-		$visitor_ready = $queue->engine_rows( 'visitor_ready', 1 );
-		$background_ready = $queue->engine_rows( 'background_ready', 1 );
+	private static function phase_work( IndexQueue $queue ): array {
+		$visitor_ready = ReadinessReconcile::step_rows( true );
+		$background_ready = ReadinessReconcile::step_rows();
 		$visitor = $queue->engine_rows( 'visitor_push', Indexer::drain_batch_size() );
 		$background = $queue->engine_rows( 'background_push', Indexer::drain_batch_size() );
 		$read = (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
-			|| ( (int) get_option( Indexer::NEXT_READER_OPTION, 0 ) <= time() && [] !== $queue->pending_read_rows() );
+			|| ( ( self::service_reads() || (int) get_option( Indexer::NEXT_READER_OPTION, 0 ) <= time() ) && [] !== $queue->pending_read_rows() );
 		$pending = self::pending();
 		return [
 			'visitorPush' => array_column( $visitor, 'id' ),
-			'visitorReady' => [] !== $visitor_ready,
+			'visitorReady' => $visitor_ready,
 			'visitorKeys' => array_map( static fn ( array $row ): string => TranslationUrl::canonicalize( $row['url'] ) . '|' . $row['language'], $visitor_ready ),
 			'backgroundPush' => array_column( $background, 'id' ),
-			'backgroundReady' => [] !== $background_ready || (int) ( self::work_state()['settle'] ?? 0 ) > 0,
+			'backgroundReady' => $background_ready,
 			'read' => $read,
 			'background' => [] !== $background || [] !== $background_ready || $read || $pending['refill'] > 0,
 		];
@@ -378,7 +446,7 @@ class BackgroundEngine {
 	public static function stalled(): bool {
 		$last = max( (int) get_option( self::LAST_STEP_OPTION, 0 ), (int) get_option( self::STARTED_OPTION, 0 ) );
 		return ! BackgroundSwitch::off() && SiteConnection::is_connected()
-			&& $last <= time() - self::STALLED_SECONDS && array_sum( self::pending() ) > 0;
+			&& ( ! empty( get_option( self::STATE_OPTION, [] )['stalled'] ) || ( $last <= time() - self::STALLED_SECONDS && array_sum( self::pending() ) > 0 ) );
 	}
 
 	public static function scheduled_tasks(): array {
@@ -421,7 +489,8 @@ class BackgroundEngine {
 
 	public static function pending( bool $include_hint = true ): array {
 		$pending = self::work_state()['pending'];
-		$pending['refill'] += (int) ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) )
+		$pending['refill'] += (int) ( false !== get_option( IndexQueue::NORMALIZE_CURSOR_OPTION, false ) )
+			+ (int) ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) )
 			+ (int) ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) )
 			+ (int) ( ! get_option( LexiconChanges::SEEDED_OPTION, false ) )
 			+ (int) ( ! get_option( Indexer::SPINE_CHECKED_OPTION, false ) )

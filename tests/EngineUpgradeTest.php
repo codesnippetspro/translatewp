@@ -113,6 +113,8 @@ check_upgrade( wp_next_scheduled( BackgroundEngine::CRON_HOOK ) >= time() + Back
 // --- A stored version above the code version (a development build): engine still installed ---
 released_site( '9.9.9' );
 Migrations::maybe_run();
+check_upgrade( false === get_option( BackgroundEngine::STARTED_OPTION, false ), 'An already-current visitor request does not inspect or install the engine' );
+Migrations::install_engine_if_needed();
 check_upgrade( engine_installed(), 'Stored version above the code version: the engine must still be installed' );
 check_upgrade( orphans_cleared(), 'Stored version above the code version: the 1.1.1 events must be cleared' );
 check_upgrade( '9.9.9' === get_option( Migrations::VERSION_OPTION ), 'Stored version above the code version: the marker is not lowered' );
@@ -141,6 +143,22 @@ Migrations::maybe_run();
 check_upgrade( [] === $GLOBALS['wp_test_scheduled_log'], 'Current version: nothing may be scheduled' );
 check_upgrade( 1700000000 === get_option( BackgroundEngine::STARTED_OPTION ), 'Current version: the engine start time must stay' );
 no_heavy_work( 'Current version' );
+
+foreach ( [ 'connected', 'invalidated', 'disconnected' ] as $connection ) {
+	released_site( TRANSLATEWP_VERSION );
+	if ( 'disconnected' === $connection ) { \TranslateWP\Components\Options::update( 'site', [] ); }
+	else { \TranslateWP\Components\Options::update( 'site.connection_status', $connection ); }
+	$GLOBALS['wp_test_after_option_read'][ BackgroundEngine::STARTED_OPTION ] = static function (): void {
+		throw new RuntimeException( 'A current-version page view must not even read the engine start option' );
+	};
+	Migrations::maybe_run();
+	no_heavy_work( 'Current page view: ' . $connection );
+	unset( $GLOBALS['wp_test_after_option_read'][ BackgroundEngine::STARTED_OPTION ] );
+}
+released_site( '1.1.1' );
+\TranslateWP\Components\Options::update( 'site.connection_status', 'invalidated' );
+Migrations::maybe_run();
+no_heavy_work( 'An invalidated upgrade uses stored credentials without a probe' );
 
 // --- Multisite: each site installs its own engine on its own first request ---
 released_site( '1.1.1' );

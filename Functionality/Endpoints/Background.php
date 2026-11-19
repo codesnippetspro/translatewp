@@ -41,14 +41,15 @@ class Background extends BaseApiEndpoints {
 		$pages = [];
 		if ( BackgroundEngine::service_reads() && is_array( $body['pages'] ?? null ) ) {
 			foreach ( array_slice( $body['pages'], 0, BackgroundEngine::MAX_READ_PAGES ) as $page ) {
-				if ( ! is_array( $page ) || ! is_string( $page['url'] ?? null ) || ! is_string( $page['html'] ?? null )
-					|| strlen( $page['html'] ) > BackgroundEngine::MAX_PAGE_BYTES ) {
+				if ( ! is_array( $page ) || ! is_string( $page['url'] ?? null ) || ! is_string( $page['html'] ?? '' )
+					|| strlen( $page['html'] ?? '' ) > BackgroundEngine::MAX_PAGE_BYTES ) {
 					continue;
 				}
 				$pages[] = [
 					'url' => esc_url_raw( $page['url'] ),
 					'status' => absint( $page['status'] ?? 0 ),
-					'html' => wp_check_invalid_utf8( $page['html'] ),
+					'error' => sanitize_key( (string) ( $page['error'] ?? '' ) ),
+					'html' => wp_check_invalid_utf8( $page['html'] ?? '' ),
 				];
 			}
 		}

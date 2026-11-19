@@ -309,14 +309,23 @@ class WP_Testwpdb {
         foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
             if ( 'twp_index_item' !== ( $post['post_type'] ?? '' ) ) { continue; }
             $m = $post['meta_input'];
-            $row = [ 'language' => (string) ( $m['_twp_language'] ?? '' ), 'status' => $m['_twp_status'] ?? '', 'stage' => $m['_twp_stage'] ?? '', 'object_type' => $m['_twp_object_type'] ?? '', 'translated' => (int) ( $m['_twp_translated_at'] ?? 0 ) > 0, 'background' => (int) ( $m['_twp_background_refresh'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslate'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslating' => (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslate' => (int) ( $m['_twp_retranslate'] ?? 0 ) > 0, 'repairing' => (int) ( $m['_twp_cold_retries'] ?? 0 ) > 0 ];
-            $key = json_encode( $row ); $due = (int) ( $m['_twp_reader_not_before'] ?? 0 );
+            $row = [ 'language' => (string) ( $m['_twp_language'] ?? '' ), 'status' => $m['_twp_status'] ?? '', 'stage' => $m['_twp_stage'] ?? '', 'object_type' => $m['_twp_object_type'] ?? '', 'translated' => (int) ( $m['_twp_translated_at'] ?? 0 ) > 0, 'background' => (int) ( $m['_twp_background_refresh'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslate'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslating' => (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslate' => (int) ( $m['_twp_retranslate'] ?? 0 ) > 0, 'repairing' => (int) ( $m['_twp_cold_retries'] ?? 0 ) > 0, 'recoverable' => (int) ( $m['_twp_dead_retries'] ?? 0 ) < 3 && empty( $m['_twp_cold_exhausted'] ) ];
+            $key = json_encode( $row ); $due = 'dead' === $row['status'] ? (int) ( $m['_twp_updated_at'] ?? 0 ) + 600 * ( 2 ** min( 3, (int) ( $m['_twp_dead_retries'] ?? 0 ) ) ) : (int) ( $m['_twp_reader_not_before'] ?? 0 );
             $buckets[$key] = $row + [ 'due' => min( $due, $buckets[$key]['due'] ?? $due ), 'n' => 1 + ( $buckets[$key]['n'] ?? 0 ) ];
         }
         return array_map( static fn ( array $row ): object => (object) $row, array_values( $buckets ) );
     }
 
 	public function get_col( string $query ): array {
+        if ( false !== strpos( $this->last_query, "AND ID > %d ORDER BY ID ASC LIMIT %d" ) ) {
+            [$type,$after,$limit] = $this->prepared_args;
+            $ids=[];
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[] as $post) {
+                if (($post['post_type']??'')===$type && ($post['post_status']??'')==='private' && (int)$post['ID']>(int)$after) { $ids[]=(int)$post['ID']; }
+            }
+            sort($ids); return array_slice($ids,0,(int)$limit);
+        }
+
         if ( 0 === strpos( $this->last_query, 'SELECT ID FROM wp_posts WHERE ID IN (' ) ) {
             $ids=array_slice($this->prepared_args,0,-2);
             return array_values(array_map(static fn(array $p):int=>(int)$p['ID'],array_filter($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[],static fn(array $p):bool=>in_array((int)$p['ID'],$ids,true)&&($p['post_type']??'')==='twp_index_item'&&($p['post_status']??'')==='private')));
@@ -329,6 +338,7 @@ class WP_Testwpdb {
             foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[] as $post){
                 $m=$post['meta_input']??[];
                 if(($post['post_type']??'')!=='twp_index_item'||($post['post_status']??'')!=='private'){continue;}
+                if(strpos($sql,'AND p.ID = %d')!==false && (int)$post['ID'] !== (int)$args[count($args)-3]) {continue;}
                 if($due){if(($m['_twp_status']??'')!==$args[2]||($m['_twp_stage']??'')!==$args[3]||(int)($m['_twp_reader_not_before']??0)>(int)$args[4]){continue;}}
                 else{
                     if(''===(string)($m['_twp_language']??'')){continue;}
@@ -336,11 +346,11 @@ class WP_Testwpdb {
                     $background=strpos($sql,'NOT (kind.meta_value')!==false;
                     if($background===$visitor){continue;}
                     if($push){if(($m['_twp_status']??'')!=='pending'||($m['_twp_stage']??'')!=='push'||(int)($m['_twp_reader_not_before']??0)>(int)$args[2]){continue;}}
-                    elseif(($m['_twp_status']??'')!=='done'||(int)($m['_twp_translated_at']??0)>0){continue;}
+                    elseif(($m['_twp_status']??'')!=='done'||(int)($m['_twp_translated_at']??0)>0||(int)($m['_twp_reader_not_before']??0)>(int)$args[2]){continue;}
                 }
                 $rows[]=$post;
             }
-            usort($rows,static fn(array $a,array $b):int=>($push?((int)($a['meta_input']['_twp_priority']??0)<=>(int)($b['meta_input']['_twp_priority']??0)):0)?:((int)$a['ID']<=>(int)$b['ID']));
+            usort($rows,static fn(array $a,array $b):int=>((int)($a['meta_input']['_twp_reader_not_before']??0)<=>(int)($b['meta_input']['_twp_reader_not_before']??0))?:($push?((int)($a['meta_input']['_twp_priority']??0)<=>(int)($b['meta_input']['_twp_priority']??0)):0)?:((int)$a['ID']<=>(int)$b['ID']));
             $ids=array_column(array_slice($rows,$offset,$limit),'ID');
             $GLOBALS['wp_test_engine_selects'][]=['query'=>$sql,'limit'=>$limit,'count'=>count($ids)];
             return $ids;
@@ -1689,6 +1699,9 @@ function wp_remote_get( string $url, array $args = [] ) {
 
 	$GLOBALS['wp_test_remote_get_urls'][] = $url;
 
+	if ( ! empty( $GLOBALS['wp_test_remote_get_sequence'] ) ) {
+		return array_shift( $GLOBALS['wp_test_remote_get_sequence'] );
+	}
 	if ( isset( $GLOBALS['wp_test_remote_get_response'] ) ) {
 		return $GLOBALS['wp_test_remote_get_response'];
 	}
