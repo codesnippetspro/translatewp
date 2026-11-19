@@ -129,6 +129,7 @@ class PluginCoexistence {
 			}
 		}
 
+		AdminNotices::mark_action_required();
 		printf(
 			'%s<p>%s</p><p>%s<a href="%s">%s</a></p></div>',
 			AdminNotices::open( 'notice-warning', self::DISMISS_ACTION ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attributes escaped in AdminNotices::open().

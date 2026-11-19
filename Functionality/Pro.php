@@ -8,6 +8,12 @@ use TranslateWP\Components\SiteConnection;
 
 class Pro {
 
+	private const REQUIREMENT_HEADERS = [
+		'tested'       => 'Tested up to',
+		'requires'     => 'Requires at least',
+		'requires_php' => 'Requires PHP',
+	];
+
 	protected $plugin_name;
 	protected $plugin_version;
 
@@ -119,33 +125,64 @@ class Pro {
 
 		if ( null === $offer ) {
 			unset( $transient->response[ $basename ] );
-			$transient->no_update[ $basename ] = $this->update_item( $basename, ProEligibility::installed_version(), '' );
+			$transient->no_update[ $basename ] = $this->update_item( $basename, ProEligibility::installed_version(), '', $fresh );
 
 			return $transient;
 		}
 
 		unset( $transient->no_update[ $basename ] );
-		$transient->response[ $offer['plugin'] ] = $this->update_item( $offer['plugin'], $offer['new_version'], $offer['package'] );
+		$transient->response[ $offer['plugin'] ] = $this->update_item( $offer['plugin'], $offer['new_version'], $offer['package'], $fresh );
 
 		return $transient;
 	}
 
-	private function update_item( string $basename, string $version, string $package ): object {
-		return (object) [
+	private function update_item( string $basename, string $version, string $package, array $state ): object {
+		$item = [
 			'id'          => 'translatewp/' . ProEligibility::addon_slug(),
 			'slug'        => ProEligibility::addon_slug(),
 			'plugin'      => $basename,
 			'new_version' => $version,
 			'package'     => $package,
 			'url'         => ProEligibility::upgrade_url(),
-			'icons'       => [],
+			'icons'       => self::icons(),
 			'banners'     => [],
 			'banners_rtl' => [],
-			'tested'      => '',
-			'requires'    => '',
-			'requires_php' => '',
 			'compatibility' => new \stdClass(),
 		];
+
+		return (object) ( $item + self::requirements( $state ) );
+	}
+
+	private static function icons(): array {
+		return [
+			'1x' => TRANSLATEWP_URL . 'assets/icon-128x128.png',
+			'2x' => TRANSLATEWP_URL . 'assets/icon-256x256.png',
+		];
+	}
+
+	/**
+	 * WordPress reads tested/requires/requires_php with isset(), so an unknown
+	 * value is left out instead of being sent as an empty string.
+	 */
+	private static function requirements( array $state ): array {
+		$header = [];
+		$file   = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR . '/' . ProEligibility::addon_basename() : '';
+		if ( '' !== $file && function_exists( 'get_file_data' ) && is_readable( $file ) ) {
+			$header = get_file_data( $file, self::REQUIREMENT_HEADERS );
+		}
+
+		$values = [];
+		foreach ( array_keys( self::REQUIREMENT_HEADERS ) as $key ) {
+			$value = ProEligibility::version_number( $state[ 'latest_' . $key ] ?? null );
+			if ( '' === $value ) {
+				$value = ProEligibility::version_number( $header[ $key ] ?? null );
+			}
+			if ( '' !== $value ) {
+				$values[ $key ] = $value;
+			}
+		}
+
+		return $values;
 	}
 
 	public function plugin_information( $result, $action, $args ) {
@@ -163,7 +200,7 @@ class Pro {
 			return $result;
 		}
 
-		return (object) [
+		$info = [
 			'name'          => 'TranslateWP Pro',
 			'slug'          => ProEligibility::addon_slug(),
 			'version'       => (string) $fresh['latest_version'],
@@ -173,7 +210,10 @@ class Pro {
 			'sections'      => [
 				'description' => esc_html__( 'TranslateWP Pro features for this site.', 'translate' ),
 			],
+			'icons'         => self::icons(),
 		];
+
+		return (object) ( $info + self::requirements( $fresh ) );
 	}
 
 	private function on_translatewp_page(): bool {
