@@ -11,32 +11,21 @@ export interface FinishProps
     pending: boolean;
     proAction: 'install' | 'activate' | null;
     proPending: boolean;
-    finish: () => void;
     finishWithPro: () => void;
 }
 
-const FinishAction = ({ enabled, pending, proAction, proPending, finish, finishWithPro }: FinishProps) =>
+// Finishing without Pro is the footer's Finish button.
+const FinishWithProAction = ({ enabled, pending, proAction, proPending, finishWithPro }: FinishProps) =>
 {
-    const disabled = !enabled || pending || proPending;
-
     if (proAction === null)
     {
-        return (
-            <Button variant='primary' className='rounded-sm!' onClick={finish} disabled={disabled} isBusy={pending} data-finish-setup>
-                {__('Open Dashboard', 'translate')}
-            </Button>
-        );
+        return null;
     }
 
     return (
-        <div className='flex flex-wrap items-center gap-3'>
-            <Button variant='primary' className='rounded-sm!' onClick={finishWithPro} disabled={disabled} isBusy={pending || proPending} data-finish-setup>
-                {proAction === 'install' ? __('Install Pro and finish', 'translate') : __('Activate Pro and finish', 'translate')}
-            </Button>
-            <Button variant='tertiary' onClick={finish} disabled={disabled}>
-                {__('Finish without Pro', 'translate')}
-            </Button>
-        </div>
+        <Button variant='secondary' className='rounded-sm!' onClick={finishWithPro} disabled={!enabled || pending || proPending} isBusy={proPending} data-finish-with-pro>
+            {proAction === 'install' ? __('Install Pro and finish', 'translate') : __('Activate Pro and finish', 'translate')}
+        </Button>
     );
 };
 
@@ -66,7 +55,7 @@ export const TranslationStep = (finishProps: FinishProps) =>
                 onChange={setAutoTranslate}
                 className='[&_.components-flex]:gap-4! mb-0! text-sm!'
             />
-            <TranslationProgressTable languages={languages} action={<FinishAction {...finishProps} />} />
+            <TranslationProgressTable languages={languages} action={<FinishWithProAction {...finishProps} />} />
         </div>
     );
 }
