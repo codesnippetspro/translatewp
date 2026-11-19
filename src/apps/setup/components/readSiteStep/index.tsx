@@ -41,6 +41,7 @@ export function setupExtractionConfig(): AdminExtractionConfig
         },
         siteId: window.TranslateWP?.context?.site_id ?? '',
         remoteApiBase: window.TranslateWP?.context?.remote_api_base ?? '',
+        seoMetadata: isProActive(getProState()),
     };
 }
 
