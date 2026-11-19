@@ -304,6 +304,7 @@ class Indexer {
 						'language'    => $language,
 						'priority'    => $read_row['priority'],
 						'payload'     => (string) wp_json_encode( $items ),
+						'promote_extract' => $force,
 					]
 				);
 				if ( false !== $row_id ) {
@@ -804,6 +805,7 @@ class Indexer {
 			}
 			$languages[ $language ] = true;
 			$rows[]                 = [
+				'id' => (int) $row['id'],
 				'object_type' => (string) $row['object_type'],
 				'object_id'   => (int) $row['object_id'],
 				'url'         => (string) $row['url'],

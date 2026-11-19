@@ -211,4 +211,124 @@ if ( in_array( $case, [ 'crawler-routing', 'all' ], true ) ) {
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'Crawler refill followed by admin extraction and reduced push keeps background purpose' );
 }
+function held_budget( ?ReadinessBudget $budget ): void {
+    $property = new ReflectionProperty( \TranslateWP\Components\QueueExecution::class, 'budget' );
+    $property->setAccessible( true ); $property->setValue( null, $budget );
+}
+function held_completed_rows( IndexQueue $queue, int $count = 5 ): array {
+    for ( $i = 1; $i <= $count; ++$i ) {
+        $id = lifecycle_row( $queue, $i );
+        $queue->claim_rows( [ $id ] ); $queue->complete( $id ); $queue->mark_translated( [ $id ] );
+    }
+    return $queue->list_rows();
+}
+if ( in_array( $case, [ 'deferred-ids', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
+    held_budget( new ReadinessBudget( 0 ) );
+    try { $queue->enqueue_retranslate( $rows, false ); } finally { held_budget( null ); }
+    $work = get_option( IndexQueue::DEFERRED_REFILLS_OPTION );
+    check_lifecycle( array_column( $rows, 'id' ) === ( $work['ids'] ?? null ) && ! isset( $work['rows'] ), 'Deferred refill state stores only exact row IDs, not row payloads' );
+}
+if ( in_array( $case, [ 'deferred-loop', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
+    update_option( IndexQueue::DEFERRED_REFILLS_OPTION, [ 'ids' => array_column( $rows, 'id' ), 'force' => false ], false );
+    held_budget( new ReadinessBudget( 20 ) );
+    try { $queue->resume_deferred_refills(); } finally { held_budget( null ); }
+    check_lifecycle( 5 === count( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) ), 'One deferred unit drains multiple rows while its budget remains' );
+    check_lifecycle( false === get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ), 'A fully drained ID list is removed' );
+}
+if ( in_array( $case, [ 'deferred-race', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
+    update_option( IndexQueue::DEFERRED_REFILLS_OPTION, [ 'rows' => $rows, 'force' => false ], false );
+    $ticks = 0; held_budget( new ReadinessBudget( 1, static function () use ( &$ticks ): float { return ++$ticks <= 2 ? 0.0 : 2.0; } ) );
+    try { $queue->resume_deferred_refills(); } finally { held_budget( null ); }
+    $work = get_option( IndexQueue::DEFERRED_REFILLS_OPTION, [] );
+    $pending = array_column( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ), 'id' );
+    $remaining = $work['ids'] ?? array_column( $work['rows'] ?? [], 'id' );
+    check_lifecycle( [] === array_diff( array_column( $rows, 'id' ), array_merge( $pending, $remaining ) ), 'A budget expiring between checks never drops the current deferred row' );
+    $queue->resume_deferred_refills();
+    check_lifecycle( 5 === count( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) ), 'Deferred work resumes after the budget-expiry race' );
+}
+if ( in_array( $case, [ 'pending-visitor', 'all' ], true ) ) {
+    foreach ( [ 'pending', 'claimed', 'delivery', 'deferred' ] as $state ) {
+        [ $queue, $indexer ] = lifecycle_fixture();
+        $refill = lifecycle_row( $queue, 321 ); $queue->track_refill( $refill );
+        if ( 'pending' !== $state ) { $queue->claim_rows( [ $refill ] ); }
+        if ( in_array( $state, [ 'delivery', 'deferred' ], true ) ) { $queue->complete( $refill ); }
+        if ( 'deferred' === $state ) { $queue->mark_translated( [ $refill ] ); delete_post_meta( $refill, '_twp_background_refresh' ); delete_post_meta( $refill, '_twp_retranslating' ); update_option( IndexQueue::DEFERRED_REFILLS_OPTION, [ 'ids' => [ $refill ], 'force' => false ], false ); }
+        $row = [ 'object_type' => 'miss', 'object_id' => 321, 'url' => 'https://example.com/shop/', 'page_title' => '', 'language' => 'it', 'priority' => 50 ];
+        $visitor = $queue->enqueue_miss_page( $row, [ [ 'groupId' => 'visitor', 'markerPayload' => '⟪item_0001⟫New visitor text', 'cache' => [ 'hash' => hash( 'sha256', 'visitor' ) ] ] ] );
+        check_lifecycle( $visitor !== $refill, 'Visitor text uses a separate row while refill is ' . $state );
+        $again = $queue->enqueue_miss_page( $row, [ [ 'groupId' => 'visitor-more', 'markerPayload' => '⟪item_0001⟫More visitor text', 'cache' => [ 'hash' => hash( 'sha256', 'visitor-more' ) ] ] ] );
+        check_lifecycle( $again === $visitor && ! $queue->requires_background_refresh( $visitor ), 'Later visitor misses merge only into the normal visitor row' );
+        $queue->collapse_stale_duplicates();
+        check_lifecycle( 2 === count( $queue->list_rows() ), 'Duplicate cleanup preserves separate active refill and visitor work' );
+        if ( 'deferred' === $state ) { $queue->resume_deferred_refills(); }
+        else { $queue->enqueue_retranslate( array_values( array_filter( $queue->list_rows(), static fn( array $r ): bool => $refill === $r['id'] ) ), false ); }
+        check_lifecycle( ! $queue->requires_background_refresh( $visitor ), 'An exact-row refill does not relabel a newer visitor row' );
+        update_option( Indexer::REPAIR_RETRY_OPTION, time() + 7200, false );
+        $indexer->drain_tick();
+        $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+        check_lifecycle( 1 === count( $creates ) && ! isset( $creates[0]['body']['purpose'] ), 'Visitor work proceeds without the pending refill purpose or backoff' );
+        $batches = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => false !== strpos( $r['path'], '/batches' ) ) );
+        check_lifecycle( 2 === count( $batches[0]['body']['items'] ?? [] ), 'Only visitor items enter the normal job' );
+    }
+}
+
+if ( in_array( $case, [ 'deferred-budget', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue );
+    update_option( IndexQueue::DEFERRED_REFILLS_OPTION, [ 'ids' => array_column( $rows, 'id' ), 'force' => true ], false );
+    $ticks = 0; held_budget( new ReadinessBudget( 1, static function () use ( &$ticks ): float { return ++$ticks <= 3 ? 0.0 : 2.0; } ) );
+    try { $queue->resume_deferred_refills(); } finally { held_budget( null ); }
+    $pending = array_values( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) );
+    $remaining = get_option( IndexQueue::DEFERRED_REFILLS_OPTION );
+    check_lifecycle( 1 === count( $pending ) && 4 === count( $remaining['ids'] ?? [] ), 'The deferred loop stops at its budget and persists the remaining IDs' );
+    check_lifecycle( 1 === (int) get_post_meta( $pending[0]['id'], '_twp_retranslate', true ), 'A deferred forced refill keeps its force policy' );
+    $queue->resume_deferred_refills();
+    check_lifecycle( 5 === count( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) ), 'The next unit drains the saved remainder' );
+}
+if ( in_array( $case, [ 'deferred-policy', 'all' ], true ) ) {
+    [ $queue ] = lifecycle_fixture(); $rows = held_completed_rows( $queue, 1 );
+    $rows[0]['self_heal'] = true; $id = $rows[0]['id'];
+    update_post_meta( $id, '_twp_cold_retries', 2 );
+    held_budget( new ReadinessBudget( 0 ) );
+    try { $queue->enqueue_retranslate( $rows, false ); } finally { held_budget( null ); }
+    $queue->resume_deferred_refills();
+    check_lifecycle( 2 === (int) get_post_meta( $id, '_twp_cold_retries', true ), 'Deferring self-heal work does not reset its bounded retry counter' );
+}
+if ( in_array( $case, [ 'legacy-cart', 'all' ], true ) ) {
+    [ $queue, $indexer ] = lifecycle_fixture();
+    $languages = [ 'en' => [ 'locale' => 'en', 'slug' => 'en', 'default' => true, 'active' => true ] ];
+    foreach ( [ 'es', 'it', 'lv' ] as $language ) { $languages[$language] = [ 'locale' => $language, 'slug' => $language, 'active' => true ]; }
+    Options::update( 'languages.list', $languages );
+    Options::update( 'cache.lexicon_language_versions', [ 'es' => 5, 'it' => 5, 'lv' => 5 ] );
+    $page = [ 'object_type' => 'page', 'object_id' => 8, 'url' => 'https://example.com/cart/', 'page_title' => 'Cart', 'priority' => 100 ];
+    $queue->enqueue_read( [ $page ] );
+    $source = $queue->claim_batch( IndexQueue::STAGE_EXTRACT, 1 )[0]['id'];
+    $old = [ [ 'groupId' => 'cart', 'markerPayload' => '⟪item_0001⟫Old cart content' ] ];
+    $queue->store_payload( $source, wp_json_encode( $old ) );
+    foreach ( [ 'es', 'it', 'lv' ] as $language ) {
+        $queue->enqueue( [ array_merge( $page, [ 'language' => $language ] ) ] );
+    }
+    $legacy = $queue->list_rows();
+    foreach ( $legacy as $row ) {
+        $id = $row['id'];
+        foreach ( [ '_twp_retranslate' => 1, '_twp_retranslating' => 1, '_twp_cold_retries' => 1, '_twp_job_outcome' => 'done', '_twp_lexicon_version' => 1, '_twp_translated_at' => 1795008977, '_twp_updated_at' => 1795008970 ] as $key => $value ) { update_post_meta( $id, $key, $value ); }
+        update_post_meta( $id, '_twp_delivery_manifest', [ 'scope' => 'previous-scope', 'groups' => [], 'title' => true ] );
+    }
+    $queue->enqueue_read( [ $page ] ); $queue->translate_after_reading( [ $page ] );
+    $queue->claim_rows( [ $source ] );
+    $fresh = [ [ 'groupId' => 'cart', 'markerPayload' => '⟪item_0001⟫Your Cart' ] ];
+    $indexer->submit_extraction( $source, $fresh, true );
+    foreach ( $queue->list_rows() as $row ) {
+        check_lifecycle( IndexQueue::STAGE_PUSH === $row['stage'] && $row['retranslate'], 'A fresh source read advances each legacy pending Cart row without losing its force flag' );
+    }
+    $indexer->drain_now();
+    $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+    check_lifecycle( 3 === count( $creates ), 'All three legacy Cart languages open their background jobs after the fresh read' );
+    foreach ( $creates as $job ) { check_lifecycle( 'background_refresh' === ( $job['body']['purpose'] ?? '' ) && 5 === $job['body']['cacheVersions']['lexiconVersion'], 'Legacy Cart work uses acknowledged background routing at the new revision' ); }
+    $batches = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => false !== strpos( $r['path'], '/batches' ) ) );
+    foreach ( $batches as $batch ) { check_lifecycle( true === ( $batch['body']['retranslate'] ?? false ), 'The existing forced-retranslation intent is preserved on delivery' ); }
+    check_lifecycle( [] === ( $GLOBALS['wp_test_remote_get_urls'] ?? [] ), 'Language rows reuse the completed source read rather than fetching Cart again' );
+}
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";
