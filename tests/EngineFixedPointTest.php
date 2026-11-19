@@ -7,6 +7,17 @@ namespace TranslateWP\Components {
 }
 namespace TranslateWP\Functionality {
 	function time(): int { return $GLOBALS['fixed_time']; }
+	function wp_remote_get( string $url, array $args = [] ) {
+		if ( ! empty( $GLOBALS['timeout_source_url'] ) && $url === $GLOBALS['timeout_source_url'] ) {
+			if ( $args['timeout'] > 5 || $args['timeout'] < 4.9 ) {
+				throw new \RuntimeException( 'A self-read must have its full five-second timeout' );
+			}
+			$GLOBALS['wpdb']->num_queries += 250;
+			return new \WP_Error( 'http_request_failed', 'cURL error 28: Operation timed out after 5000 milliseconds' );
+		}
+		return \wp_remote_get( $url, $args );
+	}
+
 }
 namespace {
 	use TranslateWP\Components\BackgroundEngine;
@@ -39,59 +50,75 @@ namespace {
 	}
 	check_convergence( $jobs === count( $GLOBALS['wp_test_remote_posts'] ) && $before === $queue->list_rows(), 'Two hundred steps neither submit jobs nor modify settled rows' );
 
-	$list = [ 'en' => [ 'locale' => 'en', 'active' => true, 'default' => true ] ];
-	foreach ( [ 'es', 'it' ] as $language ) {
-		$list[$language] = [ 'locale' => $language, 'active' => true ];
-	}
-	wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture' ], 'languages' => [ 'list' => $list ] ] );
-	update_option( LexiconChanges::SEEDED_OPTION, true );
-	update_option( Indexer::SPINE_CHECKED_OPTION, true );
-	add_filter( 'translatewp_engine_service_reads', static fn(): bool => true );
-	$pages = [];
-	for ( $n = 0; $n < 10; ++$n ) {
-		$post = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] );
-		$url = home_url( "/studio-$n/" );
-		$source = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+	foreach ( [ false, true ] as $timeout ) {
+		$list = [ 'en' => [ 'locale' => 'en', 'active' => true, 'default' => true ] ];
+		foreach ( [ 'es', 'it' ] as $language ) {
+			$list[$language] = [ 'locale' => $language, 'active' => true ];
+		}
+		wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture' ], 'languages' => [ 'list' => $list ] ] );
+		update_option( LexiconChanges::SEEDED_OPTION, true );
+		update_option( Indexer::SPINE_CHECKED_OPTION, true );
+		add_filter( 'translatewp_engine_service_reads', static fn(): bool => true );
+		$pages = [];
+		for ( $n = 0; $n < 10; ++$n ) {
+			$post = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] );
+			$url = home_url( "/studio-$n/" );
+			$source = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+				'_twp_language' => '', '_twp_status' => 'pending', '_twp_stage' => 'extract', '_twp_object_type' => 'page',
+				'_twp_object_id' => $post, '_twp_url' => $url, '_twp_translate_on_read' => 1,
+			] ] );
+			$pages[$source] = [ 'url' => $url, 'html' => "<p>Meet our dance instructor for class $n.</p>", 'status' => 200 ];
+		}
+		$blocked_url = home_url( '/private-class/' );
+		$blocked = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
 			'_twp_language' => '', '_twp_status' => 'pending', '_twp_stage' => 'extract', '_twp_object_type' => 'page',
-			'_twp_object_id' => $post, '_twp_url' => $url, '_twp_translate_on_read' => 1,
+			'_twp_object_id' => wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] ), '_twp_url' => $blocked_url,
 		] ] );
-		$pages[$source] = [ 'url' => $url, 'html' => "<p>Meet our dance instructor for class $n.</p>", 'status' => 200 ];
-	}
-	$blocked_url = home_url( '/private-class/' );
-	$blocked = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
-		'_twp_language' => '', '_twp_status' => 'pending', '_twp_stage' => 'extract', '_twp_object_type' => 'page',
-		'_twp_object_id' => wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] ), '_twp_url' => $blocked_url,
-	] ] );
-	$start = TranslationStore::cache_generations();
-	$GLOBALS['wp_test_job_states']['00000000-0000-4000-8000-000000000099'] = 'done';
-	foreach ( $pages as $source => $page ) {
-		BackgroundEngine::step( [ $page ] );
-		check_convergence( 'done' === get_post_meta( $source, '_twp_status', true ), 'Each supplied read is actually consumed' );
-		foreach ( $GLOBALS['wp_test_remote_posts'] as $request ) {
-			foreach ( $request['body']['items'] ?? [] as $item ) {
-				$GLOBALS['wp_test_cache_lookup_items'][ $item['cache']['hash'] ] = $item['markerPayload'];
+		for ( $poll = 0; $poll < 13; ++$poll ) {
+			$waiting = BackgroundEngine::step();
+			check_convergence( 'more' === $waiting['state'] && $waiting['nextDue'] > $GLOBALS['fixed_time'], 'A reader awaiting supplied pages always returns its next poll time' );
+			$GLOBALS['fixed_time'] = $waiting['nextDue'];
+			$GLOBALS['wp_test_now'] = $waiting['nextDue'];
+		}
+		$start = TranslationStore::cache_generations();
+		$GLOBALS['wp_test_job_states']['00000000-0000-4000-8000-000000000099'] = 'done';
+		foreach ( $pages as $source => $page ) {
+			BackgroundEngine::step( [ $page ] );
+			check_convergence( 'done' === get_post_meta( $source, '_twp_status', true ), 'Each supplied read is actually consumed' );
+			foreach ( $GLOBALS['wp_test_remote_posts'] as $request ) {
+				foreach ( $request['body']['items'] ?? [] as $item ) {
+					$GLOBALS['wp_test_cache_lookup_items'][ $item['cache']['hash'] ] = $item['markerPayload'];
+				}
 			}
+			if ( $source !== array_key_last( $pages ) ) {
+				check_convergence( $start === TranslationStore::cache_generations(), 'No completion while another source can produce rows' );
+			}
+			$GLOBALS['fixed_time'] += 60;
+			$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
 		}
-		if ( $source !== array_key_last( $pages ) ) {
-			check_convergence( $start === TranslationStore::cache_generations(), 'No completion while another source can produce rows' );
+		if ( $timeout ) {
+			wp_test_set_filter( 'translatewp_engine_service_reads', static fn(): bool => false );
+			$GLOBALS['wpdb'] = new class extends WP_Testwpdb { public int $num_queries = 0; };
+			$GLOBALS['timeout_source_url'] = $blocked_url;
+			$reader = new Indexer( '', '', null, null, false );
+			check_convergence( 0 === $reader->step_read( new \TranslateWP\Components\ReadinessBudget( 4 ) ) && ! get_post_meta( $blocked, '_twp_attempts', true ), 'A short remaining deadline leaves the unread page uncharged' );
 		}
-		$GLOBALS['fixed_time'] += 60;
-		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
-	}
-	for ( $n = 0; $n < 15; ++$n ) {
-		$result = BackgroundEngine::step( [ [ 'url' => $blocked_url, 'status' => 403, 'html' => '' ] ] );
-		if ( 'done' === $result['state'] ) {
-			break;
+		for ( $n = 0; $n < 15; ++$n ) {
+			$result = BackgroundEngine::step( [ [ 'url' => $blocked_url, 'status' => 403, 'html' => '' ] ] );
+			if ( 'done' === $result['state'] ) {
+				break;
+			}
+			$GLOBALS['fixed_time'] = max( $GLOBALS['fixed_time'] + 60, $result['nextDue'] ?? 0 );
+			$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
 		}
-		$GLOBALS['fixed_time'] = max( $GLOBALS['fixed_time'] + 60, $result['nextDue'] ?? 0 );
-		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
+		check_convergence( 'done' === $result['state'] && 3 === (int) get_post_meta( $blocked, '_twp_dead_retries', true ), 'A persistent 403 exhausts three late retries and settles within 25 steps including the ten supplied reads: ' . wp_json_encode( $result ) );
+		check_convergence( ( $timeout ? 'page_fetch_timeout' : 'page_fetch_403' ) === array_column( $queue->failed_items(), 'reason', 'id' )[ $blocked ], 'The dead source preserves the visible HTTP reason' );
+		foreach ( [ 'es', 'it' ] as $language ) {
+			check_convergence( 1 + ( $start[$language] ?? 1 ) === TranslationStore::cache_generation_for( $language ), "Ten page deliveries complete $language exactly once" );
+		}
+		unset( $GLOBALS['timeout_source_url'] );
+		check_convergence( 20 === count( array_filter( $queue->list_rows(), static fn( array $row ): bool => $row['translated'] ) ), 'All twenty generated language rows are confirmed' );
 	}
-	check_convergence( 'done' === $result['state'] && 3 === (int) get_post_meta( $blocked, '_twp_dead_retries', true ), 'A persistent 403 exhausts three late retries and settles within 25 steps including the ten supplied reads: ' . wp_json_encode( $result ) );
-	check_convergence( 'page_fetch_403' === array_column( $queue->failed_items(), 'reason', 'id' )[ $blocked ], 'The dead source preserves the visible HTTP reason' );
-	foreach ( [ 'es', 'it' ] as $language ) {
-		check_convergence( 1 + ( $start[$language] ?? 1 ) === TranslationStore::cache_generation_for( $language ), "Ten page deliveries complete $language exactly once" );
-	}
-	check_convergence( 20 === count( array_filter( $queue->list_rows(), static fn( array $row ): bool => $row['translated'] ) ), 'All twenty generated language rows are confirmed' );
 
 	wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'fixture' ], 'languages' => [ 'list' => [
 		'en' => [ 'locale' => 'en', 'active' => true, 'default' => true ],
@@ -101,6 +128,13 @@ namespace {
 	update_option( Indexer::SPINE_CHECKED_OPTION, true );
 	new KeepWarm( '', '' );
 	add_filter( 'translatewp_engine_service_reads', static fn(): bool => true );
+	$miss_url = home_url( '/visitor-only/' );
+	$miss = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+		'_twp_language' => 'es', '_twp_status' => 'done', '_twp_stage' => 'push', '_twp_translated_at' => time(),
+		'_twp_object_type' => 'miss', '_twp_object_id' => 123, '_twp_url' => $miss_url,
+	] ] );
+	TranslationStore::record_pending( $miss_url, 0, 'es', 'en', [ [ 'hash' => 'm1', 'markerPayload' => '⟪item_0001⟫Dance' ] ] );
+	TranslationStore::resolve_pending( $miss_url, 0, 'es', static fn(): array => [ 'm1' => '⟪item_0001⟫Baile' ] );
 	$reader = new Indexer( '', '', null, null, false );
 	for ( $n = 1; $n <= 15; ++$n ) {
 		$post = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Class ' . $n ] );
@@ -138,5 +172,6 @@ namespace {
 		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
 	}
 	check_convergence( 'done' === $r['state'] && 15 === count( $sent ) && 15 === count( array_unique( $sent ) ), 'Fifteen refill rows and a settings change produce one paid wave: ' . wp_json_encode( [ count( $sent ), count( array_unique( $sent ) ), $r ] ) );
+	check_convergence( 'done' === get_post_meta( $miss, '_twp_status', true ) && 'Baile' === TranslationStore::translated_string( 'Dance', 'Dance', $miss_url, 'es' ), 'A completed visitor miss without replay data keeps its stored translation across the rebuild' );
 	echo "EngineFixedPointTest: passed\n";
 }

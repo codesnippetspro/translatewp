@@ -176,7 +176,7 @@ class InMemoryIndexQueue extends IndexQueue {
 		return $claimed;
 	}
 
-	public function remember_batch_versions( array $ids ): bool { return true; }
+	public function remember_batch_versions( array $ids, string $unbatched_job = '' ): bool { return true; }
 
 	public function complete_delivery( array $delivery ): int {
 		$completed = 0;

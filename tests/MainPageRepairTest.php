@@ -60,12 +60,12 @@ foreach ( $GLOBALS['wp_test_inserted_posts'] as $post ) {
 }
 check_repair( 50 === $marked, 'Only the capped repair pages are marked for automatic translation' );
 $read_start = count( $GLOBALS['wp_test_remote_get_urls'] ?? [] );
-$indexer->step_read( new ReadinessBudget() );
+$indexer->step_read( new ReadinessBudget( 8 ) );
 $read = $queue->read_rows();
 check_repair( 3 === count( $read ), 'One reader unit reads up to three pages sequentially' );
 check_repair( get_permalink( 1 ) === $GLOBALS['wp_test_remote_get_urls'][ $read_start ], 'The front page stays first even when an addon enumerates pages in reverse order' );
 check_repair( (int) get_option( Indexer::NEXT_READER_OPTION ) >= time() + 59, 'The next page cannot be read until a minute has passed' );
-$indexer->step_read( new ReadinessBudget() );
+$indexer->step_read( new ReadinessBudget( 8 ) );
 check_repair( 3 === count( $queue->read_rows() ), 'A second reader unit in the same minute reads no extra page' );
 $indexer->step_push( new ReadinessBudget() );
 $created = creates();
@@ -114,7 +114,7 @@ $queue = new IndexQueue();
 $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/page/', 'page_title' => 'Page', 'language' => 'it', 'priority' => 50 ] ] );
 $indexer = new Indexer( '', '', $queue );
 $GLOBALS['wp_test_remote_get_response'] = new WP_Error( 'http_request_failed', 'cURL error 60: certificate verification failed' );
-$indexer->step_read( new ReadinessBudget() );
+$indexer->step_read( new ReadinessBudget( 8 ) );
 check_repair( 'page_tls_failed' === get_option( Indexer::READER_FAILURE_OPTION ), 'A reader certificate failure remains recorded after the request ends' );
 check_repair( false !== strpos( \TranslateWP\Functionality\CronFallback::notice_message(), 'certificate' ), 'The Dashboard explains the persistent reader certificate failure' );
 

@@ -132,7 +132,7 @@ if ( in_array( $case, [ 'reader', 'all' ], true ) ) {
     for ( $i = 1; $i <= IndexQueue::MAX_ATTEMPTS; ++$i ) {
         delete_option( Indexer::NEXT_READER_OPTION );
         delete_post_meta( $id, '_twp_reader_not_before' );
-        $indexer->step_read( new ReadinessBudget() );
+        $indexer->step_read( new ReadinessBudget( 8 ) );
         if ( IndexQueue::MAX_ATTEMPTS === $i ) {
             check_lifecycle( IndexQueue::STATUS_DEAD === $queue->list_rows()[0]['status'], 'A persistently unreadable TLS page reaches the terminal retry limit' );
             break;
@@ -188,7 +188,7 @@ if ( in_array( $case, [ 'rewarm-routing', 'all' ], true ) ) {
     $queue->claim_rows( [ $id ] ); $queue->complete( $id ); $queue->mark_translated( [ $id ] );
     $queue->enqueue_rewarm( [ $row ] );
     $GLOBALS['wp_test_remote_get_response'] = [ 'response' => [ 'code' => 200 ], 'body' => '<html><body><p>Our shop</p></body></html>' ];
-    $indexer->step_read( new ReadinessBudget() );
+    $indexer->step_read( new ReadinessBudget( 8 ) );
     $indexer->step_push( new ReadinessBudget() );
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'A page rewarm keeps background routing through extraction and reduced pushing' );

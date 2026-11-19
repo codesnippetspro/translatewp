@@ -187,6 +187,11 @@ class BackgroundEngine {
 				$indexer = new Indexer( '', '', null, null, false );
 				$budget = QueueExecution::budget();
 				ProviderHold::refresh();
+				if ( ! Indexer::cancel_unbatched_job() ) {
+					$response = self::snapshot( 'more' );
+					$response['nextDue'] = time() + self::VISITOR_INTERVAL_SECONDS;
+					return;
+				}
 				$indexer->poll_provider_probe();
 				if ( ProviderHold::waiting() ) {
 					$response = self::snapshot( 'more' );
@@ -254,7 +259,7 @@ class BackgroundEngine {
 						if ( false !== strpos( $phase, '_push' ) ) {
 							unset( $selection[ 'visitor_push' === $phase ? 'visitor_ready' : 'background_ready' ] );
 							$result = $indexer->step_push( $budget, $rows );
-							self::$trace_rows = array_sum( $result );
+							self::$trace_rows = $result['processed'] + $result['failed'];
 						} else {
 							unset( $selection['read'], $selection['background_push'], $selection['visitor_push'] );
 							self::complete( $indexer, $budget, 'visitor_ready' === $phase ? $work['visitorKeys'] : null, $rows );
@@ -337,6 +342,22 @@ class BackgroundEngine {
 					$actionable = array_column( ( new IndexQueue() )->pending_read_rows(), 'id' );
 				}
 				self::record_progress( $response, $actionable, $total_rows );
+				if ( 'more' === $response['state'] && ! $total_rows && ! isset( $response['nextDue'] ) ) {
+					$reader_due = (int) get_option( Indexer::NEXT_READER_OPTION, 0 );
+					$poll_due = time() + self::VISITOR_INTERVAL_SECONDS;
+					$deadlines = [];
+					if ( $pending['read'] ) {
+						$deadlines[] = ! self::service_reads() && $reader_due > time() ? $reader_due : $poll_due;
+					}
+					if ( $pending['push'] || $work['backgroundReady'] || $work['visitorReady'] ) {
+						$deadlines[] = $poll_due;
+					}
+					$store_due = TranslationStore::next_work_at();
+					if ( $store_due ) {
+						$deadlines[] = $store_due > time() ? $store_due : $poll_due;
+					}
+					$response['nextDue'] = $deadlines ? min( $deadlines ) : $poll_due;
+				}
 				$error = sanitize_key( (string) get_option( Indexer::READER_FAILURE_OPTION, '' ) );
 				if ( '' !== $error ) {
 					$response['error'] = [
@@ -600,7 +621,7 @@ class BackgroundEngine {
 
 	public static function pending( bool $include_hint = true ): array {
 		$pending = self::work_state()['pending'];
-		$pending['refill'] += (int) ( false !== get_option( IndexQueue::NORMALIZE_CURSOR_OPTION, false ) )
+		$pending['refill'] += (int) (bool) get_option( Indexer::UNBATCHED_JOB_OPTION, false ) + (int) ( false !== get_option( IndexQueue::NORMALIZE_CURSOR_OPTION, false ) )
 			+ (int) ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) )
 			+ (int) ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) )
 			+ (int) ( ! get_option( LexiconChanges::SEEDED_OPTION, false ) )

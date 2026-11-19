@@ -75,6 +75,7 @@ class CleanupInventory {
 		Indexer::SPINE_CHECKED_OPTION,
 		Indexer::READER_FAILURE_OPTION,
 		Indexer::REPAIR_RETRY_OPTION,
+		Indexer::UNBATCHED_JOB_OPTION,
 		'translatewp_background_kick_at',
 		IndexQueue::DEFERRED_REFILLS_OPTION,
 		'translatewp_queue_due_result',

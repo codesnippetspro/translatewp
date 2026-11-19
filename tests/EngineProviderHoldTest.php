@@ -206,5 +206,18 @@ namespace {
 	$batches = requests_to( '/batches' );
 	expect_hold( 1 === count( $batches ) && empty( requests_to( '/translation/jobs' )[0]['body']['purpose'] ), 'The visitor proceeds during the background settings debounce' );
 	expect_hold( 'pending' === get_post_meta( $ids[1], '_twp_status', true ), 'The affected background row waits for that same debounce' );
+	$ids = fixture();
+	$GLOBALS['wpdb'] = new class extends WP_Testwpdb { public int $num_queries = 0; };
+	wp_test_set_filter( 'translatewp_translation_job_request_body', static fn( array $body ): array => $body );
+	wp_test_set_filter( 'translatewp_translation_batch_request_body', static function( array $body ): array {
+		$GLOBALS['wpdb']->num_queries = ( $GLOBALS['wpdb']->num_queries ?? 0 ) + 250;
+		return $body;
+	} );
+	BackgroundEngine::step();
+	$open = get_option( Indexer::UNBATCHED_JOB_OPTION );
+	expect_hold( ! empty( $open['id'] ) && in_array( $ids[0], $open['rows'], true ) && $open['id'] === get_post_meta( $ids[0], '_twp_unbatched_job', true ) && ! requests_to( '/batches' ), 'A deadline after create retains the id and its rows before a batch can be sent' );
+	wp_test_set_filter( 'translatewp_translation_batch_request_body', static fn( array $body ): array => $body );
+	BackgroundEngine::step();
+	expect_hold( ! get_option( Indexer::UNBATCHED_JOB_OPTION ) && 1 === count( requests_to( '/' . $open['id'] . '/cancel' ) ), 'The next step cancels the open job' );
 	echo "EngineProviderHoldTest: passed\n";
 }

@@ -743,6 +743,11 @@ class TranslationStore {
 		return self::cache_generation();
 	}
 
+	public static function next_work_at(): ?int {
+		$work = self::read_work();
+		return $work ? min( array_map( static fn ( array $item ): int => max( time(), (int) ( $item['not_before'] ?? 0 ) ), $work ) ) : null;
+	}
+
 	public static function has_pending_work(): bool {
 		return (bool) self::read_work();
 	}
