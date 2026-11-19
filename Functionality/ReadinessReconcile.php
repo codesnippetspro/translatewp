@@ -138,6 +138,16 @@ class ReadinessReconcile {
 		$budget = $budget ?? new ReadinessBudget();
 		$rows = $this->step_batch ?? $this->indexer->page_rows();
 		$jobs = $this->indexer->poll_remembered_jobs( $budget, $this->step_batch );
+		if ( \TranslateWP\Components\ProviderHold::waiting() ) {
+			return [
+				'cursor' => $cursor,
+				'lookupUnavailable' => true,
+				'requeued' => 0,
+				'failed' => 0,
+				'retried' => 0,
+				'translated' => 0,
+			];
+		}
 		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget, null !== $this->step_batch );
 		if ( ! empty( $result['lookupUnavailable'] ) ) {
 			return $result + [
@@ -159,6 +169,9 @@ class ReadinessReconcile {
 		// A done row counts as translated once its job finished or every one of
 		// its segments is proven; one status call per job per pass.
 		foreach ( $rows as $row ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
 			if ( IndexQueue::STATUS_DONE !== (string) $row['status'] || ! empty( $row['translated'] ) ) {
 				continue;
 			}
@@ -185,6 +198,9 @@ class ReadinessReconcile {
 			$this->indexer->mark_translated( $translated );
 		}
 		foreach ( $ids as $id ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
 			$row = $by_id[ (int) $id ] ?? null;
 			if ( ! is_array( $row ) || (int) $row['updated'] > $now - self::GRACE_SECONDS ) {
 				continue;

@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\PlainText;
+use TranslateWP\Components\ProviderHold;
 use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\PageExclusion;
 use TranslateWP\Components\IndexQueue;
@@ -273,6 +274,19 @@ class Indexer {
 		$source_lang = TranslationProxySettings::default_locale();
 		$queued      = 0;
 
+		if ( $force && QueueExecution::in_step() && 1 === count( $read_rows ) && count( $languages ) > 1 ) {
+			$source = reset( $read_rows );
+			$payloads = [];
+			foreach ( $languages as $language ) {
+				$items = $this->stamp_hashes( $language, $source['items'], $source_lang );
+				if ( $items ) {
+					$payloads[ $language ] = (string) wp_json_encode( $items );
+				}
+			}
+			$promoted = $this->queue->promote_read_translations( $source, $payloads );
+			$queued += count( $promoted );
+			$languages = array_diff( $languages, $promoted );
+		}
 		foreach ( $languages as $language ) {
 			$ai_settings = TranslationProxySettings::ai_settings( $language );
 
@@ -901,12 +915,76 @@ class Indexer {
 		} else {
 			$state = (string) ( $status['state'] ?? '' );
 			$state = in_array( $state, [ 'finished', 'completed' ], true ) ? 'done' : ( 'canceled' === $state ? 'cancelled' : $state );
+			if ( 'done' === $state || 'cancelled' === $state ) {
+				$items = $status['items'] ?? null;
+				$reason = ProviderHold::reason( (string) ( $status['failure']['code'] ?? '' ) );
+				$watch = get_option( ProviderHold::WATCH_OPTION, [] );
+				$own = true === ( $status['byok'] ?? false ) || ( $watch['job'] ?? '' ) === $job_id || ( ProviderHold::state()['probe'] ?? '' ) === $job_id;
+				if ( ! is_array( $items ) && $own ) {
+					$events = SiteRequests::get( '/v1/site/job-events', [ 'limit' => 100 ], $timeout );
+					if ( is_wp_error( $events ) ) {
+						return 'unavailable';
+					}
+					foreach ( $events['events'] ?? [] as $event ) {
+						if ( ( $event['detail']['jobId'] ?? '' ) !== $job_id || 'provider_error' !== ( $event['kind'] ?? '' ) ) {
+							continue;
+						}
+						$reason = ProviderHold::reason( (string) ( $event['reasonCode'] ?? '' ) );
+						if ( '' !== $reason ) {
+							break;
+						}
+					}
+				}
+				if ( $own && '' !== $reason ) {
+					if ( ( get_option( ProviderHold::WATCH_OPTION, [] )['job'] ?? null ) === $job_id ) {
+						delete_option( ProviderHold::WATCH_OPTION );
+					}
+					ProviderHold::reject( $reason, (int) ( $status['failure']['retryAfterSeconds'] ?? 0 ) );
+					$this->queue->retry_provider_job( $job_id );
+					return 'failed';
+				}
+				if ( $own && ! is_array( $items ) && 'done' === $state ) {
+					// Older status replies confirm that the job closed, without confirming a translated item.
+					$state = 'unknown';
+				}
+				if ( is_array( $items ) && 0 === ( $items['succeeded'] ?? null ) && ( $items['failed'] ?? 0 ) > 0 ) {
+					$state = 'failed';
+				}
+			}
 			$state = 'open' === $state || in_array( $state, self::TERMINAL_JOB_OUTCOMES, true ) ? $state : 'unavailable';
 		}
 		if ( in_array( $state, self::TERMINAL_JOB_OUTCOMES, true ) ) {
 			$this->queue->finish_job( $job_id, $state );
 		}
 		return $state;
+	}
+
+	public function poll_provider_probe(): void {
+		$hold = ProviderHold::state();
+		$watch = get_option( ProviderHold::WATCH_OPTION, [] );
+		if ( ! empty( $watch['job'] ) && ! ProviderHold::waiting() ) {
+			$outcome = $this->read_job_outcome( $watch['job'], self::JOB_POST_TIMEOUT_SECONDS );
+			if ( 'done' === $outcome ) {
+				ProviderHold::verified();
+			} elseif ( in_array( $outcome, self::TERMINAL_JOB_OUTCOMES, true ) || time() >= $watch['started'] + 900 ) {
+				delete_option( ProviderHold::WATCH_OPTION );
+			}
+		}
+		if ( empty( $hold['probe'] ) ) {
+			return;
+		}
+		$outcome = $this->read_job_outcome( $hold['probe'], self::JOB_POST_TIMEOUT_SECONDS );
+		if ( 'unknown' === $outcome ) {
+			$answers = TranslationStore::remote_lookup( $hold['language'], [ $hold['hash'] ] );
+			if ( ! empty( $answers[ $hold['hash'] ] ) ) {
+				$outcome = 'done';
+			}
+		}
+		if ( 'done' === $outcome ) {
+			ProviderHold::clear_probe( $hold['probe'] );
+		} elseif ( ( in_array( $outcome, self::TERMINAL_JOB_OUTCOMES, true ) || $hold['started'] + 900 <= time() ) && ( ProviderHold::state()['probe'] ?? null ) === $hold['probe'] ) {
+			ProviderHold::reject( $hold['reason'] );
+		}
 	}
 
 	public function poll_remembered_jobs( \TranslateWP\Components\ReadinessBudget $budget, ?array $rows = null ): array {
@@ -934,11 +1012,14 @@ class Indexer {
 				continue;
 			}
 			$timeout = $budget->claim_status_timeout();
-			if ( $timeout <= 0 ) {
+			if ( $timeout <= 0 || QueueExecution::expired() ) {
 				break;
 			}
 			$known[ $id ] = $this->read_job_outcome( $id, $timeout );
 			update_option( self::JOB_POLL_CURSOR_OPTION, $id, false );
+			if ( ProviderHold::waiting() ) {
+				break;
+			}
 			if ( 'unavailable' !== $known[ $id ] && is_array( $pending ) ) {
 				$pending = array_values( array_diff( $pending, [ $id ] ) );
 			}
@@ -1049,12 +1130,53 @@ class Indexer {
 		}
 		$by_url = array_column( $pages, null, 'url' );
 		$processed = 0;
-		foreach ( $this->queue->pending_read_rows() as $candidate ) {
+		$candidates = $this->queue->pending_read_rows( $supplied && $by_url ? 50 : 3 );
+		$stored = [];
+		if ( $supplied ) {
+			foreach ( $by_url as $url => $page ) {
+				if ( 200 !== (int) ( $page['status'] ?? 0 ) || ! empty( $page['error'] ) || empty( $page['html'] ) ) {
+					continue;
+				}
+				$ids = [];
+				foreach ( $candidates as $candidate ) {
+					if ( $url === $candidate['url'] && '' === $candidate['language'] ) {
+						// The source row controls whether its language rows enter a refill.
+						$ids = [];
+						break;
+					}
+					if ( $url === $candidate['url'] && '' !== $candidate['language'] && $this->public_read_row( $candidate ) ) {
+						$ids[] = $candidate['id'];
+					}
+				}
+				if ( count( $ids ) < 2 ) {
+					continue;
+				}
+				try {
+					$items = RenderedPageExtraction::extract( $page['html'] );
+				} catch ( \RuntimeException $error ) {
+					continue;
+				}
+				if ( $items ) {
+					$stored += array_fill_keys( $this->queue->store_supplied_extractions( $ids, $url, $items ), true );
+				}
+			}
+		}
+		$processed += count( $stored );
+		foreach ( $candidates as $position => $candidate ) {
+			if ( $by_url && $position >= \TranslateWP\Components\BackgroundEngine::MAX_READ_PAGES && ! isset( $by_url[ $candidate['url'] ] ) ) {
+				continue;
+			}
+			if ( isset( $stored[ $candidate['id'] ] ) ) {
+				continue;
+			}
 			if ( $budget->remaining_seconds() <= 0 ) {
 				break;
 			}
 			$url = TranslationUrl::rebase_to_home( $candidate['url'] );
 			if ( $supplied && $this->public_read_row( array_merge( $candidate, [ 'url' => $url ] ) ) && ! isset( $by_url[ $url ] ) ) {
+				continue;
+			}
+			if ( IndexQueue::STAGE_EXTRACT !== get_post_meta( $candidate['id'], '_twp_stage', true ) ) {
 				continue;
 			}
 			$rows = $this->queue->claim_stage_rows( [ $candidate['id'] ], IndexQueue::STAGE_EXTRACT );
@@ -1065,6 +1187,9 @@ class Indexer {
 				update_option( self::NEXT_READER_OPTION, time() + self::RESCHEDULE_DELAY_SECONDS, false );
 			}
 			$processed += $this->extract_pending_page( $rows[0], $by_url[ $url ] ?? [] );
+			if ( $supplied && '' === $candidate['language'] ) {
+				update_meta_cache( 'post', array_column( $candidates, 'id' ) );
+			}
 		}
 		return $processed;
 	}
@@ -1079,6 +1204,12 @@ class Indexer {
 		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
 			return $result;
 		}
+		if ( ProviderHold::waiting() || ProviderHold::watching() ) {
+			return $result;
+		}
+		if ( ProviderHold::state() && null !== $ids ) {
+			$ids = array_slice( $ids, 0, 1 );
+		}
 		$rows = null === $ids ? $this->queue->claim_batch( IndexQueue::STAGE_PUSH, self::drain_batch_size() ) : $this->queue->claim_rows( $ids );
 		$groups = [];
 		foreach ( $rows as $row ) {
@@ -1091,7 +1222,7 @@ class Indexer {
 			$this->add_row_to_groups( $groups, $row, $items );
 		}
 		foreach ( $groups as $group ) {
-			if ( $budget->remaining_seconds() <= 0 || ( $this->clock )() - $started >= self::drain_tick_budget() ) {
+			if ( QueueExecution::expired() || $budget->remaining_seconds() <= 0 || ( $this->clock )() - $started >= self::drain_tick_budget() ) {
 				foreach ( $group['rows'] as $row ) {
 					$this->queue->release( (int) $row['id'] );
 					$result['released']++;
@@ -1152,7 +1283,11 @@ class Indexer {
 			return 1;
 		}
 		try {
-			if ( ! $this->submit_extraction( (int) $row['id'], RenderedPageExtraction::extract( $html ) ) ) {
+			$items = RenderedPageExtraction::extract( $html );
+			if ( ! empty( $row['payload'] ) && json_decode( $row['payload'], true ) === $items ) {
+				$items = [];
+			}
+			if ( ! $this->submit_extraction( (int) $row['id'], $items ) ) {
 				$this->queue->fail( (int) $row['id'], 'page_store_failed' );
 				return 1;
 			}
@@ -1275,6 +1410,14 @@ class Indexer {
 		// arrives with the claims its proxy request took and is pushed as it
 		// is. Claims are released on failure here and by the store as each
 		// hash resolves.
+		if ( ProviderHold::waiting() || ProviderHold::watching() ) {
+			foreach ( $language_rows as $row ) {
+				$this->queue->release( (int) $row['id'] );
+				$result['released']++;
+			}
+			return;
+		}
+		$probe = (bool) ProviderHold::state();
 		$site_id = Sites::registered_id();
 		$readiness_items = [];
 		foreach ( $language_rows as &$language_row ) {
@@ -1360,7 +1503,10 @@ class Indexer {
 		}
 
 		$repair = $this->queue->requires_background_refresh( (int) $language_rows[0]['id'] );
-		$job = $this->create_job( $language, $repair );
+		if ( $probe ) {
+			ProviderHold::reserve_probe();
+		}
+		$job = $this->create_job( $language, $repair, $probe );
 		if ( '' === $job['id'] ) {
 			foreach ( $language_rows as $language_row ) {
 				$this->release_row_claims( $language, $language_row['items'] );
@@ -1412,6 +1558,11 @@ class Indexer {
 			$base_body['retranslate'] = true;
 		}
 
+		if ( $probe ) {
+			ProviderHold::probe( $job_id, $language, (string) $batch_items[0]['cache']['hash'] );
+			$base_body['items'] = array_slice( $base_body['items'], 0, 1 );
+			$base_body['retranslate'] = true;
+		}
 		$batch_body = apply_filters(
 			'translatewp_translation_batch_request_body',
 			$base_body,
@@ -1419,6 +1570,16 @@ class Indexer {
 			$language
 		);
 
+		if ( $probe && empty( $batch_body['byok'] ) && ! \TranslateWP\Components\QuotaHandoff::wants_own_providers( $job_id ) ) {
+			SiteRequests::post( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/cancel', [] );
+			ProviderHold::reject( ProviderHold::state()['reason'] );
+			foreach ( $language_rows as $row ) {
+				$this->release_row_claims( $language, $row['items'] );
+				$this->queue->release( (int) $row['id'] );
+				$result['released']++;
+			}
+			return;
+		}
 		$pushed = TranslationProRetry::post(
 			'/v1/translation/jobs/' . rawurlencode( $job_id ) . '/batches',
 			$batch_body,
@@ -1428,7 +1589,11 @@ class Indexer {
 		);
 
 		if ( is_wp_error( $pushed ) ) {
-			if ( QueueExecution::is_budget_error( $pushed ) ) {
+			$provider_refusal = $this->hold_for_refusal( $pushed );
+			if ( $provider_refusal && ! QueueExecution::expired() ) {
+				SiteRequests::post( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/cancel', [] );
+			}
+			if ( $provider_refusal || $probe || QueueExecution::is_budget_error( $pushed ) ) {
 				foreach ( $language_rows as $row ) {
 					$this->release_row_claims( $language, $row['items'] );
 					$this->queue->release( (int) $row['id'] );
@@ -1446,14 +1611,26 @@ class Indexer {
 			return;
 		}
 
+		if ( $probe ) {
+			foreach ( $language_rows as $row ) {
+				$this->release_row_claims( $language, $row['items'] );
+				$this->queue->release( (int) $row['id'] );
+				$result['released']++;
+			}
+			return;
+		}
 		$completed = $this->queue->complete_delivery(
             [
 				'language' => $language,
 				'rows' => $language_rows,
 				'items' => $readiness_items,
 				'job_id' => $job_id,
+				'keep_payload' => ! empty( $job['byok'] ) || ! empty( $batch_body['byok'] ),
 			]
         );
+		if ( ! empty( $batch_body['byok'] ) || ! empty( $job['byok'] ) ) {
+			ProviderHold::watch( $job_id );
+		}
 		$result['processed'] += $completed;
 		if ( count( $language_rows ) !== $completed ) {
 			foreach ( $language_rows as $row ) {
@@ -1524,7 +1701,7 @@ class Indexer {
 			'released'  => 0,
 		];
 
-		if ( ! SiteConnection::is_connected() ) {
+		if ( ! SiteConnection::is_connected() || ProviderHold::state() || ProviderHold::watching() ) {
 			return $result;
 		}
 
@@ -1851,6 +2028,17 @@ class Indexer {
 		);
 	}
 
+	private function hold_for_refusal( \WP_Error $error ): bool {
+		$data = $error->get_error_data();
+		$code = (string) ( $data['payload']['code'] ?? $data['payload']['error'] ?? '' );
+		$reason = str_starts_with( $code, 'byok_' ) ? ProviderHold::reason( $code ) : '';
+		if ( '' === $reason ) {
+			return false;
+		}
+		ProviderHold::reject( $reason, (int) ( $data['payload']['retryAfterSeconds'] ?? 0 ) );
+		return true;
+	}
+
 	/**
 	 * Opens a job for the language. On failure the reason names what the
 	 * service said: a used-up plan allowance, an hourly cap, or a plain
@@ -1858,7 +2046,7 @@ class Indexer {
 	 *
 	 * @return array{id:string,reason:string}
 	 */
-	private function create_job( string $language, bool $repair = false ): array {
+	private function create_job( string $language, bool $repair = false, bool $probe = false ): array {
 		$retry_at = (int) get_option( self::REPAIR_RETRY_OPTION, 0 );
 		if ( $repair && $retry_at > time() ) {
 			return [
@@ -1880,6 +2068,13 @@ class Indexer {
 			]
 		);
 
+		if ( $probe && empty( $job_body['byok'] ) && ! \TranslateWP\Components\QuotaHandoff::wants_own_providers( '' ) ) {
+			return [
+				'id' => '',
+				'reason' => '',
+				'deferred' => true,
+			];
+		}
 		if ( $repair && '' !== self::REPAIR_JOB_FIELD ) {
 			$job_body[ self::REPAIR_JOB_FIELD ] = self::REPAIR_JOB_PURPOSE;
 		}
@@ -1896,7 +2091,7 @@ class Indexer {
 			return [
 				'id'     => '',
 				'reason' => self::job_failure_reason( $response ),
-				'deferred' => QueueExecution::is_budget_error( $response ),
+				'deferred' => $this->hold_for_refusal( $response ) || $probe || QueueExecution::is_budget_error( $response ),
 			];
 		}
 
@@ -1920,6 +2115,7 @@ class Indexer {
 
 		return [
 			'id'     => sanitize_text_field( (string) ( $response['jobId'] ?? '' ) ),
+			'byok' => ! empty( $job_body['byok'] ) || ! empty( $response['byok'] ) || \TranslateWP\Components\QuotaHandoff::wants_own_providers( (string) ( $response['jobId'] ?? '' ) ),
 			'reason' => '',
 		];
 	}

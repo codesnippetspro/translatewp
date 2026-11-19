@@ -584,7 +584,9 @@ class IndexQueue {
 	 */
 	public function list_rows( ?array $ids = null ): array {
 		$rows = [];
-		if ( $ids && function_exists( 'update_meta_cache' ) ) {
+		if ( $ids && function_exists( '_prime_post_caches' ) ) {
+			_prime_post_caches( $ids, false, true );
+		} elseif ( $ids && function_exists( 'update_meta_cache' ) ) {
 			update_meta_cache( 'post', $ids );
 		}
 
@@ -658,7 +660,9 @@ class IndexQueue {
 			if ( QueueMetadata::write( $batch ) ) {
 				BackgroundEngine::mark_dirty(); }
 		}
-		$this->settle_refills();
+		if ( ! QueueExecution::in_step() ) {
+			$this->settle_refills();
+		}
 	}
 
 	public function settle_refills(): void {
@@ -666,6 +670,15 @@ class IndexQueue {
 	}
 
 	private function settle_refills_unlocked(): void {
+		if ( QueueExecution::in_step() ) {
+			$state = BackgroundEngine::work_state();
+			if ( isset( $state['settle_languages'] ) ) {
+				do {
+					$cleared = $this->finish_refills( $state['settle_languages'], $state['refill_pending'] );
+				} while ( $cleared && ! QueueExecution::expired() );
+				return;
+			}
+		}
 		$pending = QueueExecution::is_bounded() ? ( BackgroundEngine::work_state()['refill_pending'] ?? [ '__unknown' => 1 ] ) : null;
 		do {
 			$languages = [];
@@ -714,6 +727,12 @@ class IndexQueue {
 	private function finish_refills( array $languages, ?array $pending_counts = null ): int {
 		$cleared = 0;
 		foreach ( $languages as $language ) {
+			if ( QueueExecution::query_budget_spent() ) {
+				break;
+			}
+			if ( ( $pending_counts[ $language ] ?? 0 ) > 0 || ! empty( $pending_counts['__unknown'] ) ) {
+				continue;
+			}
 			MutationLock::run(
                 'refill_' . $language,
                 function () use ( $language, $pending_counts, &$cleared ): void {
@@ -755,17 +774,28 @@ class IndexQueue {
 	 * rows are unique per object and language, so a done row is one translated
 	 * page in one language.
 	 */
-	public function pending_read_rows(): array {
+	public function pending_read_rows( int $limit = BackgroundEngine::MAX_READ_PAGES ): array {
 		$rows = [];
-		foreach ( $this->due_row_ids( [ 'stage' => self::STAGE_EXTRACT ], BackgroundEngine::MAX_READ_PAGES ) as $id ) {
+		$ids = $this->due_row_ids( [ 'stage' => self::STAGE_EXTRACT ], $limit );
+		if ( $ids ) {
+			update_meta_cache( 'post', $ids );
+		}
+		foreach ( $ids as $id ) {
 			$rows[] = [
 				'id' => (int) $id,
+				'language' => (string) get_post_meta( $id, self::META_LANGUAGE, true ),
 				'object_type' => (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ),
 				'object_id' => (int) get_post_meta( $id, self::META_OBJECT_ID, true ),
 				'url' => TranslationUrl::rebase_to_home( (string) get_post_meta( $id, self::META_URL, true ) ),
 				'status' => $this->row_status( (int) $id ),
 				'stage' => self::STAGE_EXTRACT,
 			];
+		}
+		if ( $rows && function_exists( '_prime_post_caches' ) ) {
+			$objects = array_unique( array_filter( array_column( array_filter( $rows, static fn( array $row ): bool => ! in_array( $row['object_type'], [ 'miss', 'archive' ], true ) && $row['object_id'] > 0 ), 'object_id' ) ) );
+			if ( $objects ) {
+				_prime_post_caches( $objects, false, true );
+			}
 		}
 		return $rows;
 	}
@@ -973,30 +1003,37 @@ class IndexQueue {
 	}
 
 	private function insert_push_row( array $row ) {
-			$post_id = wp_insert_post(
-				[
-					'post_type'    => self::POST_TYPE,
-					'post_status'  => 'private',
-					'post_title'   => $row['object_type'] . ':' . $row['object_id'] . ':' . $row['language'],
-					'post_content' => wp_slash( self::encode_payload( (string) $row['payload'] ) ),
-					'meta_input'   => [
-						self::META_OBJECT_TYPE => (string) $row['object_type'],
-						self::META_OBJECT_ID   => (int) $row['object_id'],
-						self::META_URL         => (string) ( $row['url'] ?? '' ),
-						self::META_PAGE_TITLE  => (string) ( $row['page_title'] ?? '' ),
-						self::META_LANGUAGE    => (string) $row['language'],
-						self::META_STAGE       => self::STAGE_PUSH,
-						self::META_STATUS      => self::STATUS_PENDING,
-						self::META_PRIORITY    => (int) $row['priority'],
-						self::META_ATTEMPTS    => 0,
-						self::META_FAIL_REASON => '',
-						self::META_RETRANSLATE => 0,
-					],
-				],
-				false
-			);
-
-			return ( $post_id && ! is_wp_error( $post_id ) ) ? (int) $post_id : false;
+		$meta = [
+			self::META_OBJECT_TYPE => (string) $row['object_type'],
+			self::META_OBJECT_ID   => (int) $row['object_id'],
+			self::META_URL         => (string) ( $row['url'] ?? '' ),
+			self::META_PAGE_TITLE  => (string) ( $row['page_title'] ?? '' ),
+			self::META_LANGUAGE    => (string) $row['language'],
+			self::META_STAGE       => self::STAGE_PUSH,
+			self::META_STATUS      => self::STATUS_PENDING,
+			self::META_PRIORITY    => (int) $row['priority'],
+			self::META_ATTEMPTS    => 0,
+			self::META_FAIL_REASON => '',
+			self::META_RETRANSLATE => 0,
+		];
+		$post = [
+			'post_type' => self::POST_TYPE,
+			'post_status' => 'private',
+			'post_title' => $row['object_type'] . ':' . $row['object_id'] . ':' . $row['language'],
+			'post_content' => wp_slash( self::encode_payload( (string) $row['payload'] ) ),
+		];
+		if ( ! QueueExecution::in_step() ) {
+			$post['meta_input'] = $meta;
+		}
+		$id = wp_insert_post( $post, false );
+		if ( ! $id || is_wp_error( $id ) ) {
+			return false;
+		}
+		if ( QueueExecution::in_step() && ! QueueMetadata::write( [ (int) $id => $meta ] ) ) {
+			wp_delete_post( $id, true );
+			return false;
+		}
+		return (int) $id;
 	}
 
 	private function enqueue_push_row( array $row, bool $visitor ) {
@@ -1292,6 +1329,168 @@ class IndexQueue {
 		return false === $decoded ? '' : $decoded;
 	}
 
+	private static function write_payloads( array $payloads ): bool {
+		global $wpdb;
+		if ( $payloads && 1 === count( array_unique( $payloads ) ) ) {
+			$ids = array_keys( $payloads );
+			$places = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$written = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->posts} SET post_content = %s WHERE post_type = %s AND post_status = %s AND ID IN ($places)", array_merge( [ reset( $payloads ), self::POST_TYPE, 'private' ], $ids ) ) );
+			foreach ( $ids as $id ) {
+				wp_cache_delete( $id, 'posts' );
+			}
+			return false !== $written;
+		}
+		$chunks = [];
+		$chunk = [];
+		$bytes = 0;
+		foreach ( $payloads as $id => $payload ) {
+			if ( $chunk && $bytes + strlen( $payload ) > 400000 ) {
+				$chunks[] = $chunk;
+				$chunk = [];
+				$bytes = 0;
+			}
+			$chunk[ $id ] = $payload;
+			$bytes += strlen( $payload );
+		}
+		if ( $chunk ) {
+			$chunks[] = $chunk;
+		}
+		foreach ( $chunks as $chunk ) {
+			$ids = array_keys( $chunk );
+			$places = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+			$args = [];
+			$cases = [];
+			foreach ( $chunk as $id => $payload ) {
+				$cases[] = 'WHEN %d THEN %s';
+				$args[] = $id;
+				$args[] = $payload;
+			}
+			$case = implode( ' ', $cases );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$count = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->posts} SET post_content = CASE ID $case END WHERE post_type = %s AND post_status = %s AND ID IN ($places)", array_merge( $args, [ self::POST_TYPE, 'private' ], $ids ) ) );
+			if ( false === $count ) {
+				return false;
+			}
+			foreach ( $ids as $id ) {
+				wp_cache_delete( $id, 'posts' );
+			}
+		}
+		return true;
+	}
+
+	public function promote_read_translations( array $source, array $payloads ): array {
+		return self::mutate_rows(
+			function () use ( $source, $payloads ): array {
+				$ids = get_posts(
+                    [
+						'post_type' => self::POST_TYPE,
+						'post_status' => 'private',
+						'fields' => 'ids',
+						'posts_per_page' => -1,
+						'orderby' => 'ID',
+						'order' => 'DESC',
+						'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+						[
+                    'key' => self::META_OBJECT_TYPE,
+                    'value' => $source['object_type'],
+						],
+						[
+						'key' => self::META_OBJECT_ID,
+						'value' => $source['object_id'],
+						],
+						],
+					]
+                );
+				if ( $ids ) {
+					update_meta_cache( 'post', $ids );
+				}
+				$changes = [];
+				$contents = [];
+				$languages = [];
+				foreach ( $ids as $id ) {
+					$language = (string) get_post_meta( $id, self::META_LANGUAGE, true );
+					if ( ! isset( $payloads[ $language ] ) ) {
+						continue;
+					}
+					$payload = $payloads[ $language ];
+					unset( $payloads[ $language ] );
+					if ( self::STATUS_PENDING !== $this->row_status( $id ) || self::STAGE_EXTRACT !== get_post_meta( $id, self::META_STAGE, true ) ) {
+						continue;
+					}
+					$languages[ $id ] = $language;
+					$contents[ $id ] = self::encode_payload( $payload );
+					$changes[ $id ] = [
+						self::META_STAGE => self::STAGE_PUSH,
+						self::META_STATUS => self::STATUS_PENDING,
+						self::META_PRIORITY => (int) $source['priority'],
+						self::META_PAGE_TITLE => (string) ( $source['page_title'] ?? '' ),
+						self::META_ATTEMPTS => 0,
+						self::META_FAIL_REASON => '',
+						self::META_BACKGROUND_REFRESH => 1,
+						self::META_RETRANSLATING => 1,
+					];
+				}
+				$promoted = [];
+				foreach ( array_chunk( $changes, QueueMetadata::MAX_ROWS, true ) as $batch ) {
+					if ( ! self::write_payloads( array_intersect_key( $contents, $batch ) ) || ! QueueMetadata::write( $batch, [ self::META_TRANSLATED_AT, self::META_JOB_OUTCOME, self::META_REFILL_FINISHED, '_twp_confirmation_attempts', '_twp_reader_not_before', self::META_CLAIMED_AT, self::META_STARTED_AT ] ) ) {
+						break;
+					}
+					$promoted += array_intersect_key( $languages, $batch );
+				}
+				if ( $promoted ) {
+					$completions = (array) get_option( self::REFILL_COMPLETIONS_OPTION, [] );
+					update_option( self::REFILL_COMPLETIONS_OPTION, array_fill_keys( $promoted, false ) + $completions, false );
+				}
+				return array_values( $promoted );
+			},
+			[]
+		);
+	}
+
+	public function store_supplied_extractions( array $ids, string $url, array $items ): array {
+		return self::mutate_rows(
+			function () use ( $ids, $url, $items ): array {
+				foreach ( $ids as $id ) {
+					wp_cache_delete( $id, 'post_meta' );
+				}
+				update_meta_cache( 'post', $ids );
+				if ( function_exists( '_prime_post_caches' ) ) {
+					_prime_post_caches( $ids, false, false );
+				}
+				$changes = [];
+				foreach ( $ids as $id ) {
+					if ( $this->retire_unpublished_row( $id ) || self::STATUS_PENDING !== $this->row_status( $id ) || self::STAGE_EXTRACT !== get_post_meta( $id, self::META_STAGE, true )
+						|| self::READ_LANGUAGE === get_post_meta( $id, self::META_LANGUAGE, true ) || 'miss' === get_post_meta( $id, self::META_OBJECT_TYPE, true )
+						|| TranslationUrl::rebase_to_home( (string) get_post_meta( $id, self::META_URL, true ) ) !== $url
+						|| (int) get_post_meta( $id, '_twp_reader_not_before', true ) > $this->now() || '' !== (string) get_post_field( 'post_content', $id ) ) {
+						continue;
+					}
+					$changes[ $id ] = [
+						self::META_STAGE => self::STAGE_PUSH,
+						self::META_URL => $url,
+						self::META_ATTEMPTS => 0,
+						self::META_FAIL_REASON => '',
+					];
+				}
+				if ( ! $changes ) {
+					return [];
+				}
+				$ids = array_keys( $changes );
+				$payload = self::encode_payload( (string) wp_json_encode( $items ) );
+				if ( ! self::write_payloads( array_fill_keys( $ids, $payload ) ) ) {
+					return [];
+				}
+				$cleared = [ self::META_TRANSLATED_AT, self::META_JOB_OUTCOME, self::META_REFILL_FINISHED, '_twp_confirmation_attempts', self::META_CLAIMED_AT, '_twp_reader_not_before', '_twp_reader_retries' ];
+				if ( ! QueueMetadata::write( $changes, $cleared ) ) {
+					return [];
+				}
+				return $ids;
+			},
+			[]
+		);
+	}
+
 	public function store_payload( int $id, string $payload ): bool {
 		return self::mutate_rows( fn () => $this->store_payload_unlocked( $id, $payload ), false );
 	}
@@ -1300,6 +1499,22 @@ class IndexQueue {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id )
 			|| self::STAGE_EXTRACT !== (string) get_post_meta( $id, self::META_STAGE, true ) ) {
 			return false;
+		}
+
+		if ( QueueExecution::in_step() ) {
+			$source = self::READ_LANGUAGE === (string) get_post_meta( $id, self::META_LANGUAGE, true );
+			$meta = [
+				self::META_STAGE => $source ? self::STAGE_READ : self::STAGE_PUSH,
+				self::META_STATUS => $source ? self::STATUS_DONE : self::STATUS_PENDING,
+				self::META_ATTEMPTS => 0,
+				self::META_FAIL_REASON => '',
+			];
+			if ( $source ) {
+				$meta[ self::META_UPDATED_AT ] = $this->now();
+			}
+			$clear = $source ? [ self::META_PREVIOUS_READ ] : [ self::META_TRANSLATED_AT, self::META_JOB_OUTCOME, self::META_REFILL_FINISHED, '_twp_confirmation_attempts' ];
+			$clear[] = self::META_CLAIMED_AT;
+			return self::write_payloads( [ $id => self::encode_payload( $payload ) ] ) && QueueMetadata::write( [ $id => $meta ], $clear );
 		}
 
 		$updated = wp_update_post(
@@ -1784,7 +1999,10 @@ class IndexQueue {
 					if ( '' === get_post_meta( $id, self::META_LEXICON_VERSION, true ) ) {
 						$changes[ $id ] += $this->version_metadata( $language );
 					}
-					if ( 'miss' !== $row['object_type'] ) {
+					if ( ! empty( $delivery['keep_payload'] ) && 'miss' !== $row['object_type'] ) {
+						$changes[ $id ]['_twp_provider_payload'] = 1;
+					}
+					if ( empty( $delivery['keep_payload'] ) && 'miss' !== $row['object_type'] ) {
 						$clear_content[] = $id;
 					}
 				}
@@ -1807,7 +2025,9 @@ class IndexQueue {
 				}
 				if ( $translated ) {
 					BackgroundEngine::mark_dirty();
-					$this->settle_refills();
+					if ( ! QueueExecution::in_step() ) {
+						$this->settle_refills();
+					}
 				}
 				return count( $changes );
 			},
@@ -2176,11 +2396,48 @@ class IndexQueue {
 		return $jobs;
 	}
 
+	public function retry_provider_job( string $job_id ): void {
+		self::mutate_rows(
+			function () use ( $job_id ): int {
+				$ids = $this->remembered_jobs( $job_id )[ $job_id ] ?? [];
+				foreach ( array_chunk( $ids, QueueMetadata::MAX_ROWS ) as $batch ) {
+					$changes = [];
+					foreach ( $batch as $id ) {
+						$changes[ $id ] = [
+							self::META_STATUS => self::STATUS_PENDING,
+							self::META_STAGE => get_post_field( 'post_content', $id ) ? self::STAGE_PUSH : self::STAGE_EXTRACT,
+						];
+					}
+					QueueMetadata::write( $changes, [ self::META_JOB_ID, self::META_JOB_OUTCOME, self::META_TRANSLATED_AT, '_twp_reader_not_before' ] );
+				}
+				return count( $ids );
+			},
+			0
+		);
+	}
+
 	public function finish_job( string $job_id, string $outcome ): void {
-		$ids = $this->remembered_jobs( $job_id )[ $job_id ] ?? [];
-		foreach ( array_chunk( $ids, QueueMetadata::MAX_ROWS ) as $batch ) {
-			QueueMetadata::write( array_fill_keys( $batch, [ self::META_JOB_OUTCOME => $outcome ] ), [ self::META_JOB_ID ] );
-		}
+		self::mutate_rows(
+			function () use ( $job_id, $outcome ): void {
+				$ids = $this->remembered_jobs( $job_id )[ $job_id ] ?? [];
+				if ( 'done' === $outcome && $ids ) {
+					update_meta_cache( 'post', $ids );
+					$clear = [];
+					foreach ( $ids as $id ) {
+						if ( 'miss' !== get_post_meta( $id, self::META_OBJECT_TYPE, true ) && get_post_meta( $id, '_twp_provider_payload', true ) ) {
+							$clear[ $id ] = '';
+						}
+					}
+					if ( $clear ) {
+						self::write_payloads( $clear );
+					}
+				}
+				foreach ( array_chunk( $ids, QueueMetadata::MAX_ROWS ) as $batch ) {
+					QueueMetadata::write( array_fill_keys( $batch, [ self::META_JOB_OUTCOME => $outcome ] ), [ self::META_JOB_ID, '_twp_provider_payload' ] );
+				}
+			},
+			null
+		);
 	}
 
 	public function job_outcome( int $id ): string {
@@ -2189,9 +2446,8 @@ class IndexQueue {
 	}
 
 	public function reset_cold_retries( array $ids ): void {
-		foreach ( $ids as $id ) {
-			delete_post_meta( (int) $id, self::META_COLD_RETRIES );
-			delete_post_meta( (int) $id, self::META_COLD_EXHAUSTED );
+		foreach ( array_chunk( array_map( 'intval', $ids ), QueueMetadata::MAX_ROWS ) as $batch ) {
+			QueueMetadata::write( array_fill_keys( $batch, [] ), [ self::META_COLD_RETRIES, self::META_COLD_EXHAUSTED ] );
 		}
 	}
 
@@ -2633,6 +2889,7 @@ class IndexQueue {
 		$counts = [];
 		$next = null;
 		$settle = 0;
+		$settle_languages = [];
 		$needs_normalization = false;
 		$refill_pending = [];
 		foreach ( (array) $buckets as $bucket ) {
@@ -2687,6 +2944,7 @@ class IndexQueue {
 			}
 			if ( $row['retranslating'] && ( ( self::STATUS_DONE === $status && $row['translated'] ) || self::STATUS_DEAD === $status ) ) {
 				$settle += $n;
+				$settle_languages[ $language ] = true;
 			}
 		}
 		$pending['refill'] += $settle > 0 ? 1 : 0;
@@ -2696,6 +2954,7 @@ class IndexQueue {
 			'next' => $next,
 			'refill_pending' => $refill_pending,
 			'settle' => $settle,
+			'settle_languages' => array_keys( $settle_languages ),
 			'needs_normalization' => $needs_normalization,
 		];
 	}
@@ -2708,6 +2967,9 @@ class IndexQueue {
 		return self::mutate_rows(
 			function () use ( $cursor ): bool {
 				$ids = $this->row_ids_after( (int) $cursor, QueueMetadata::MAX_ROWS );
+				if ( $ids ) {
+					update_meta_cache( 'post', $ids );
+				}
 				$changes = [];
 				foreach ( $ids as $id ) {
 					if ( self::STATUS_PENDING === $this->row_status( $id ) ) {

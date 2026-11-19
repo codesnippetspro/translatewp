@@ -86,6 +86,8 @@ class CleanupInventory {
 		BackgroundSignature::REFRESH_OPTION,
 		BackgroundEngine::LAST_SERVICE_OPTION,
 		BackgroundEngine::LAST_STEP_OPTION,
+		ProviderHold::OPTION,
+		ProviderHold::WATCH_OPTION,
 		BackgroundEngine::STARTED_OPTION,
 		BackgroundEngine::PHASE_OPTION,
 		BackgroundEngine::STATE_OPTION,

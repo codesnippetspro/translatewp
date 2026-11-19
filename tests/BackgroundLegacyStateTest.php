@@ -166,4 +166,16 @@ foreach ( [ '/category/recipes/', 'https://WWW.EXAMPLE.COM/studio/category/recip
 	unset( $GLOBALS['wp_test_remote_get_sequence'] );
 }
 
+$ids = legacy_state();
+wp_delete_post( $ids[0], true );
+$indexer = new Indexer( '', '', null, null, false );
+$page = [ 'url' => 'https://example.com/cart/', 'status' => 200, 'html' => '<p>A studio class begins today.</p>' ];
+$count = $indexer->step_read( new \TranslateWP\Components\ReadinessBudget(), [ $page ] );
+check_legacy( 3 === $count, 'One supplied page advances all three due language rows' );
+foreach ( array_slice( $ids, 1 ) as $id ) {
+	$payload = json_decode( IndexQueue::decode_payload( get_post_field( 'post_content', $id ) ), true );
+	check_legacy( ! empty( $payload[0]['markerPayload'] ) && false !== strpos( $payload[0]['markerPayload'], 'A studio class begins today.' ), 'The language row retains the actual supplied source payload' );
+	check_legacy( 'push' === get_post_meta( $id, '_twp_stage', true ) && ! get_post_meta( $id, '_twp_translated_at', true ) && get_post_meta( $id, '_twp_retranslate', true ), 'A bulk read preserves the refill flag and leaves the row pending push without a translation mark' );
+}
+
 echo "BackgroundLegacyStateTest: all assertions passed\n";

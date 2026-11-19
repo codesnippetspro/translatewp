@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality\Endpoints;
 
 use TranslateWP\Components\CacheVersions;
+use TranslateWP\Components\ProviderHold;
 
 use PluboRoutes\Endpoint\GetEndpoint;
 use PluboRoutes\Endpoint\PostEndpoint;
@@ -418,6 +419,10 @@ class TranslationJobs extends BaseApiEndpoints {
 	}
 
 	public function create_job( $request ) {
+		$provider_error = ProviderHold::request_error();
+		if ( $provider_error ) {
+			return $provider_error;
+		}
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;
@@ -505,6 +510,10 @@ class TranslationJobs extends BaseApiEndpoints {
 	}
 
 	public function push_batch( $request ) {
+		$provider_error = ProviderHold::request_error();
+		if ( $provider_error ) {
+			return $provider_error;
+		}
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;

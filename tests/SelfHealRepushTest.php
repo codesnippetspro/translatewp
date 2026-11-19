@@ -70,7 +70,7 @@ function index_front_page( IndexQueue $queue, Indexer $indexer ): string {
 }
 
 $cold_lookup = static fn(): array => [];
-$now         = static fn(): int => 10_000;
+$now         = static fn(): int => 700;
 
 // ---------------------------------------------------------------------------
 // A pushed page whose translation job is still running is not cold yet.
@@ -117,6 +117,15 @@ TranslationReadiness::record( (int) $miss['id'], 'it', [ [ 'cache' => [ 'hash' =
 $heal   = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $cold_lookup, $now, false );
 $result = $heal->reconcile( 0 );
 assert_true( 0 === $result['requeued'] && IndexQueue::STATUS_DONE === $queue->list_rows()[0]['status'], 'A visitor-only page must not be healed, got ' . wp_json_encode( $result ) );
+
+wp_test_reset( connected_options() );
+seed_front_page();
+$queue = new IndexQueue();
+$indexer = new Indexer( 'translatewp', TRANSLATEWP_VERSION, $queue );
+$job_id = index_front_page( $queue, $indexer );
+$GLOBALS['wp_test_job_states'][ $job_id ] = 'processing';
+$heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $cold_lookup, static fn(): int => 1000, false );
+assert_true( 1 === $heal->reconcile( 0 )['requeued'], 'A processing job at the fifteen-minute age limit is requeued' );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "SelfHealRepushTest failed with {$failures} assertion(s)\n" );

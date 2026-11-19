@@ -224,7 +224,7 @@ class TranslationReadiness {
 			$batch = $batches[ $index ];
 			$language = $batch['language'];
 			$timeout = null === $work_budget ? SiteRequests::DEFAULT_TIMEOUT_SECONDS : $work_budget->remaining_seconds();
-			if ( $timeout <= 0 ) {
+			if ( $timeout <= 0 || QueueExecution::expired() ) {
 				$index = ( $index + count( $batches ) - 1 ) % count( $batches );
 				break;
 			}

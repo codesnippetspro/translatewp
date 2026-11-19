@@ -4,6 +4,7 @@ namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\AdminNotices;
 use TranslateWP\Components\BackgroundEngine;
+use TranslateWP\Components\ProviderHold;
 use TranslateWP\Components\BackgroundSwitch;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\MutationLock;
@@ -50,8 +51,19 @@ class CronFallback {
 	}
 
 	public function render_cron_late_notice(): void {
-		if ( ! current_user_can( 'manage_options' ) || ! AdminNotices::on_plugin_screen()
-			|| get_transient( self::DISMISSED_TRANSIENT . get_current_user_id() ) ) {
+		if ( ! current_user_can( 'manage_options' ) || ! AdminNotices::on_plugin_screen() ) {
+			return;
+		}
+		if ( ProviderHold::state() ) {
+			printf(
+				'<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
+				esc_html( 'model_unavailable' === ProviderHold::state()['reason'] ? __( 'Your AI provider cannot use the selected model. Translation is waiting.', 'translate' ) : __( 'Your AI provider did not accept the key. Translation is waiting.', 'translate' ) ),
+				esc_url( admin_url( 'admin.php?page=translatewp-settings#ai-model' ) ),
+				esc_html__( 'AI models', 'translate' )
+			);
+			return;
+		}
+		if ( get_transient( self::DISMISSED_TRANSIENT . get_current_user_id() ) ) {
 			return;
 		}
 		if ( ! BackgroundSwitch::off() && ! $this->is_behind() && ! get_option( Indexer::READER_FAILURE_OPTION, false ) ) {

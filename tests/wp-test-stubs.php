@@ -209,6 +209,28 @@ class WP_Testwpdb {
                 if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){foreach($keys as $key){unset($post['meta_input'][$key]);}}
             }unset($post);return 1;
         }
+		if ( 0 === strpos( $this->last_query, 'UPDATE wp_posts SET post_content = CASE ID' ) ) {
+			$n = substr_count( $this->last_query, 'WHEN %d THEN %s' );
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				for ( $i = 0; $i < 2 * $n; $i += 2 ) {
+					if ( (int) $post['ID'] === $this->prepared_args[ $i ] && 'twp_index_item' === $post['post_type'] && 'private' === $post['post_status'] ) {
+						$post['post_content'] = $this->prepared_args[ $i + 1 ];
+					}
+				}
+			}
+			unset( $post );
+			return $n;
+		}
+		if ( 0 === strpos( $this->last_query, 'UPDATE wp_posts SET post_content = %s' ) ) {
+			$ids = array_slice( $this->prepared_args, 3 );
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				if ( in_array( (int) $post['ID'], $ids, true ) && 'twp_index_item' === $post['post_type'] && 'private' === $post['post_status'] ) {
+					$post['post_content'] = $this->prepared_args[0];
+				}
+			}
+			unset( $post );
+			return count( $ids );
+		}
         if ( 0 === strpos( $this->last_query, "UPDATE wp_posts SET post_content = ''" ) ) {
             $ids=array_slice($this->prepared_args,2);
             foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post){if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){$post['post_content']='';}}unset($post);return count($ids);
@@ -1728,7 +1750,7 @@ function wp_remote_get( string $url, array $args = [] ) {
 				[
 					'state'     => $GLOBALS['wp_test_job_states'][ $job_match[1] ] ?? 'open',
 					'createdAt' => '2026-08-15T00:00:00Z',
-				]
+				] + ( in_array( $GLOBALS['wp_test_job_states'][ $job_match[1] ] ?? '', [ 'done', 'finished', 'completed' ], true ) ? [ 'items' => [ 'total' => 1, 'succeeded' => 1, 'failed' => 0 ] ] : [] )
 			),
 		];
 	}

@@ -8,6 +8,26 @@ class QueueExecution {
 	private const MAX_STATUS_CALLS = 20;
 	private const MIN_HTTP_SECONDS = 0.01;
 	private static bool $active = false;
+	private static ?int $query_start = null;
+	private const QUERY_WORK_LIMIT = 240;
+
+	public static function begin_step(): void {
+		global $wpdb;
+		self::$query_start = (int) ( $wpdb->num_queries ?? 0 );
+	}
+
+	public static function in_step(): bool {
+		return null !== self::$query_start;
+	}
+
+	public static function end_step(): void {
+		self::$query_start = null;
+	}
+
+	public static function query_budget_spent(): bool {
+		global $wpdb;
+		return null !== self::$query_start && (int) ( $wpdb->num_queries ?? 0 ) - self::$query_start >= self::QUERY_WORK_LIMIT;
+	}
 	private static int $remote = 0;
 
 	public static function reset_trace(): void {
@@ -78,7 +98,7 @@ class QueueExecution {
 	}
 
 	public static function expired(): bool {
-		return null !== self::$budget && self::$budget->remaining_seconds() <= 0;
+		return null !== self::$budget && ( self::query_budget_spent() || self::$budget->remaining_seconds() <= 0 );
 	}
 
 	public static function is_budget_error( \WP_Error $error ): bool {

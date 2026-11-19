@@ -39,6 +39,7 @@ class BackgroundEngine {
 	private const PHASE_COUNT = 2;
 	private const MAX_UNITS_PER_STEP = 64;
 	private static bool $servicing = false;
+	private static ?array $step_work = null;
 	private static string $trace_phase = 'idle';
 	private static int $trace_rows = 0;
 
@@ -136,7 +137,13 @@ class BackgroundEngine {
 		self::$trace_phase = 'idle';
 		self::$trace_rows = 0;
 		QueueExecution::reset_trace();
-		$response = self::run_step( $pages );
+		QueueExecution::begin_step();
+		try {
+			$response = self::run_step( $pages );
+		} finally {
+			self::$step_work = null;
+			QueueExecution::end_step();
+		}
 		if ( $tracing ) {
 			$response['trace'] = [
 				'phase' => self::$trace_phase,
@@ -178,11 +185,23 @@ class BackgroundEngine {
 				}
 				$indexer = new Indexer( '', '', null, null, false );
 				$budget = QueueExecution::budget();
+				$indexer->poll_provider_probe();
+				if ( ProviderHold::waiting() ) {
+					$response = self::snapshot( 'more' );
+					self::$step_work = null;
+					$response['pending'] = self::pending();
+					$hold = ProviderHold::state();
+					$response['nextDue'] = ! empty( $hold['probe'] ) ? time() + 15 : $hold['due'];
+					return;
+				}
 				if ( ! empty( self::work_state()['needs_normalization'] ) ) {
 					add_option( IndexQueue::NORMALIZE_CURSOR_OPTION, 0, '', false );
 					( new IndexQueue() )->normalize_legacy_rows();
 				}
 				$total_rows = $pages && self::service_reads() ? $indexer->step_read( $budget, $pages ) : 0;
+				if ( $total_rows > 0 ) {
+					self::$trace_phase = 'read';
+				}
 				$queue = new IndexQueue();
 				$queue->reclaim_stale();
 				$work = [
@@ -192,10 +211,15 @@ class BackgroundEngine {
 					'backgroundReady' => [],
 					'read' => false,
 				];
+				$selection = [];
+				$refill_pending = self::pending()['refill'] > 0;
 				$idle_turns = 0;
 				for ( $unit = 0; $unit < self::MAX_UNITS_PER_STEP && ! QueueExecution::expired() && ! BackgroundSwitch::off(); ++$unit ) {
+					if ( ProviderHold::waiting() ) {
+						break;
+					}
 					self::$trace_rows = 0;
-					$work = self::phase_work( $queue );
+					$work = self::phase_work( $queue, $selection, $refill_pending );
 					$streak = (int) get_option( self::VISITOR_STREAK_OPTION, 0 );
 					$visitor_turn = ! $work['background'] || $streak < self::MAX_VISITOR_STREAK;
 					$is_visitor = false;
@@ -211,10 +235,20 @@ class BackgroundEngine {
 							continue;
 						}
 						self::$trace_phase = $phase;
+						if ( str_ends_with( $phase, '_push' ) && isset( $selection[ $phase ] ) ) {
+							array_splice( $selection[ $phase ], 0, count( $rows ) );
+							if ( ! $selection[ $phase ] && ! empty( $selection[ $phase . '_more' ] ) ) {
+								unset( $selection[ $phase ] );
+							}
+						} else {
+							unset( $selection[ $phase ] );
+						}
 						if ( false !== strpos( $phase, '_push' ) ) {
+							unset( $selection[ 'visitor_push' === $phase ? 'visitor_ready' : 'background_ready' ] );
 							$result = $indexer->step_push( $budget, $rows );
 							self::$trace_rows = array_sum( $result );
 						} else {
+							unset( $selection['read'], $selection['background_push'], $selection['visitor_push'] );
 							self::complete( $indexer, $budget, 'visitor_ready' === $phase ? $work['visitorKeys'] : null, $rows );
 						}
 						if ( self::$trace_rows > 0 ) {
@@ -224,11 +258,13 @@ class BackgroundEngine {
 						}
 					}
 					if ( ! $worked && ! QueueExecution::expired() && $work['read'] ) {
+						unset( $selection['read'], $selection['background_push'] );
 						self::$trace_phase = 'read';
 						self::$trace_rows = $indexer->step_read( $budget, $pages );
 						$worked = self::$trace_rows > 0;
 					}
 					if ( ! $worked && ! QueueExecution::expired() ) {
+						$selection = [];
 						self::$trace_phase = 'maintenance';
 						$phase = max( 0, (int) get_option( self::PHASE_OPTION, 1 ) ) % self::PHASE_COUNT;
 						update_option( self::PHASE_OPTION, ( $phase + 1 ) % self::PHASE_COUNT, false );
@@ -248,13 +284,18 @@ class BackgroundEngine {
 					update_option( self::VISITOR_STREAK_OPTION, $is_visitor ? min( self::MAX_VISITOR_STREAK, $streak + 1 ) : 0, false );
 					$total_rows += self::$trace_rows;
 					$idle_turns = $worked ? 0 : $idle_turns + 1;
-					if ( $idle_turns >= self::PHASE_COUNT || 0 === array_sum( self::pending( false ) ) ) {
+					if ( $idle_turns >= self::PHASE_COUNT ) {
 						break;
 					}
+				}
+				self::$step_work = null;
+				if ( ! QueueExecution::expired() ) {
+					$indexer->report_completion();
 				}
 				self::$trace_rows = $total_rows;
 				update_option( self::LAST_STEP_OPTION, time(), false );
 				update_option( Indexer::LAST_DRAIN_OPTION, time(), false );
+				self::$step_work = null;
 				$pending = self::pending( false );
 				if ( 0 === $pending['visitor'] ) {
 					MutationLock::run(
@@ -276,7 +317,7 @@ class BackgroundEngine {
 					'pending' => $pending,
 					'v' => 1,
 				];
-				$next_due = (int) ( self::work_state()['next'] ?? 0 );
+				$next_due = ProviderHold::waiting() ? max( time() + 15, ProviderHold::state()['due'] ) : (int) ( self::work_state()['next'] ?? 0 );
 				if ( 'more' === $response['state'] && $next_due > time() ) {
 					$response['nextDue'] = $next_due;
 				}
@@ -377,19 +418,21 @@ class BackgroundEngine {
 		if ( ! QueueExecution::expired() ) {
 			TranslationStore::run_backfill_batch( QueueMetadata::MAX_ROWS, null, $visitor_keys, true );
 		}
-		if ( ! QueueExecution::expired() ) {
-			$indexer->report_completion();
-		}
 	}
 
-	private static function phase_work( IndexQueue $queue ): array {
-		$visitor_ready = ReadinessReconcile::step_rows( true );
-		$background_ready = ReadinessReconcile::step_rows();
-		$visitor = $queue->engine_rows( 'visitor_push', Indexer::drain_batch_size() );
-		$background = $queue->engine_rows( 'background_push', Indexer::drain_batch_size() );
-		$read = (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
+	private static function phase_work( IndexQueue $queue, array &$selection, bool $refill_pending ): array {
+		$visitor_ready = $selection['visitor_ready'] ??= ReadinessReconcile::step_rows( true );
+		$background_ready = $selection['background_ready'] ??= ReadinessReconcile::step_rows();
+		foreach ( [ 'visitor_push', 'background_push' ] as $kind ) {
+			if ( ! isset( $selection[ $kind ] ) ) {
+				$selection[ $kind ] = $queue->engine_rows( $kind, QueueMetadata::MAX_ROWS );
+				$selection[ $kind . '_more' ] = count( $selection[ $kind ] ) === QueueMetadata::MAX_ROWS;
+			}
+		}
+		$visitor = array_slice( $selection['visitor_push'], 0, Indexer::drain_batch_size() );
+		$background = array_slice( $selection['background_push'], 0, Indexer::drain_batch_size() );
+		$read = $selection['read'] ??= (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
 			|| ( ( self::service_reads() || (int) get_option( Indexer::NEXT_READER_OPTION, 0 ) <= time() ) && [] !== $queue->pending_read_rows() );
-		$pending = self::pending();
 		return [
 			'visitorPush' => array_column( $visitor, 'id' ),
 			'visitorReady' => $visitor_ready,
@@ -397,7 +440,7 @@ class BackgroundEngine {
 			'backgroundPush' => array_column( $background, 'id' ),
 			'backgroundReady' => $background_ready,
 			'read' => $read,
-			'background' => [] !== $background || [] !== $background_ready || $read || $pending['refill'] > 0,
+			'background' => [] !== $background || [] !== $background_ready || $read || $refill_pending,
 		];
 	}
 
@@ -506,11 +549,17 @@ class BackgroundEngine {
 	}
 
 	public static function work_state(): array {
+		if ( null !== self::$step_work ) {
+			return self::$step_work;
+		}
 		wp_cache_delete( self::REVISION_OPTION, 'options' );
 		wp_cache_delete( self::WORK_OPTION, 'options' );
 		$revision = get_option( self::REVISION_OPTION, '' );
 		$state = get_option( self::WORK_OPTION, [] );
 		if ( is_array( $state ) && isset( $state['pending'] ) && ( $state['revision'] ?? null ) === $revision ) {
+			if ( QueueExecution::in_step() ) {
+				self::$step_work = $state;
+			}
 			return $state;
 		}
 		$locked = MutationLock::run(
@@ -522,6 +571,9 @@ class BackgroundEngine {
 				update_option( self::WORK_OPTION, $state, false );
 			}
         );
+		if ( $locked && QueueExecution::in_step() ) {
+			self::$step_work = $state;
+		}
 		return $locked ? $state : [
 			'pending' => [
 				'read' => 0,
