@@ -17,6 +17,8 @@ class KeepWarm {
 	public const LEXICON_DEBOUNCE_HOOK  = 'translatewp_lexicon_stale_debounce';
 	public const SETTINGS_DEBOUNCE_HOOK = 'translatewp_settings_rebuild_debounce';
 	public const PENDING_LANGUAGES_OPTION = 'translatewp_settings_rebuild_languages';
+	public const REBUILD_CURSOR = 'translatewp_settings_refill_cursor';
+	public const LEXICON_LANGUAGES = 'translatewp_lexicon_debounce_languages';
 	private const ALL_LANGUAGES = '*';
 	public const REWARM_DEBOUNCE_HOOK  = 'translatewp_rewarm_debounce';
 
@@ -150,7 +152,8 @@ class KeepWarm {
 		return is_array( $types ) ? array_values( array_filter( array_map( 'strval', $types ) ) ) : [];
 	}
 
-	public function schedule_lexicon_stale_mark(): void {
+	public function schedule_lexicon_stale_mark( array $languages = [] ): void {
+		self::remember_languages( self::LEXICON_LANGUAGES, $languages );
 		DebouncedTask::schedule( self::LEXICON_DEBOUNCE_HOOK );
 	}
 
@@ -160,6 +163,7 @@ class KeepWarm {
 			return;
 		}
 
+		delete_option( self::LEXICON_LANGUAGES );
 		CacheVersions::bump_lexicon_version();
 		self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
@@ -171,17 +175,14 @@ class KeepWarm {
 	 *                         empty means every one of them.
 	 */
 	public function schedule_settings_rebuild( $languages = [] ): void {
-		// Changes inside one debounce window add up to one retranslation: the
-		// languages are gathered here, and one change for every language wins.
-		$languages = is_array( $languages ) ? array_values( array_map( 'strval', $languages ) ) : [];
-		$pending   = get_option( self::PENDING_LANGUAGES_OPTION, null );
-		if ( ! $languages || ( is_array( $pending ) && in_array( self::ALL_LANGUAGES, $pending, true ) ) ) {
-			$pending = [ self::ALL_LANGUAGES ];
-		} else {
-			$pending = array_values( array_unique( array_merge( is_array( $pending ) ? $pending : [], $languages ) ) );
-		}
-		update_option( self::PENDING_LANGUAGES_OPTION, $pending, false );
+		self::remember_languages( self::PENDING_LANGUAGES_OPTION, is_array( $languages ) ? $languages : [] );
 		DebouncedTask::schedule( self::SETTINGS_DEBOUNCE_HOOK );
+	}
+
+	private static function remember_languages( string $option, array $languages ): void {
+		$pending = (array) get_option( $option, [] );
+		$pending = ! $languages || in_array( self::ALL_LANGUAGES, $pending, true ) ? [ self::ALL_LANGUAGES ] : array_values( array_unique( array_merge( $pending, $languages ) ) );
+		update_option( $option, $pending, false );
 	}
 
 	/**
@@ -197,10 +198,25 @@ class KeepWarm {
 		}
 
 		$pending = get_option( self::PENDING_LANGUAGES_OPTION, null );
-		delete_option( self::PENDING_LANGUAGES_OPTION );
-		$pending = is_array( $pending ) ? $pending : [ self::ALL_LANGUAGES ];
+		if ( ! is_array( $pending ) || ! $pending || ! delete_option( self::PENDING_LANGUAGES_OPTION ) ) {
+			return;
+		}
 		CacheVersions::bump_settings_version();
-		if ( SiteConnection::is_connected() ) {
+		if ( \TranslateWP\Components\QueueExecution::in_step() && SiteConnection::is_connected() ) {
+			$current = get_option( self::REBUILD_CURSOR, [] );
+			$languages = array_unique( array_merge( $current['languages'] ?? [], in_array( self::ALL_LANGUAGES, $pending, true ) ? TranslationProxySettings::target_languages() : $pending ) );
+			update_option(
+                self::REBUILD_CURSOR,
+                [
+					'after' => 0,
+					'languages' => array_values( $languages ),
+				],
+                false
+            );
+			if ( $languages ) {
+				TranslationStore::bump_cache_generation( $languages );
+			}
+		} elseif ( SiteConnection::is_connected() ) {
 			( new Indexer( '', '', null, null, false ) )->retranslate_everything( in_array( self::ALL_LANGUAGES, $pending, true ) ? [] : $pending );
 		}
 	}

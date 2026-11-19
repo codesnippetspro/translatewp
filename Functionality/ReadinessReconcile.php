@@ -148,8 +148,17 @@ class ReadinessReconcile {
 				'translated' => 0,
 			];
 		}
+		$rows = array_values( array_filter( $rows, static fn( array $row ): bool => (int) get_post_meta( (int) $row['id'], '_twp_reader_not_before', true ) <= time() ) );
 		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget, null !== $this->step_batch );
 		if ( ! empty( $result['lookupUnavailable'] ) ) {
+			$finished = [];
+			foreach ( $rows as $row ) {
+				if ( IndexQueue::STATUS_DONE === $row['status'] && empty( $row['translated'] ) && empty( $row['retranslating'] ) && 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) ) {
+					$finished[] = (int) $row['id'];
+				}
+			}
+			$this->indexer->mark_translated( $finished );
+			$result['translated'] = count( $finished );
 			return $result + [
 				'requeued' => 0,
 				'failed' => 0,

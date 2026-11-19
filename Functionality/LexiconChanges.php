@@ -16,6 +16,7 @@ use TranslateWP\Entities\CPTs\Lexicon;
 class LexiconChanges {
 
 	public const SEEDED_OPTION = 'translatewp_lexicon_changes_seeded';
+	public const SEED_LANGUAGES_OPTION = 'translatewp_seed_refill_languages';
 	public const SEED_CURSOR_OPTION = 'translatewp_lexicon_seed_refill_cursor';
 	private const SEED_BATCH_SIZE = 10;
 	public const SNAPSHOTS_OPTION = 'translatewp_lexicon_change_snapshots';
@@ -88,6 +89,7 @@ class LexiconChanges {
 				$cursor = (int) get_option( self::SEED_CURSOR_OPTION, 0 );
 				$ids = $queue->row_ids_after( $cursor, self::SEED_BATCH_SIZE );
 				$times = (array) Options::get( 'cache.lexicon_changed_at', [] );
+				$languages = (array) get_option( self::SEED_LANGUAGES_OPTION, [] );
 				foreach ( $ids as $id ) {
 					if ( QueueExecution::expired() ) {
 						Indexer::schedule_drain();
@@ -95,11 +97,19 @@ class LexiconChanges {
 					}
 					$rows = $queue->rows_before_lexicon_changes( $times, [ $id ] );
 					if ( $rows && $queue->enqueue_retranslate( $rows, false ) > 0 ) {
-						TranslationStore::bump_cache_generation( array_column( $rows, 'language' ) );
+						$language = $rows[0]['language'];
+						if ( ! isset( $languages[ $language ] ) ) {
+							$languages[ $language ] = true;
+							update_option( self::SEED_LANGUAGES_OPTION, $languages, false );
+						}
 					}
 					update_option( self::SEED_CURSOR_OPTION, $id, false );
 				}
 				if ( count( $ids ) < self::SEED_BATCH_SIZE ) {
+					if ( $languages ) {
+						TranslationStore::bump_cache_generation( array_keys( $languages ) );
+					}
+					delete_option( self::SEED_LANGUAGES_OPTION );
 					delete_option( self::SEED_CURSOR_OPTION );
 				} else {
 					Indexer::schedule_drain( 60 );
@@ -185,7 +195,7 @@ class LexiconChanges {
 		Options::update( 'cache.lexicon_language_versions', $versions );
 		update_option( self::SNAPSHOTS_OPTION, $snapshots, false );
 		if ( $changed ) {
-			do_action( 'translatewp_lexicon_changed' );
+			do_action( 'translatewp_lexicon_changed', array_keys( $changed ) );
 		}
 	}
 

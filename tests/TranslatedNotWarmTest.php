@@ -226,13 +226,15 @@ for ( $n = 20; $n < 34; $n++ ) {
 }
 tnw_check( 7 === TranslationReadiness::batch_count( $queue->list_rows() ), 'Seven hundred segments are seven batches, got ' . TranslationReadiness::batch_count( $queue->list_rows() ) );
 $looked_up = 0;
-$counting  = static function ( string $language, array $batch ) use ( &$looked_up ): array {
+$seen_hashes = [];
+$counting  = static function ( string $language, array $batch ) use ( &$looked_up, &$seen_hashes ): array {
 	++$looked_up;
+	$seen_hashes = array_merge( $seen_hashes, $batch );
 	return tnw_present( $language, $batch );
 };
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $counting, static fn (): int => 1000, true );
 $heal->run();
-tnw_check( 14 === $looked_up, 'The bounded readiness turn visits all fourteen page rows while its time budget remains, got ' . $looked_up );
+tnw_check( 7 === $looked_up && 700 === count( array_unique( $seen_hashes ) ), 'All fourteen pages are confirmed in seven lookups of 100 distinct segments' );
 $looked_up = 0;
 $heal->reconcile( 0 );
 tnw_check( 1 === $looked_up, 'A browser pass still proves one batch' );

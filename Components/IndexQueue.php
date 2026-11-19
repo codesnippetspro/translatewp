@@ -750,6 +750,12 @@ class IndexQueue {
 					}
 					$pending = $pending || ( null !== $pending_counts && ( ( $pending_counts[ $language ] ?? 0 ) > 0 || ! empty( $pending_counts['__unknown'] ) ) );
 					if ( ! $pending && $unannounced ) {
+						if ( null === $pending_counts ) {
+							$counts = $this->engine_aggregate()['refill_pending'];
+							if ( ! empty( $counts['__unknown'] ) || ! empty( $counts[ $language ] ) ) {
+								return;
+							}
+						}
 						$completions = (array) get_option( self::REFILL_COMPLETIONS_OPTION, [] );
 						if ( empty( $completions[ $language ] ) && ! TranslationReadiness::complete_refill( $language ) ) {
 							return;
@@ -2396,19 +2402,29 @@ class IndexQueue {
 		return $jobs;
 	}
 
-	public function retry_provider_job( string $job_id ): void {
+	public function retry_provider_job( string $job_id, int $throttle_until = 0 ): void {
 		self::mutate_rows(
-			function () use ( $job_id ): int {
+			function () use ( $job_id, $throttle_until ): int {
 				$ids = $this->remembered_jobs( $job_id )[ $job_id ] ?? [];
 				foreach ( array_chunk( $ids, QueueMetadata::MAX_ROWS ) as $batch ) {
 					$changes = [];
 					foreach ( $batch as $id ) {
+						if ( $throttle_until && ! $this->requires_background_refresh( $id ) ) {
+							continue;
+						}
 						$changes[ $id ] = [
 							self::META_STATUS => self::STATUS_PENDING,
 							self::META_STAGE => get_post_field( 'post_content', $id ) ? self::STAGE_PUSH : self::STAGE_EXTRACT,
 						];
+						if ( $throttle_until ) {
+							$changes[ $id ]['_twp_reader_not_before'] = $throttle_until;
+						}
 					}
-					QueueMetadata::write( $changes, [ self::META_JOB_ID, self::META_JOB_OUTCOME, self::META_TRANSLATED_AT, '_twp_reader_not_before' ] );
+					$remove = [ self::META_JOB_ID, self::META_JOB_OUTCOME, self::META_TRANSLATED_AT, self::META_REFILL_FINISHED, '_twp_confirmation_attempts' ];
+					if ( ! $throttle_until ) {
+						$remove[] = '_twp_reader_not_before';
+					}
+					QueueMetadata::write( $changes, $remove );
 				}
 				return count( $ids );
 			},
@@ -2814,7 +2830,7 @@ class IndexQueue {
 		);
 	}
 
-	public function engine_rows( string $kind, int $limit = 1, int $offset = 0, ?int $row_id = null ): array {
+	public function engine_rows( string $kind, int $limit = 1, int $offset = 0, ?int $row_id = null, array $exclude_languages = [] ): array {
 		if ( ! in_array( $kind, [ 'visitor_push', 'visitor_ready', 'background_push', 'background_ready' ], true ) ) {
 			return [];
 		}
@@ -2830,6 +2846,10 @@ class IndexQueue {
 		} else {
 			$where .= " AND state.meta_value = 'done' AND COALESCE(translated.meta_value,'0') + 0 <= 0 AND COALESCE(due.meta_value,'0') + 0 <= %d";
 			$params[] = $this->now();
+		}
+		if ( $exclude_languages ) {
+			$where .= ' AND lang.meta_value NOT IN (' . implode( ',', array_fill( 0, count( $exclude_languages ), '%s' ) ) . ')';
+			array_push( $params, ...$exclude_languages );
 		}
 		if ( null !== $row_id ) {
 			$where .= ' AND p.ID = %d';
@@ -2905,6 +2925,9 @@ class IndexQueue {
 				$next = null === $next ? $due : min( $next, $due );
 			}
 			if ( self::READ_LANGUAGE === $language ) {
+				if ( $active ) {
+					$refill_pending['__unknown'] = 1;
+				}
 				$pending['read'] += $active ? $n : 0;
 				continue;
 			}
@@ -2939,7 +2962,7 @@ class IndexQueue {
 				$pending['visitor'] += $n;
 			}
 			$counts[ $language ] = $count;
-			if ( $row['retranslating'] && ( $active || $confirming ) ) {
+			if ( ( $active && self::STAGE_EXTRACT === $row['stage'] ) || ( $row['retranslating'] && ( $active || $confirming ) ) ) {
 				$refill_pending[ $language ] = ( $refill_pending[ $language ] ?? 0 ) + $n;
 			}
 			if ( $row['retranslating'] && ( ( self::STATUS_DONE === $status && $row['translated'] ) || self::STATUS_DEAD === $status ) ) {

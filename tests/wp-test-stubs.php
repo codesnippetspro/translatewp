@@ -364,6 +364,7 @@ class WP_Testwpdb {
                 if($due){if(($m['_twp_status']??'')!==$args[2]||($m['_twp_stage']??'')!==$args[3]||(int)($m['_twp_reader_not_before']??0)>(int)$args[4]){continue;}}
                 else{
                     if(''===(string)($m['_twp_language']??'')){continue;}
+                    if (str_contains($sql, 'lang.meta_value NOT IN') && in_array($m['_twp_language'], array_slice($args,3,-2),true)) { continue; }
                     $visitor=($m['_twp_object_type']??'')==='miss'&&(int)($m['_twp_retranslate']??0)<=0&&(int)($m['_twp_retranslating']??0)<=0&&(int)($m['_twp_background_refresh']??0)<=0;
                     $background=strpos($sql,'NOT (kind.meta_value')!==false;
                     if($background===$visitor){continue;}
@@ -683,6 +684,8 @@ function untrailingslashit( string $value ): string {
 	return rtrim( $value, '/' );
 }
 
+function wp_salt( $scheme = 'auth' ): string { return 'test-site-salt-' . $scheme; }
+
 function wp_generate_uuid4(): string {
 	return '11111111-1111-4111-8111-111111111111';
 }
@@ -770,6 +773,7 @@ function get_option( $name, $default = false ) {
 }
 
 function update_option( $name, $value ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$name = wp_test_option_key( (string) $name );
 	if ( 'translatewp_proxy_state_schema_version' === $name ) {
 		$GLOBALS['wp_test_proxy_schema_version'] = $value;
@@ -790,6 +794,7 @@ function update_option( $name, $value ) {
 }
 
 function delete_option( $name ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$name = wp_test_option_key( (string) $name );
 	if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
 		$key = substr( $name, strlen( 'translatewp_' ) );
@@ -803,6 +808,7 @@ function delete_option( $name ) {
 
 if ( ! function_exists( 'add_option' ) ) {
 	function add_option( $name, $value = '', $deprecated = '', $autoload = null ): bool {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
         if ( ! empty( $GLOBALS['wp_test_option_insert_fail'] ) && 0 === strpos( $name, 'translatewp_lock_' ) ) { return false; }
 		unset( $deprecated, $autoload );
 		if ( false !== get_option( $name, false ) ) {
@@ -877,6 +883,7 @@ function wp_test_matches_meta( array $meta, array $query ): bool {
 }
 
 function get_posts( array $args = [] ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$GLOBALS['wp_test_get_posts_calls'][] = $args;
 	$post_type = $args['post_type'] ?? 'post';
 
@@ -1023,6 +1030,7 @@ function wp_insert_post( array $postarr, $wp_error = false ) {
 }
 
 function wp_update_post( array $postarr, $wp_error = false ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	unset( $wp_error );
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
@@ -1118,6 +1126,7 @@ function get_post_meta( $post_id, $key, $single = false ) {
 }
 
 function update_post_meta( $post_id, $key, $value ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) $post_id ) {
@@ -1139,6 +1148,7 @@ function update_post_meta( $post_id, $key, $value ) {
 }
 
 function delete_post_meta( $post_id, $key, $value = '' ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) $post_id ) {
@@ -1165,6 +1175,7 @@ function maybe_unserialize( $value ) {
 function wp_cache_set_posts_last_changed(): void { $GLOBALS['qm_last_changed']=1+($GLOBALS['qm_last_changed']??0); }
 
 function update_meta_cache( $type, $ids ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	unset( $type, $ids );
 	return true;
 }

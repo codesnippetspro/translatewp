@@ -786,11 +786,37 @@ class Indexer {
 	 * model takes, and the "Retranslate all" action. Returns the rows queued
 	 * and the languages touched.
 	 */
+	public function resume_settings_refill( array $cursor ): int {
+		$processed = 0;
+		$ids = $this->queue->row_ids_after( $cursor['after'], 16 );
+		foreach ( $this->queue->list_rows( $ids ) as $row ) {
+			if ( QueueExecution::expired() ) {
+				return $processed;
+			}
+			if ( in_array( $row['language'], $cursor['languages'], true ) ) {
+				$processed += $this->retranslate_pages( [ $row ], $cursor['languages'], false )['requeued'];
+			}
+			$cursor['after'] = (int) $row['id'];
+			update_option( KeepWarm::REBUILD_CURSOR, $cursor, false );
+		}
+		if ( count( $ids ) < 16 ) {
+			delete_option( KeepWarm::REBUILD_CURSOR );
+		} elseif ( end( $ids ) > $cursor['after'] ) {
+			$cursor['after'] = end( $ids );
+			update_option( KeepWarm::REBUILD_CURSOR, $cursor, false );
+		}
+		return $processed;
+	}
+
 	public function retranslate_everything( array $only_languages = [] ): array {
+		return $this->retranslate_pages( $this->page_rows(), $only_languages, true );
+	}
+
+	private function retranslate_pages( array $pages, array $only_languages, bool $advance_generation ): array {
 		$rows      = [];
 		$purges    = [];
 		$languages = [];
-		foreach ( $this->page_rows() as $row ) {
+		foreach ( $pages as $row ) {
 			$language = (string) $row['language'];
 			if ( ! IndexQueue::is_target_row_language( $language ) || ( $only_languages && ! in_array( $language, $only_languages, true ) ) ) {
 				continue;
@@ -820,7 +846,7 @@ class Indexer {
 				TranslationProxyDedupe::release_segments( $site_id, $purge['locale'], $hashes );
 			}
 		}
-		if ( $languages ) {
+		if ( $advance_generation && $languages ) {
 			TranslationStore::bump_cache_generation( array_keys( $languages ) );
 		}
 
@@ -907,7 +933,8 @@ class Indexer {
 		return 'unavailable' === $outcome ? 'open' : $outcome;
 	}
 
-	private function read_job_outcome( string $job_id, float $timeout ): string {
+	private function read_job_outcome( string $job_id, float $timeout, ?bool &$legacy_provider_ok = null ): string {
+		$legacy_provider_ok = false;
 		$status = SiteRequests::get( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/status', [], $timeout );
 		if ( is_wp_error( $status ) ) {
 			$data = (array) $status->get_error_data();
@@ -915,7 +942,7 @@ class Indexer {
 		} else {
 			$state = (string) ( $status['state'] ?? '' );
 			$state = in_array( $state, [ 'finished', 'completed' ], true ) ? 'done' : ( 'canceled' === $state ? 'cancelled' : $state );
-			if ( 'done' === $state || 'cancelled' === $state ) {
+			if ( in_array( $state, [ 'done', 'cancelled', 'failed' ], true ) ) {
 				$items = $status['items'] ?? null;
 				$reason = ProviderHold::reason( (string) ( $status['failure']['code'] ?? '' ) );
 				$watch = get_option( ProviderHold::WATCH_OPTION, [] );
@@ -925,15 +952,21 @@ class Indexer {
 					if ( is_wp_error( $events ) ) {
 						return 'unavailable';
 					}
+					$legacy_provider_ok = 'done' === $state && is_array( $events['events'] ?? null );
 					foreach ( $events['events'] ?? [] as $event ) {
 						if ( ( $event['detail']['jobId'] ?? '' ) !== $job_id || 'provider_error' !== ( $event['kind'] ?? '' ) ) {
 							continue;
 						}
+						$legacy_provider_ok = false;
 						$reason = ProviderHold::reason( (string) ( $event['reasonCode'] ?? '' ) );
 						if ( '' !== $reason ) {
 							break;
 						}
 					}
+				}
+				if ( in_array( $status['failure']['code'] ?? '', [ 'rate_limited', 'throttled' ], true ) ) {
+					$this->queue->retry_provider_job( $job_id, self::throttle_until( $status['failure'] ) );
+					$state = 'failed';
 				}
 				if ( $own && '' !== $reason ) {
 					if ( ( get_option( ProviderHold::WATCH_OPTION, [] )['job'] ?? null ) === $job_id ) {
@@ -963,8 +996,8 @@ class Indexer {
 		$hold = ProviderHold::state();
 		$watch = get_option( ProviderHold::WATCH_OPTION, [] );
 		if ( ! empty( $watch['job'] ) && ! ProviderHold::waiting() ) {
-			$outcome = $this->read_job_outcome( $watch['job'], self::JOB_POST_TIMEOUT_SECONDS );
-			if ( 'done' === $outcome ) {
+			$outcome = $this->read_job_outcome( $watch['job'], self::JOB_POST_TIMEOUT_SECONDS, $legacy_provider_ok );
+			if ( 'done' === $outcome || $legacy_provider_ok ) {
 				ProviderHold::verified();
 			} elseif ( in_array( $outcome, self::TERMINAL_JOB_OUTCOMES, true ) || time() >= $watch['started'] + 900 ) {
 				delete_option( ProviderHold::WATCH_OPTION );
@@ -1570,6 +1603,16 @@ class Indexer {
 			$language
 		);
 
+		$recheck = ! $probe && ProviderHold::needs_recheck();
+		if ( $recheck ) {
+			if ( ! empty( $batch_body['byok'] ) || \TranslateWP\Components\QuotaHandoff::wants_own_providers( $job_id ) ) {
+				$batch_body['items'] = array_slice( $batch_body['items'], 0, 1 );
+				$batch_body['retranslate'] = true;
+			} else {
+				delete_option( ProviderHold::WATCH_OPTION );
+				$recheck = false;
+			}
+		}
 		if ( $probe && empty( $batch_body['byok'] ) && ! \TranslateWP\Components\QuotaHandoff::wants_own_providers( $job_id ) ) {
 			SiteRequests::post( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/cancel', [] );
 			ProviderHold::reject( ProviderHold::state()['reason'] );
@@ -1589,14 +1632,19 @@ class Indexer {
 		);
 
 		if ( is_wp_error( $pushed ) ) {
+			$throttle = $repair ? self::throttle_error( $pushed ) : 0;
 			$provider_refusal = $this->hold_for_refusal( $pushed );
-			if ( $provider_refusal && ! QueueExecution::expired() ) {
+			if ( ( $provider_refusal || $throttle ) && ! QueueExecution::expired() ) {
 				SiteRequests::post( '/v1/translation/jobs/' . rawurlencode( $job_id ) . '/cancel', [] );
 			}
-			if ( $provider_refusal || $probe || QueueExecution::is_budget_error( $pushed ) ) {
+			if ( $throttle || $provider_refusal || $probe || QueueExecution::is_budget_error( $pushed ) ) {
 				foreach ( $language_rows as $row ) {
 					$this->release_row_claims( $language, $row['items'] );
-					$this->queue->release( (int) $row['id'] );
+					if ( $throttle ) {
+						$this->queue->defer_until( (int) $row['id'], $throttle );
+					} else {
+						$this->queue->release( (int) $row['id'] );
+					}
 					$result['released']++;
 				}
 				return;
@@ -1611,7 +1659,10 @@ class Indexer {
 			return;
 		}
 
-		if ( $probe ) {
+		if ( $probe || $recheck ) {
+			if ( $recheck ) {
+				ProviderHold::watch( $job_id );
+			}
 			foreach ( $language_rows as $row ) {
 				$this->release_row_claims( $language, $row['items'] );
 				$this->queue->release( (int) $row['id'] );
@@ -1625,7 +1676,7 @@ class Indexer {
 				'rows' => $language_rows,
 				'items' => $readiness_items,
 				'job_id' => $job_id,
-				'keep_payload' => ! empty( $job['byok'] ) || ! empty( $batch_body['byok'] ),
+				'keep_payload' => $repair || ! empty( $job['byok'] ) || ! empty( $batch_body['byok'] ),
 			]
         );
 		if ( ! empty( $batch_body['byok'] ) || ! empty( $job['byok'] ) ) {
@@ -1701,6 +1752,7 @@ class Indexer {
 			'released'  => 0,
 		];
 
+		ProviderHold::refresh();
 		if ( ! SiteConnection::is_connected() || ProviderHold::state() || ProviderHold::watching() ) {
 			return $result;
 		}
@@ -2028,6 +2080,17 @@ class Indexer {
 		);
 	}
 
+	private static function throttle_until( array $detail ): int {
+		return time() + min( 21600, max( 1, (int) ( $detail['retryAfterSeconds'] ?? 60 ) ) );
+	}
+
+	private static function throttle_error( \WP_Error $error ): int {
+		$data = (array) $error->get_error_data();
+		$payload = (array) ( $data['payload'] ?? [] );
+		return in_array( $payload['code'] ?? '', [ 'rate_limited', 'throttled' ], true )
+			|| ( 429 === (int) ( $data['status'] ?? 0 ) && empty( $payload['code'] ) ) ? self::throttle_until( $payload ) : 0;
+	}
+
 	private function hold_for_refusal( \WP_Error $error ): bool {
 		$data = $error->get_error_data();
 		$code = (string) ( $data['payload']['code'] ?? $data['payload']['error'] ?? '' );
@@ -2088,10 +2151,12 @@ class Indexer {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$throttle = $repair ? self::throttle_error( $response ) : 0;
 			return [
+				'retryAt' => $throttle,
 				'id'     => '',
 				'reason' => self::job_failure_reason( $response ),
-				'deferred' => $this->hold_for_refusal( $response ) || $probe || QueueExecution::is_budget_error( $response ),
+				'deferred' => $throttle || $this->hold_for_refusal( $response ) || $probe || QueueExecution::is_budget_error( $response ),
 			];
 		}
 

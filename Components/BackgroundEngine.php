@@ -4,6 +4,7 @@ namespace TranslateWP\Components;
 
 use TranslateWP\Functionality\CronFallback;
 use TranslateWP\Functionality\Indexer;
+use TranslateWP\Functionality\KeepWarm;
 use TranslateWP\Functionality\LexiconChanges;
 use TranslateWP\Functionality\ReadinessReconcile;
 
@@ -185,6 +186,7 @@ class BackgroundEngine {
 				}
 				$indexer = new Indexer( '', '', null, null, false );
 				$budget = QueueExecution::budget();
+				ProviderHold::refresh();
 				$indexer->poll_provider_probe();
 				if ( ProviderHold::waiting() ) {
 					$response = self::snapshot( 'more' );
@@ -198,10 +200,16 @@ class BackgroundEngine {
 					add_option( IndexQueue::NORMALIZE_CURSOR_OPTION, 0, '', false );
 					( new IndexQueue() )->normalize_legacy_rows();
 				}
-				$total_rows = $pages && self::service_reads() ? $indexer->step_read( $budget, $pages ) : 0;
+				$inputs = self::apply_inputs();
+				if ( $inputs['rows'] ) {
+					self::$trace_phase = 'maintenance';
+				}
+				self::$step_work = null;
+				$total_rows = ! QueueExecution::expired() && $pages && self::service_reads() ? $indexer->step_read( $budget, $pages ) : 0;
 				if ( $total_rows > 0 ) {
 					self::$trace_phase = 'read';
 				}
+				$total_rows += $inputs['rows'];
 				$queue = new IndexQueue();
 				$queue->reclaim_stale();
 				$work = [
@@ -219,7 +227,7 @@ class BackgroundEngine {
 						break;
 					}
 					self::$trace_rows = 0;
-					$work = self::phase_work( $queue, $selection, $refill_pending );
+					$work = self::phase_work( $queue, $selection, $refill_pending, $inputs['languages'] );
 					$streak = (int) get_option( self::VISITOR_STREAK_OPTION, 0 );
 					$visitor_turn = ! $work['background'] || $streak < self::MAX_VISITOR_STREAK;
 					$is_visitor = false;
@@ -318,6 +326,9 @@ class BackgroundEngine {
 					'v' => 1,
 				];
 				$next_due = ProviderHold::waiting() ? max( time() + 15, ProviderHold::state()['due'] ) : (int) ( self::work_state()['next'] ?? 0 );
+				if ( ! $pending['visitor'] && $inputs['due'] > time() && ! $total_rows && ! ProviderHold::waiting() ) {
+					$next_due = $inputs['due'];
+				}
 				if ( 'more' === $response['state'] && $next_due > time() ) {
 					$response['nextDue'] = $next_due;
 				}
@@ -420,12 +431,13 @@ class BackgroundEngine {
 		}
 	}
 
-	private static function phase_work( IndexQueue $queue, array &$selection, bool $refill_pending ): array {
+	private static function phase_work( IndexQueue $queue, array &$selection, bool $refill_pending, array $blocked_languages ): array {
 		$visitor_ready = $selection['visitor_ready'] ??= ReadinessReconcile::step_rows( true );
 		$background_ready = $selection['background_ready'] ??= ReadinessReconcile::step_rows();
 		foreach ( [ 'visitor_push', 'background_push' ] as $kind ) {
 			if ( ! isset( $selection[ $kind ] ) ) {
-				$selection[ $kind ] = $queue->engine_rows( $kind, QueueMetadata::MAX_ROWS );
+				$excluded = 'background_push' === $kind ? $blocked_languages : [];
+				$selection[ $kind ] = in_array( '*', $excluded, true ) ? [] : $queue->engine_rows( $kind, QueueMetadata::MAX_ROWS, 0, null, $excluded );
 				$selection[ $kind . '_more' ] = count( $selection[ $kind ] ) === QueueMetadata::MAX_ROWS;
 			}
 		}
@@ -463,8 +475,64 @@ class BackgroundEngine {
 		self::schedule_wake();
 	}
 
-	public static function run_deferred_task(): bool {
+	private static function apply_inputs(): array {
+		( new LexiconChanges( '', '', false ) )->seed();
+		$hooks = [ KeepWarm::SETTINGS_DEBOUNCE_HOOK, KeepWarm::LEXICON_DEBOUNCE_HOOK, KeepWarm::VERSIONED_REFILL_HOOK ];
+		$blocked = [];
+		$rows = 0;
+		$due = 0;
+		foreach ( self::scheduled_tasks() as $event ) {
+			if ( ! in_array( $event['hook'], $hooks, true ) ) {
+				continue;
+			}
+			if ( $event['at'] <= time() ) {
+				if ( ! QueueExecution::expired() && wp_unschedule_event( $event['at'], $event['hook'], $event['args'] ) ) {
+					do_action( $event['hook'], ...$event['args'] );
+				}
+			} else {
+				$due = $due ? min( $due, $event['at'] ) : $event['at'];
+				$languages = [ '*' ];
+				if ( KeepWarm::SETTINGS_DEBOUNCE_HOOK === $event['hook'] ) {
+					$languages = get_option( KeepWarm::PENDING_LANGUAGES_OPTION, [] );
+				} elseif ( KeepWarm::LEXICON_DEBOUNCE_HOOK === $event['hook'] ) {
+					$languages = get_option( KeepWarm::LEXICON_LANGUAGES, [ '*' ] );
+				}
+				$blocked = array_merge( $blocked, (array) $languages );
+			}
+		}
+		while ( ! QueueExecution::expired() && self::run_deferred_task( $hooks ) ) {
+			continue;
+		}
+		foreach ( [ LexiconChanges::SEED_CURSOR_OPTION, KeepWarm::REBUILD_CURSOR, IndexQueue::DEFERRED_REFILLS_OPTION ] as $option ) {
+			while ( ! QueueExecution::expired() && false !== ( $before = get_option( $option, false ) ) ) {
+				if ( LexiconChanges::SEED_CURSOR_OPTION === $option ) {
+					LexiconChanges::run_seed_batch();
+				} elseif ( KeepWarm::REBUILD_CURSOR === $option ) {
+					$rows += ( new Indexer( '', '', null, null, false ) )->resume_settings_refill( $before );
+				} else {
+					( new IndexQueue() )->resume_deferred_refills();
+				}
+				if ( get_option( $option, false ) === $before ) {
+					return [
+						'languages' => [ '*' ],
+						'due' => time() + 15,
+						'rows' => $rows,
+					];
+				}
+			}
+		}
+		return [
+			'languages' => array_values( array_unique( $blocked ) ),
+			'due' => $due,
+			'rows' => $rows,
+		];
+	}
+
+	public static function run_deferred_task( ?array $only_hooks = null ): bool {
 		$tasks = (array) get_option( self::TASKS_OPTION, [] );
+		if ( null !== $only_hooks ) {
+			$tasks = array_filter( $tasks, static fn( array $task ): bool => in_array( $task['hook'], $only_hooks, true ) );
+		}
 		$key = key( $tasks );
 		$task = null !== $key ? $tasks[ $key ] : null;
 		if ( ! is_array( $task ) || ! in_array( $task['hook'] ?? '', \TranslateWP\Functionality\KeepWarm::BACKGROUND_HOOKS, true ) ) {
@@ -536,6 +604,7 @@ class BackgroundEngine {
 			+ (int) ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) )
 			+ (int) ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) )
 			+ (int) ( ! get_option( LexiconChanges::SEEDED_OPTION, false ) )
+			+ (int) ( false !== get_option( KeepWarm::REBUILD_CURSOR, false ) )
 			+ (int) ( ! get_option( Indexer::SPINE_CHECKED_OPTION, false ) )
 			+ (int) (bool) get_option( Indexer::SPINE_PENDING_OPTION, false )
 			+ (int) TranslationStore::has_pending_work()

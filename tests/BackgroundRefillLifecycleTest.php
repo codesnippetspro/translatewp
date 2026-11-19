@@ -48,11 +48,13 @@ if ( in_array( $case, [ 'seed', 'all' ], true ) ) {
     $changes->seed();
     $scans = array_filter( $GLOBALS['wp_test_get_posts_calls'], static fn( array $r ): bool => IndexQueue::POST_TYPE === ( $r['post_type'] ?? '' ) );
     check_lifecycle( [] === $scans, 'Upgrade init does not scan translation rows' );
+    $initial_generation = \TranslateWP\Components\TranslationStore::cache_generation_for( 'it' );
     $changes->run_seed_batch();
     $first = count( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) );
     check_lifecycle( $first > 0 && $first < 25, 'The migration advances one bounded chunk' );
     $restarted = new LexiconChanges();
     for ( $i = 0; $i < 10; ++$i ) { $restarted->run_seed_batch(); }
+    check_lifecycle( $initial_generation + 1 === \TranslateWP\Components\TranslationStore::cache_generation_for( 'it' ), 'A seed of 25 rows across batches bumps Italian once' );
     check_lifecycle( 25 === count( array_filter( $queue->list_rows(), static fn( array $r ): bool => IndexQueue::STATUS_PENDING === $r['status'] ) ), 'An interrupted migration resumes and queues the remaining rows' );
 }
 if ( in_array( $case, [ 'late', 'all' ], true ) ) {
