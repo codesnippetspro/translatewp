@@ -106,6 +106,15 @@ class Menus {
             [ $this, 'render_dashboard_page' ]
         );
 
+		add_submenu_page(
+			'translatewp',
+			esc_html__( 'Support', 'translate' ),
+			esc_html__( 'Support', 'translate' ),
+			'manage_options',
+			'translatewp-support',
+			[ $this, 'render_dashboard_page' ]
+		);
+
 		$this->add_upgrade_menu_link();
     }
 
@@ -113,6 +122,7 @@ class Menus {
         remove_submenu_page( 'translatewp', 'translatewp-seo' );
         remove_submenu_page( 'translatewp', 'translatewp-lexicon' );
         remove_submenu_page( 'translatewp', 'translatewp-settings' );
+		remove_submenu_page( 'translatewp', 'translatewp-support' );
     }
 
     public function redirect_to_permitted_page() {

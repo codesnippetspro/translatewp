@@ -42,7 +42,7 @@ describe('Settings page pages', () =>
     it('registers the six settings pages and the two dashboard pages by their ids', () =>
     {
         expect(SETTINGS_PAGES.map(page => page.name)).toEqual(['languages', 'translation', 'switcher', 'connection', 'advanced', 'ai-model']);
-        expect(DASHBOARD_PAGES.map(page => page.name)).toEqual(['overview', 'indexing', 'support']);
+        expect(DASHBOARD_PAGES.map(page => page.name)).toEqual(['overview', 'indexing']);
     });
 
     it('opens the page named in the hash', async () =>
