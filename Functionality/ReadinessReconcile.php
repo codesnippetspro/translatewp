@@ -14,88 +14,73 @@ class ReadinessReconcile {
 	public const HOOK = 'translatewp_readiness_reconcile';
 	public const CHECK_TRANSIENT = 'translatewp_readiness_reconcile_check';
 	public const CURSOR_OPTION = 'translatewp_readiness_reconcile_cursor';
-	public const REDUCED_CURSOR_OPTION = 'translatewp_reduced_readiness_cursor';
+	public const VISITOR_CURSOR_OPTION = 'translatewp_visitor_readiness_cursor';
+	public const STEP_CURSOR_OPTION = 'translatewp_step_readiness_cursor';
 	public const MAX_COLD_ATTEMPTS = 3;
 	public const MAX_DEAD_ATTEMPTS = 3;
 
-	private const CHECK_SECONDS = 600;
-	private const CATCH_UP_SECONDS = 60;
-	// A scheduled pass proves a sixth of the site, bounded by time rather than
-	// by count: as many look-ups as fit in forty seconds, every minute. A site
-	// is walked in six passes while the service answers within the budget.
-	private const PASS_SECONDS = 40;
 	private const GRACE_SECONDS = 120;
 	private const DEAD_BACKOFF_SECONDS = 600;
 
+	private ?int $step_row_id = null;
 	private Indexer $indexer;
 	private $lookup;
 	private $clock;
 
 	public function __construct( $plugin_name = '', $plugin_version = '', ?Indexer $indexer = null, ?callable $lookup = null, ?callable $clock = null, bool $register_hooks = true ) {
-		unset( $plugin_name, $plugin_version );
+		unset( $plugin_name, $plugin_version, $register_hooks );
 		$this->indexer = $indexer ?? new Indexer( '', '', null, null, false );
 		$this->lookup  = $lookup;
 		$this->clock   = $clock ?? 'time';
-		if ( $register_hooks ) {
-			add_action( 'init', [ $this, 'maybe_schedule' ] );
-			add_action( self::HOOK, [ $this, 'run' ] );
-			add_action( QueueExecution::READINESS_HOOK, [ $this, 'reduced_run' ] );
-		}
 	}
 
 	public function maybe_schedule(): void {
-		if ( ! SiteConnection::is_connected() || false !== get_transient( self::CHECK_TRANSIENT ) ) {
-			return;
-		}
-		// How often an unattended site re-checks. A first pass has thousands of
-		// segments to prove, so a site with work outstanding may want this far
-		// shorter than the steady-state ten minutes.
-		// A site larger than one pass is walked a pass a minute until it is
-		// covered; a site one pass covers keeps the steady ten minutes.
-		$batches  = TranslationReadiness::batch_count( $this->indexer->page_rows() );
-		$steady   = $batches <= self::batches_per_pass( $batches ) ? self::CHECK_SECONDS : self::CATCH_UP_SECONDS;
-		$interval = max( 5, (int) apply_filters( 'translatewp_readiness_reconcile_interval', $steady ) );
-		set_transient( self::CHECK_TRANSIENT, 1, $interval );
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time(), self::HOOK );
-		}
+		\TranslateWP\Components\BackgroundEngine::install();
 	}
 
 	public function run(): void {
-		$ran = QueueExecution::run(
+		QueueExecution::run(
             function (): void {
-				$this->run_unlocked();
-			}
+                $this->step_run( QueueExecution::budget() );
+            }
         );
-		if ( ! $ran && ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time() + self::CATCH_UP_SECONDS, self::HOOK );
-		}
 	}
 
-	public function reduced_run( ReadinessBudget $budget ): void {
-		if ( SiteConnection::is_connected() && $budget->remaining_seconds() > 0 ) {
-			$this->reconcile( 0, $budget );
+	public function step_run( ReadinessBudget $budget, bool $visitor_only = false ): void {
+		$rows = $this->indexer->page_rows();
+		if ( $visitor_only ) {
+			$queue = new IndexQueue();
+			$rows = array_values( array_filter( $rows, static fn ( array $row ): bool => 'miss' === $row['object_type'] && IndexQueue::STATUS_DONE === $row['status'] && ! $queue->requires_background_refresh( $row['id'] ) && ! $row['translated'] ) );
 		}
-	}
-
-	private function run_unlocked(): void {
-		if ( ! SiteConnection::is_connected() ) {
+		if ( ! SiteConnection::is_connected() || ! $rows || $budget->remaining_seconds() <= 0 ) {
 			return;
 		}
-		// Unattended, one batch per ten minutes would take half a day to walk a
-		// large site; the scheduled pass proves a share of it each time.
-		$batches = TranslationReadiness::batch_count( $this->indexer->page_rows() );
-		$per_pass = static fn ( int $value ): int => max( $value, self::batches_per_pass( $batches ) );
-		$seconds  = static fn ( float $value ): float => $value > 0 ? $value : (float) self::PASS_SECONDS;
-		add_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
-		add_filter( 'translatewp_readiness_pass_seconds', $seconds );
-		try {
-			$result = $this->reconcile( (int) get_option( self::CURSOR_OPTION, 0 ), new ReadinessBudget( self::PASS_SECONDS ) );
-		} finally {
-			remove_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
-			remove_filter( 'translatewp_readiness_pass_seconds', $seconds );
+		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
+		$position = (array) get_option( $option, [] );
+		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) ) % count( $rows );
+		foreach ( $rows as $index => $row ) {
+			if ( (int) ( $position['row'] ?? 0 ) === (int) $row['id'] ) {
+				$offset = 0 < (int) ( $position['cursor'] ?? 0 ) ? $index : ( $index + 1 ) % count( $rows );
+				break;
+			}
 		}
-		update_option( self::CURSOR_OPTION, (int) ( $result['cursor'] ?? 0 ) );
+		$this->step_row_id = (int) $rows[ $offset ]['id'];
+		$cursor = (int) ( $position['row'] ?? 0 ) === $this->step_row_id ? (int) ( $position['cursor'] ?? 0 ) : 0;
+		try {
+			$result = $this->reconcile( $cursor, $budget );
+		} finally {
+			$this->step_row_id = null;
+		}
+		$next_cursor = (int) ( $result['cursor'] ?? 0 );
+		update_option(
+            self::STEP_CURSOR_OPTION,
+            [
+				'offset' => 0 === $next_cursor ? ( $offset + 1 ) % count( $rows ) : $offset,
+				'row' => (int) $rows[ $offset ]['id'],
+				'cursor' => $next_cursor,
+			],
+            false
+        );
 	}
 
 	public static function batches_per_pass( int $batches ): int {
@@ -126,10 +111,8 @@ class ReadinessReconcile {
 		$budget = $budget ?? new ReadinessBudget();
 		$jobs = $this->indexer->poll_remembered_jobs( $budget );
 		$rows   = $this->indexer->page_rows();
-		if ( QueueExecution::is_reduced() && $rows ) {
-			$offset = max( 0, (int) get_option( self::REDUCED_CURSOR_OPTION, 0 ) ) % count( $rows );
-			update_option( self::REDUCED_CURSOR_OPTION, $offset + 1, false );
-			$rows = [ $rows[ $offset ] ];
+		if ( null !== $this->step_row_id ) {
+			$rows = array_values( array_filter( $rows, fn ( array $row ): bool => (int) $row['id'] === $this->step_row_id ) );
 		}
 		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
 		$now    = (int) call_user_func( $this->clock );
@@ -191,7 +174,7 @@ class ReadinessReconcile {
 		];
 		$result['requeued'] = $healed['requeued'];
 		$result['failed']   = $healed['failed'];
-		$result['retried']  = QueueExecution::is_reduced() ? 0 : $this->indexer->retry_dead_automatically( self::MAX_DEAD_ATTEMPTS, self::DEAD_BACKOFF_SECONDS, $now );
+		$result['retried']  = $this->indexer->retry_dead_automatically( self::MAX_DEAD_ATTEMPTS, self::DEAD_BACKOFF_SECONDS, $now );
 		return $result;
 	}
 }

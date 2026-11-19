@@ -34,7 +34,7 @@ if ( in_array( $case, [ 'visitor', 'all' ], true ) ) {
     $queue->mark_translated( [ $id ] );
     update_option( Indexer::REPAIR_RETRY_OPTION, time() + 7200, false );
     lifecycle_row( $queue, 321 );
-    $indexer->reduced_push( new ReadinessBudget() );
+    $indexer->step_push( new ReadinessBudget() );
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 1 === count( $creates ), 'A visitor miss after refill does not wait for the repair backoff' );
     check_lifecycle( ! isset( $creates[0]['body']['purpose'] ), 'A visitor miss after refill has no background purpose' );
@@ -61,24 +61,18 @@ if ( in_array( $case, [ 'late', 'all' ], true ) ) {
         $started = 0;
         add_action( $hook, static function () use ( &$started ): void { ++$started; } );
         wp_schedule_single_event( time() - 120, $hook );
-        $cron = new CronFallback();
-        check_lifecycle( $cron->is_behind(), 'A late refill is counted even without push rows' );
-        $cron->run_maintenance();
-        check_lifecycle( 1 === $started, 'Worker maintenance starts a late refill without WP-Cron' );
-        wp_schedule_single_event( time() - 120, $hook );
-        ( new Indexer( '', '', null, null, false ) )->reduced_read( new ReadinessBudget() );
-        check_lifecycle( 2 === $started, 'The reduced read phase starts the same late refill without WP-Cron' );
+        \TranslateWP\Components\QueueExecution::run( static function (): void { CronFallback::run_refill_maintenance(); } );
+        check_lifecycle( 1 === $started, 'The shared maintenance phase resumes a late refill without WP-Cron' );
     }
 }
+
 if ( in_array( $case, [ 'kick', 'all' ], true ) ) {
-    [ $queue, $indexer ] = lifecycle_fixture();
-    wp_schedule_single_event( time() - 120, Indexer::DRAIN_HOOK );
-    $indexer->kick_due_drain();
-    $first = get_option( Indexer::LAST_KICK_OPTION );
-    check_lifecycle( (int) $first >= time() - 1, 'An overdue kick records its persisted gate' );
-    $indexer->kick_due_drain();
-    check_lifecycle( $first === get_option( Indexer::LAST_KICK_OPTION ) && 1 === count( $GLOBALS['wp_test_remote_request_calls'] ), 'Repeated requests send only one kick per minute' );
+    lifecycle_fixture();
+    for ( $i = 0; $i < 10; ++$i ) { Indexer::schedule_drain(); }
+    check_lifecycle( false !== wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::WAKE_HOOK ), 'Queue producers schedule a service wake' );
+    check_lifecycle( [] === $GLOBALS['wp_test_remote_request_calls'], 'Queue producers never call their own site' );
 }
+
 if ( in_array( $case, [ 'reread', 'all' ], true ) ) {
     [ $queue ] = lifecycle_fixture();
     $row = [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/page/', 'page_title' => '', 'priority' => 10 ];
@@ -131,7 +125,7 @@ if ( in_array( $case, [ 'reader', 'all' ], true ) ) {
     for ( $i = 0; $i < 4; ++$i ) {
         delete_option( Indexer::NEXT_READER_OPTION );
         delete_post_meta( $id, '_twp_reader_not_before' );
-        $indexer->reduced_read( new ReadinessBudget() );
+        $indexer->step_read( new ReadinessBudget() );
         check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'An unreadable TLS page remains pending beyond the terminal retry limit' );
         $next = (int) get_post_meta( $id, '_twp_reader_not_before', true );
         check_lifecycle( $next > time() && $next > $last, 'TLS retries persist an increasing backoff' );
@@ -141,13 +135,12 @@ if ( in_array( $case, [ 'reader', 'all' ], true ) ) {
 if ( in_array( $case, [ 'mode', 'all' ], true ) ) {
     lifecycle_fixture();
     update_option( Indexer::READER_FAILURE_OPTION, 'page_tls_failed', false );
-    set_transient( \TranslateWP\Components\LoopbackKick::FAILURE_TRANSIENT, 'certificate', 300 );
-    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'cannot finish a page response' ), 'The reader notice says work is waiting when response finishing is unavailable' );
-    if ( ! function_exists( 'fastcgi_finish_request' ) ) { function fastcgi_finish_request(): bool { return true; } }
-    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'reduced mode' ), 'The reader notice also names reduced mode on a supported server' );
+    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'HTTPS certificate' ) && false !== strpos( CronFallback::notice_message(), 'Indexing' ), 'The reader notice names the cause and browser fallback' );
+    check_lifecycle( ! method_exists( CronFallback::class, 'run_after_flush' ), 'No queue work remains after visitor responses' );
 }
+
 if ( in_array( $case, [ 'routing', 'all' ], true ) ) {
-    foreach ( [ 'reduced', 'worker', 'cron', 'admin' ] as $driver ) {
+    foreach ( [ 'service', 'cron', 'admin' ] as $driver ) {
       foreach ( [ true, false ] as $echo ) {
         [ $queue, $indexer ] = lifecycle_fixture();
         $id = lifecycle_row( $queue, 321 );
@@ -156,10 +149,10 @@ if ( in_array( $case, [ 'routing', 'all' ], true ) ) {
         $queue->retry_failed();
         check_lifecycle( $queue->list_rows()[0]['retranslating'], 'Retrying a settled refill restarts its completion tracking' );
         if ( ! $echo ) { $GLOBALS['wp_test_translation_job_responses'] = [ [ 'response' => [ 'code' => 201 ], 'body' => wp_json_encode( [ 'jobId' => '00000000-0000-4000-8000-000000000099' ] ) ] ]; }
-        if ( 'reduced' === $driver ) { $indexer->reduced_push( new ReadinessBudget() ); }
-        elseif ( 'worker' === $driver ) { $indexer->drain_now(); }
-        elseif ( 'cron' === $driver ) { $indexer->drain_tick(); }
-        else { $indexer->drain_rows( [ $id ] ); }
+        update_option( \TranslateWP\Components\BackgroundEngine::PHASE_OPTION, 1, false );
+        if ( 'service' === $driver ) { \TranslateWP\Components\BackgroundEngine::service_step( [] ); }
+        elseif ( 'cron' === $driver ) { \TranslateWP\Components\BackgroundEngine::cron(); }
+        else { ( new \TranslateWP\Functionality\Endpoints\Background() )->admin_step( new WP_REST_Request( 'POST', '' ) ); }
         $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
         check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'Retried refill purpose survives progress settlement through the ' . $driver . ' driver' );
         if ( ! $echo ) {
@@ -171,11 +164,10 @@ if ( in_array( $case, [ 'routing', 'all' ], true ) ) {
 }
 if ( in_array( $case, [ 'failure-log', 'all' ], true ) ) {
     lifecycle_fixture();
-    $GLOBALS['wp_test_loopback_response'] = new WP_Error( 'http_request_failed', 'cURL error 60: certificate verification failed' );
-    for ( $i = 0; $i < 10; ++$i ) { \TranslateWP\Components\LoopbackKick::fire(); }
-    $errors = array_filter( \TranslateWP\Components\ActionLog::entries(), static fn( array $r ): bool => false !== strpos( $r['message'], 'could not call itself' ) );
-    check_lifecycle( 1 === count( $errors ), 'Repeated unchanged loopback failures do not flood the action log' );
+    for ( $i = 0; $i < 10; ++$i ) { Indexer::schedule_drain(); }
+    check_lifecycle( [] === \TranslateWP\Components\ActionLog::entries(), 'Scheduling a service step cannot flood the log with self-request failures' );
 }
+
 if ( in_array( $case, [ 'rewarm-routing', 'all' ], true ) ) {
     [ $queue, $indexer ] = lifecycle_fixture();
     $row = [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/page/', 'page_title' => '', 'language' => 'it', 'priority' => 10, 'payload' => wp_json_encode( [ [ 'groupId' => 'g', 'markerPayload' => '⟪item_0001⟫Shop' ] ] ) ];
@@ -183,8 +175,8 @@ if ( in_array( $case, [ 'rewarm-routing', 'all' ], true ) ) {
     $queue->claim_rows( [ $id ] ); $queue->complete( $id ); $queue->mark_translated( [ $id ] );
     $queue->enqueue_rewarm( [ $row ] );
     $GLOBALS['wp_test_remote_get_response'] = [ 'response' => [ 'code' => 200 ], 'body' => '<html><body><p>Our shop</p></body></html>' ];
-    $indexer->reduced_read( new ReadinessBudget() );
-    $indexer->reduced_push( new ReadinessBudget() );
+    $indexer->step_read( new ReadinessBudget() );
+    $indexer->step_push( new ReadinessBudget() );
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'A page rewarm keeps background routing through extraction and reduced pushing' );
 }
@@ -207,7 +199,7 @@ if ( in_array( $case, [ 'crawler-routing', 'all' ], true ) ) {
     $id = $rows[0]['id'];
     $queue->claim_rows( [ $id ] );
     $queue->append_extraction( $id, [ [ 'groupId' => 'g', 'markerPayload' => '⟪item_0001⟫Our shop' ] ], true );
-    $indexer->reduced_push( new ReadinessBudget() );
+    $indexer->step_push( new ReadinessBudget() );
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'Crawler refill followed by admin extraction and reduced push keeps background purpose' );
 }
@@ -324,7 +316,7 @@ if ( in_array( $case, [ 'legacy-cart', 'all' ], true ) ) {
     foreach ( $queue->list_rows() as $row ) {
         check_lifecycle( IndexQueue::STAGE_PUSH === $row['stage'] && $row['retranslate'], 'A fresh source read advances each legacy pending Cart row without losing its force flag' );
     }
-    $indexer->drain_now();
+    $indexer->drain_tick();
     $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
     check_lifecycle( 3 === count( $creates ), 'All three legacy Cart languages open their background jobs after the fresh read' );
     foreach ( $creates as $job ) { check_lifecycle( 'background_refresh' === ( $job['body']['purpose'] ?? '' ) && 5 === $job['body']['cacheVersions']['lexiconVersion'], 'Legacy Cart work uses acknowledged background routing at the new revision' ); }
@@ -333,43 +325,30 @@ if ( in_array( $case, [ 'legacy-cart', 'all' ], true ) ) {
     check_lifecycle( [] === ( $GLOBALS['wp_test_remote_get_urls'] ?? [] ), 'Language rows reuse the completed source read rather than fetching Cart again' );
 }
 if ( in_array( $case, [ 'lost-drain', 'all' ], true ) ) {
-    foreach ( [ 'cron', 'worker' ] as $driver ) {
-        [ $queue, $indexer ] = lifecycle_fixture();
-        $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 8, 'url' => 'https://example.com/cart/', 'page_title' => 'Cart', 'language' => 'it', 'priority' => 100 ] ] );
-        $id = $queue->list_rows()[0]['id'];
-        update_post_meta( $id, '_twp_retranslate', 1 ); update_post_meta( $id, '_twp_retranslating', 1 );
-        update_post_meta( $id, '_twp_translated_at', 1795008977 );
-        wp_schedule_single_event( time() - 60, Indexer::DRAIN_HOOK );
-        wp_unschedule_event( time() - 60, Indexer::DRAIN_HOOK );
-        $database = $GLOBALS['wpdb'];
-        $GLOBALS['wpdb'] = new class() extends WP_Testwpdb { public function get_var( string $query ) { return '0'; } };
-        try { if ( 'cron' === $driver ) { $indexer->drain_tick(); } else { $indexer->drain_now(); } }
-        finally { $GLOBALS['wpdb'] = $database; }
-        check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'A consumed ' . $driver . ' drain retries after lock contention' );
-        wp_unschedule_event( (int) wp_next_scheduled( Indexer::DRAIN_HOOK ), Indexer::DRAIN_HOOK );
-		$hint = get_option( IndexQueue::DUE_HINT_OPTION );
-		$hint['nextAt'] = time() - 1;
-		update_option( IndexQueue::DUE_HINT_OPTION, $hint, false );
-        $cron = new CronFallback();
-        check_lifecycle( $cron->is_behind(), 'Pending extraction is detected when its drain event is missing' );
-        \TranslateWP\Components\LoopbackKick::acknowledge();
-        $cron->maybe_run_on_front_end();
-        check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'A visitor restores the missing drain schedule without processing queue work' );
-        check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'] && [] === ( $GLOBALS['wp_test_remote_posts'] ?? [] ) && [] === ( $GLOBALS['wp_test_remote_get_urls'] ?? [] ), 'Missing-event recovery schedules background work without draining before the response' );
-    }
+    [ $queue ] = lifecycle_fixture(); lifecycle_row( $queue, 321 );
+    $database = $GLOBALS['wpdb'];
+    $GLOBALS['wpdb'] = new class() extends WP_Testwpdb { public function get_var( string $query ) { return '0'; } };
+    try { $response = \TranslateWP\Components\BackgroundEngine::step(); }
+    finally { $GLOBALS['wpdb'] = $database; }
+    check_lifecycle( 'busy' === $response['state'], 'A contended execution lock answers busy without consuming a row' );
+    check_lifecycle( false !== wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ), 'Lock contention leaves fallback recovery scheduled' );
+    check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'A busy step preserves the pending row' );
 }
+
 if ( in_array( $case, [ 'deferred-recovery', 'all' ], true ) ) {
-    [ $queue ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 );
+    [ $queue, $indexer ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 );
     $queue->defer_until( $id, time() + 7200 );
-    check_lifecycle( ! $queue->has_due_work() && ! ( new CronFallback() )->is_behind(), 'Missing-event recovery respects future retry backoff and stays quiet' );
+    $indexer->drain_tick();
+    check_lifecycle( [] === $GLOBALS['wp_test_remote_posts'], 'The push phase respects a future retry backoff' );
 }
+
 if ( in_array( $case, [ 'stale-claim-recovery', 'all' ], true ) ) {
-    [ $queue ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 ); $queue->claim_rows( [ $id ] );
-    check_lifecycle( ! $queue->has_due_work(), 'Missing-event recovery does not steal a fresh claim' );
+    [ $queue, $indexer ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 ); $queue->claim_rows( [ $id ] );
+    $indexer->drain_tick();
+    check_lifecycle( [] === $GLOBALS['wp_test_remote_posts'], 'The next phase does not steal a fresh claim' );
     update_post_meta( $id, '_twp_claimed_at', time() - IndexQueue::STALE_CLAIM_SECONDS - 1 );
-	$result = get_option( IndexQueue::DUE_RESULT_OPTION );
-	$result['checkedAt'] = time() - IndexQueue::STALE_CLAIM_SECONDS - 1;
-	update_option( IndexQueue::DUE_RESULT_OPTION, $result, false );
-    check_lifecycle( $queue->has_due_work() && ( new CronFallback() )->is_behind(), 'An abandoned claim can restore its missing worker event' );
+    $indexer->drain_tick();
+    check_lifecycle( 1 === count( array_filter( $GLOBALS['wp_test_remote_posts'], static fn ( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) ), 'An abandoned claim can be recovered by the next phase' );
 }
+
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";

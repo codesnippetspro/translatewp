@@ -446,21 +446,25 @@ class TranslationStore {
 	 *
 	 * @return array{resolved:int,remaining:int}
 	 */
-	public static function run_backfill_batch( int $limit, ?callable $lookup = null ): array {
+	public static function run_backfill_batch( int $limit, ?callable $lookup = null, ?array $page_keys = null ): array {
 		$result = [
 			'resolved' => 0,
 			'remaining' => count( self::read_work() ),
 		];
 		QueueExecution::run(
-            static function () use ( &$result, $limit, $lookup ): void {
-				$result = self::run_backfill_batch_unlocked( $limit, $lookup );
+            static function () use ( &$result, $limit, $lookup, $page_keys ): void {
+				$result = self::run_backfill_batch_unlocked( $limit, $lookup, $page_keys );
 			}
         );
 		return $result;
 	}
 
-	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup ): array {
-		$batch    = array_slice( self::read_work(), 0, max( 1, $limit ), true );
+	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup, ?array $page_keys ): array {
+		$work = self::read_work();
+		if ( null !== $page_keys ) {
+			$work = array_filter( $work, static fn ( array $item ): bool => in_array( TranslationUrl::canonicalize( $item['url'] ) . '|' . $item['locale'], $page_keys, true ) );
+		}
+		$batch = array_slice( $work, 0, max( 1, $limit ), true );
 		$resolved = 0;
 		$done     = [];
 		$carry    = [];
@@ -476,7 +480,7 @@ class TranslationStore {
 				continue;
 			}
 
-			if ( QueueExecution::is_reduced() ) {
+			if ( QueueExecution::expired() ) {
 				$carry[ $key ] = $item;
 				continue;
 			}

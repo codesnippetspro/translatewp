@@ -14,5 +14,7 @@ class DebouncedTask {
 		}
 
 		wp_schedule_single_event( time() + self::DEBOUNCE_SECONDS, $hook, $args );
+		BackgroundEngine::schedule();
+		BackgroundEngine::schedule_wake();
 	}
 }

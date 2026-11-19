@@ -52,6 +52,7 @@ class Migrations {
 			}
 		}
 
+		BackgroundEngine::install();
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 		ActionLog::record( '' === $stored ? 'Plugin installed at ' . TRANSLATEWP_VERSION : 'Plugin updated from ' . $stored . ' to ' . TRANSLATEWP_VERSION );
 	}
@@ -109,6 +110,7 @@ class Migrations {
 			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
 			update_option( self::JOB_CLEANUP_OPTION, [], false );
 		}
+		BackgroundEngine::install();
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 	}
 

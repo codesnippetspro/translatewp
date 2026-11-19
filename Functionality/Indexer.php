@@ -5,10 +5,8 @@ namespace TranslateWP\Functionality;
 use TranslateWP\Components\PlainText;
 use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\PageExclusion;
-use TranslateWP\Components\PageCachePurge;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\TranslationStore;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\SiteRequests;
 use TranslateWP\Components\Sites;
@@ -49,6 +47,7 @@ class Indexer {
 	public const SCHEDULED_LATE_INTERVALS = 2;
 	public const LAST_DRAIN_STALE_SECONDS = 600;
 
+
 	public const INLINE_BUDGET_SECONDS = 2.5;
 	public const INLINE_MAX_CONCURRENT = 2;
 	public const INLINE_SLOT_TTL_SECONDS = 30;
@@ -73,12 +72,11 @@ class Indexer {
 	private const TITLE_MARKER       = '⟪item_0001⟫';
 	public const REPAIR_JOB_FIELD = 'purpose';
 	public const REPAIR_JOB_PURPOSE = 'background_refresh';
-	public const LAST_KICK_OPTION = 'translatewp_background_kick_at';
 	public const REPAIR_RETRY_OPTION = 'translatewp_background_refresh_retry_at';
 	public const REPAIR_RETRY_SECONDS = 7200;
 	public const REPAIR_PAGE_LIMIT = 50;
 	private const PAGE_FETCH_TIMEOUT_SECONDS = 8;
-	private const PAGE_MAX_BYTES = 2097152;
+	private const PAGE_MAX_BYTES = \TranslateWP\Components\BackgroundEngine::MAX_PAGE_BYTES;
 	private const PAGE_MAX_REDIRECTS = 3;
 
 	private IndexQueue $queue;
@@ -103,12 +101,7 @@ class Indexer {
 		}
 
 		add_action( 'init', [ IndexQueue::class, 'register_post_type' ], 5 );
-		add_action( self::DRAIN_HOOK, [ $this, 'drain_tick' ] );
 		add_action( 'translatewp_languages_saved', [ $this, 'on_languages_saved' ] );
-		add_action( 'init', [ $this, 'ensure_spine' ] );
-		add_action( QueueExecution::READ_HOOK, [ $this, 'reduced_read' ] );
-		add_action( QueueExecution::PUSH_HOOK, [ $this, 'reduced_push' ] );
-		add_action( 'shutdown', [ $this, 'kick_due_drain' ] );
 		add_action( 'update_option_page_on_front', [ $this, 'schedule_spine_refresh' ] );
 		add_action( 'update_option_show_on_front', [ $this, 'schedule_spine_refresh' ] );
 		add_action( 'wp_update_nav_menu', [ $this, 'schedule_spine_refresh' ] );
@@ -126,7 +119,7 @@ class Indexer {
 		if ( ! \TranslateWP\Components\BackgroundSwitch::off() && SiteConnection::is_connected() ) {
 			update_option( self::SPINE_PENDING_OPTION, true, false );
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 	}
 
@@ -166,7 +159,6 @@ class Indexer {
 		$queue->enqueue( [ $row ] );
 		$queue->enqueue_rewarm( [ $row ] );
 		self::schedule_drain();
-		LoopbackKick::fire();
 	}
 
 	/**
@@ -227,7 +219,7 @@ class Indexer {
 		}
 		if ( $queued > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 		return $queued;
 	}
@@ -266,7 +258,7 @@ class Indexer {
 
 		if ( $queued > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 
 		return $queued;
@@ -338,27 +330,6 @@ class Indexer {
 		return $languages;
 	}
 
-	/** One drain batch now, for the loopback kick; nothing when a batch is already running. */
-	public function drain_now(): array {
-		$result = [
-			'ran' => false,
-			'processed' => 0,
-			'failed' => 0,
-			'released' => 0,
-		];
-		$ran    = LoopbackKick::run_locked(
-			function () use ( &$result ): void {
-				$result = $this->drain_tick() + [ 'ran' => true ];
-				do_action( CronFallback::MAINTENANCE_HOOK );
-			}
-		);
-		if ( ! $ran ) {
-			self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
-		}
-		$result['ran'] = $ran;
-
-		return $result;
-	}
 
 	/**
 	 * Post types eligible for warm-up. Configurable, never hardcoded.
@@ -721,7 +692,7 @@ class Indexer {
 		$languages = self::target_languages( null );
 		if ( $languages && $this->fan_out_read_rows( [ $read_row ], $languages, true ) > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 	}
 
@@ -767,7 +738,7 @@ class Indexer {
 		$revived = $this->queue->retry_failed( $language );
 		if ( $revived > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 
 		return $revived;
@@ -883,7 +854,7 @@ class Indexer {
 
 		if ( $result['requeued'] > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 		return $result;
 	}
@@ -941,7 +912,7 @@ class Indexer {
 		$last = array_search( get_option( self::JOB_POLL_CURSOR_OPTION, '' ), $ids, true );
 		$job_count = count( $ids );
 		$start = false === $last ? 0 : ( $last + 1 ) % max( 1, $job_count );
-		for ( $offset = 0; $offset < $job_count && ( ! QueueExecution::is_reduced() || 0 === $offset ); ++$offset ) {
+		for ( $offset = 0; $offset < $job_count && ( ! QueueExecution::is_bounded() || 0 === $offset ); ++$offset ) {
 			$id = $ids[ ( $start + $offset ) % $job_count ];
 			if ( ! isset( $groups[ $id ] ) ) {
 				$pending = is_array( $pending ) ? array_values( array_diff( $pending, [ $id ] ) ) : $pending;
@@ -975,7 +946,7 @@ class Indexer {
 		$revived = $this->queue->retry_dead_automatically( $max_attempts, $backoff_seconds, $now );
 		if ( $revived > 0 ) {
 			self::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 		return $revived;
 	}
@@ -1012,15 +983,8 @@ class Indexer {
 		if ( \TranslateWP\Components\BackgroundSwitch::off() ) {
 			return;
 		}
-		$due = time() + max( 0, $delay_seconds );
-		$next = wp_next_scheduled( self::DRAIN_HOOK );
-		IndexQueue::signal_due_work( false === $next ? $due : min( $due, (int) $next ) );
-		if ( false === $next || $due < (int) $next ) {
-			if ( false !== $next ) {
-				wp_unschedule_event( (int) $next, self::DRAIN_HOOK );
-			}
-			wp_schedule_single_event( $due, self::DRAIN_HOOK );
-		}
+		\TranslateWP\Components\BackgroundEngine::schedule( $delay_seconds );
+		\TranslateWP\Components\BackgroundEngine::schedule_wake();
 	}
 
 	/**
@@ -1041,143 +1005,73 @@ class Indexer {
 		return max( 0, (int) apply_filters( 'translatewp_drain_reschedule_delay', self::RESCHEDULE_DELAY_SECONDS ) );
 	}
 
-	public function kick_due_drain(): void {
-		$next = wp_next_scheduled( self::DRAIN_HOOK );
-		if ( SiteConnection::is_connected() && $next && $next <= time() && (int) get_option( self::LAST_DRAIN_OPTION, 0 ) <= time() - self::RESCHEDULE_DELAY_SECONDS && (int) get_option( self::LAST_KICK_OPTION, 0 ) <= time() - 60 ) {
-			update_option( self::LAST_KICK_OPTION, time(), false );
-			LoopbackKick::fire();
-		}
-	}
-
-	/**
-	 * One cron tick: claim up to BATCH_SIZE push rows and relay each stored
-	 * payload through the remote job pipeline within the tick budget.
-	 */
 	public function drain_tick(): array {
 		$result = [
 			'processed' => 0,
 			'failed' => 0,
 			'released' => 0,
 		];
-		$ran = QueueExecution::run(
+		QueueExecution::run(
             function () use ( &$result ): void {
-				$result = $this->drain_tick_unlocked();
-			},
-            0
+                update_option( self::LAST_DRAIN_OPTION, time(), false );
+                $result = $this->step_push( QueueExecution::budget() );
+            }
         );
-		if ( ! $ran ) {
-			self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
-		}
 		return $result;
 	}
 
-	public function reduced_read( ReadinessBudget $budget ): void {
+	public function step_read( ReadinessBudget $budget, array $pages = [] ): void {
 		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
-			return;
-		}
-		if ( CronFallback::run_refill_maintenance() ) {
 			return;
 		}
 		if ( get_option( self::SPINE_PENDING_OPTION, false ) ) {
 			delete_option( self::SPINE_PENDING_OPTION );
 			$this->enqueue_read_rows( true );
 		}
-		$this->extract_pending_page();
-		self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
+		if ( $budget->remaining_seconds() > 0 ) {
+			$this->extract_pending_page( $pages );
+		}
 	}
 
-	public function reduced_push( ReadinessBudget $budget ): void {
-		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
-			return;
-		}
-		$rows = $this->queue->claim_batch( IndexQueue::STAGE_PUSH, 1 );
-		if ( ! $rows ) {
-			return;
-		}
-		$row = $rows[0];
-		$items = json_decode( (string) $row['payload'], true );
-		if ( ! is_array( $items ) || ! $items ) {
-			$this->queue->fail( (int) $row['id'], 'invalid_stored_payload' );
-			return;
-		}
-		$groups = [];
-		$this->add_row_to_groups( $groups, $row, $items );
+	public function step_push( ReadinessBudget $budget, ?array $ids = null ): array {
+		$started = ( $this->clock )();
 		$result = [
 			'processed' => 0,
 			'failed' => 0,
 			'released' => 0,
 		];
-		foreach ( $groups as $group ) {
-			$this->push_language_rows( (string) $group['language'], $group['rows'], $result, (bool) $group['retranslate'] );
-		}
-		self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
-	}
-
-	private function drain_tick_unlocked(): array {
-		$started = ( $this->clock )();
-		$result  = [
-			'processed' => 0,
-			'failed'    => 0,
-			'released'  => 0,
-		];
-
-		if ( ! SiteConnection::is_connected() ) {
+		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
 			return $result;
 		}
-
-		$this->queue->maintain_duplicates();
-		$scheduled = wp_next_scheduled( self::DRAIN_HOOK );
-		if ( $scheduled && (int) $scheduled <= time() ) {
-			wp_unschedule_event( (int) $scheduled, self::DRAIN_HOOK );
-		}
-		update_option( self::LAST_DRAIN_OPTION, time() );
-		if ( get_option( self::SPINE_PENDING_OPTION, false ) ) {
-			delete_option( self::SPINE_PENDING_OPTION );
-			$this->enqueue_read_rows( true );
-		}
-		$this->extract_pending_page();
-
-		$rows = $this->queue->claim_batch( IndexQueue::STAGE_PUSH, self::drain_batch_size() );
-
-		// Group rows per language and retranslate flag: one job + one batch push
-		// per group per tick instead of one HTTP round-trip per row. Retranslate
-		// rows form their own batch so the forced-overwrite flag never charges a
-		// normal warm-up row a fresh translation.
+		$rows = null === $ids ? $this->queue->claim_batch( IndexQueue::STAGE_PUSH, self::drain_batch_size() ) : $this->queue->claim_rows( $ids );
 		$groups = [];
-		foreach ( $rows as $index => $row ) {
-			if ( ( ( $this->clock )() - $started ) >= self::drain_tick_budget() ) {
-				foreach ( array_slice( $rows, $index ) as $unprocessed ) {
-					$this->queue->release( (int) $unprocessed['id'] );
-					$result['released']++;
-				}
-				break;
-			}
-
+		foreach ( $rows as $row ) {
 			$items = json_decode( (string) $row['payload'], true );
 			if ( ! is_array( $items ) || ! $items ) {
 				$this->queue->fail( (int) $row['id'], 'invalid_stored_payload' );
 				$result['failed']++;
 				continue;
 			}
-
 			$this->add_row_to_groups( $groups, $row, $items );
 		}
-
 		foreach ( $groups as $group ) {
+			if ( $budget->remaining_seconds() <= 0 || ( $this->clock )() - $started >= self::drain_tick_budget() ) {
+				foreach ( $group['rows'] as $row ) {
+					$this->queue->release( (int) $row['id'] );
+					$result['released']++;
+				}
+				continue;
+			}
 			$this->push_language_rows( (string) $group['language'], $group['rows'], $result, (bool) $group['retranslate'] );
 		}
-
-		$counts = $this->queue->counts();
-		$this->report_completed_languages( $counts );
-
-		if ( $this->has_pending( $counts ) || (int) $this->queue->read_counts()['pending'] > 0 ) {
-			self::schedule_drain( max( self::drain_reschedule_delay(), ( $this->queue->next_due_at() ?? time() ) - time() ) );
+		if ( ! QueueExecution::expired() ) {
+			$this->report_completion();
 		}
-
+		self::schedule_drain( self::RESCHEDULE_DELAY_SECONDS );
 		return $result;
 	}
 
-	private function extract_pending_page(): void {
+	private function extract_pending_page( array $pages = [] ): void {
 		if ( (int) get_option( self::NEXT_READER_OPTION, 0 ) > time() ) {
 			return;
 		}
@@ -1195,7 +1089,25 @@ class Indexer {
 			return;
 		}
 		update_option( self::NEXT_READER_OPTION, time() + self::RESCHEDULE_DELAY_SECONDS, false );
-		$html = $this->fetch_page( (string) $row['url'], self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] );
+		$html = null;
+		if ( \TranslateWP\Components\BackgroundEngine::service_reads() ) {
+			if ( ! $this->public_read_row( $row ) ) {
+				$this->queue->fail( (int) $row['id'], 'page_redirected' );
+				return;
+			}
+			foreach ( $pages as $page ) {
+				if ( $this->public_read_row( $row ) && ( $page['url'] ?? '' ) === $row['url'] && ( 200 === ( $page['status'] ?? 0 ) || ( 404 === ( $page['status'] ?? 0 ) && self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] ) ) ) {
+					$html = (string) $page['html'];
+					break;
+				}
+			}
+			if ( null === $html ) {
+				$this->queue->release( (int) $row['id'] );
+				return;
+			}
+		} else {
+			$html = $this->fetch_page( (string) $row['url'], self::NOT_FOUND_OBJECT_TYPE === $row['object_type'] );
+		}
 		if ( is_wp_error( $html ) ) {
 			if ( QueueExecution::is_budget_error( $html ) ) {
 				$this->queue->release( (int) $row['id'] );
@@ -1219,6 +1131,31 @@ class Indexer {
 			$this->reader_failed( $error->getMessage() );
 			$this->queue->fail( (int) $row['id'], $error->getMessage() );
 		}
+	}
+
+	public function report_completion(): void {
+		$this->queue->settle_refills();
+		$this->report_completed_languages( $this->queue->counts() );
+	}
+
+	public function wanted_pages(): array {
+		$wanted = [];
+		foreach ( $this->queue->pending_read_rows() as $row ) {
+			if ( ! $this->public_read_row( $row ) ) {
+				continue;
+			}
+			$wanted[ $row['url'] ] = [ 'url' => $row['url'] ];
+		}
+		return array_values( $wanted );
+	}
+
+	private function public_read_row( array $row ): bool {
+		$home = wp_parse_url( home_url( '/' ) );
+		$url = wp_parse_url( $row['url'] );
+		return 'miss' !== $row['object_type'] && TranslationUrl::is_indexable_url( $row['url'] )
+			&& ( $url['host'] ?? '' ) === ( $home['host'] ?? '' ) && ( $url['scheme'] ?? '' ) === ( $home['scheme'] ?? '' )
+			&& ( $url['port'] ?? null ) === ( $home['port'] ?? null ) && ! isset( $url['user'] ) && ! isset( $url['pass'] )
+			&& ( $row['object_id'] <= 0 || 'publish' === get_post_status( $row['object_id'] ) );
 	}
 
 	private function reader_failed( string $code ): void {
@@ -1256,7 +1193,7 @@ class Indexer {
 				]
             );
 			if ( is_wp_error( $response ) ) {
-				$code = ( microtime( true ) - $started >= self::PAGE_FETCH_TIMEOUT_SECONDS || false !== stripos( $response->get_error_message(), 'timed out' ) || false !== stripos( $response->get_error_message(), 'cURL error 28' ) ) ? 'page_fetch_timeout' : LoopbackKick::failure_reason( $response );
+				$code = ( microtime( true ) - $started >= self::PAGE_FETCH_TIMEOUT_SECONDS || false !== stripos( $response->get_error_message(), 'timed out' ) || false !== stripos( $response->get_error_message(), 'cURL error 28' ) ) ? 'page_fetch_timeout' : ( false !== stripos( $response->get_error_message(), 'certificate' ) || false !== stripos( $response->get_error_message(), 'cURL error 60' ) ? 'page_tls_failed' : 'page_fetch_failed' );
 				return new \WP_Error( $code, $code );
 			}
 			$status = (int) wp_remote_retrieve_response_code( $response );
@@ -1666,9 +1603,25 @@ class Indexer {
 	}
 
 	public static function schedule_inline_drain( array $ids ): string {
-		unset( $ids );
-		LoopbackKick::fire();
-		return 'cron';
+		if ( ( ! function_exists( 'fastcgi_finish_request' ) && ! function_exists( 'litespeed_finish_request' ) ) || \TranslateWP\Components\BackgroundSwitch::off() ) {
+			return 'cron';
+		}
+		if ( ! self::acquire_inline_slot() ) {
+			return 'capped';
+		}
+		register_shutdown_function(
+            static function () use ( $ids ): void {
+				try {
+					$finished = function_exists( 'fastcgi_finish_request' ) ? fastcgi_finish_request() : litespeed_finish_request();
+					if ( true === $finished ) {
+						( new self( '', '', null, null, false ) )->drain_rows( array_map( 'intval', $ids ) );
+					}
+				} finally {
+					self::release_inline_slot();
+				}
+			}
+        );
+		return 'inline';
 	}
 
 	public static function release_inline_slot(): void {
@@ -1767,6 +1720,7 @@ class Indexer {
 			$first_pass_done = true;
 		}
 
+		$last_step = (int) get_option( \TranslateWP\Components\BackgroundEngine::LAST_STEP_OPTION, 0 );
 		return [
 			'readerError' => (string) get_option( self::READER_FAILURE_OPTION, get_transient( self::LOOPBACK_ERROR_TRANSIENT ) ),
 			'firstPassDone'      => $first_pass_done,
@@ -1774,9 +1728,10 @@ class Indexer {
 			'read'               => $this->queue->read_counts(),
 			'changedPages'       => $this->queue->changed_since_read_count(),
 			'scan'               => $this->queue->read_scan_progress(),
-			'drainScheduled'     => (bool) wp_next_scheduled( self::DRAIN_HOOK ),
+			'drainScheduled'     => (bool) wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ),
+			'background' => \TranslateWP\Components\BackgroundEngine::snapshot( \TranslateWP\Components\BackgroundSwitch::off() ? 'paused' : 'more' ),
 			'scheduledTasksLate' => $this->scheduled_tasks_late( $counts ),
-			'lastRun'            => $this->last_drain_run(),
+			'lastRun'            => $last_step > 0 ? $last_step : $this->last_drain_run(),
 			'failed'             => $this->failed_items_for_status(),
 		];
 	}
@@ -1987,7 +1942,6 @@ class Indexer {
 
 		if ( $changed ) {
 			update_option( self::REPORTED_OPTION, array_values( $reported ) );
-			PageCachePurge::purge_all( 'first_pass_complete' );
 		}
 	}
 }

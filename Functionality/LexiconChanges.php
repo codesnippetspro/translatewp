@@ -6,7 +6,6 @@ use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\DebouncedTask;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\TranslationStore;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\PlainText;
 use TranslateWP\Components\MutationLock;
@@ -22,9 +21,11 @@ class LexiconChanges {
 	public const SNAPSHOTS_OPTION = 'translatewp_lexicon_change_snapshots';
 	private static array $pending = [];
 
-	public function __construct( $plugin_name = '', $plugin_version = '' ) {
+	public function __construct( $plugin_name = '', $plugin_version = '', bool $register_hooks = true ) {
 		unset( $plugin_name, $plugin_version );
-		add_action( 'init', [ $this, 'seed' ], 20 );
+		if ( ! $register_hooks ) {
+			return;
+		}
 		add_action( 'save_post_lexicon', [ $this, 'edited' ] );
 		add_action( 'before_delete_post', [ $this, 'deleting' ], 10, 2 );
 		add_action( 'added_post_meta', [ $this, 'meta_changed' ], 10, 4 );
@@ -75,7 +76,6 @@ class LexiconChanges {
 		update_option( self::SEED_CURSOR_OPTION, 0, false );
 		update_option( self::SEEDED_OPTION, true, false );
 		Indexer::schedule_drain();
-		LoopbackKick::fire();
 	}
 
 	public static function run_seed_batch(): void {

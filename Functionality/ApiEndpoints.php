@@ -45,6 +45,7 @@ class ApiEndpoints {
 
 		// Warm-up indexer endpoints.
 		new Indexing( $this->plugin_name, $this->plugin_version );
+		new Endpoints\Background( $this->plugin_name, $this->plugin_version );
 
 		// Portal connect endpoints.
 		new ConnectEndpoints( $this->plugin_name, $this->plugin_version );

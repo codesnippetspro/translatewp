@@ -87,8 +87,8 @@ $row     = self_heal_done_row( $queue, 5, 'uk' );
 self_heal_manifest( $row );
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, static fn (): array => [], static fn (): int => 1000 );
 $heal->maybe_schedule();
-self_heal_check( isset( $GLOBALS['wp_test_scheduled'][ ReadinessReconcile::HOOK ] ), 'Ordinary init must schedule readiness reconcile without an admin request' );
-do_action( ReadinessReconcile::HOOK );
+self_heal_check( isset( $GLOBALS['wp_test_scheduled'][ \TranslateWP\Components\BackgroundEngine::CRON_HOOK ] ), 'Installation schedules the shared background phase without a visitor driver' );
+$heal->step_run( new \TranslateWP\Components\ReadinessBudget() );
 self_heal_check( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'The scheduled readiness hook must heal without an admin request' );
 
 wp_test_reset( [ 'site' => [ 'id' => 'site', 'token' => 'secret' ] ] );

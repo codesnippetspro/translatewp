@@ -7,7 +7,6 @@ use PluboRoutes\Endpoint\GetEndpoint;
 use PluboRoutes\Endpoint\PostEndpoint;
 use PluboRoutes\Middleware\Cors;
 use TranslateWP\Components\IndexQueue;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\Sites;
 use TranslateWP\Components\TranslationProxyDedupe;
 use TranslateWP\Components\TranslationProxySettings;
@@ -41,7 +40,6 @@ class Indexing extends BaseApiEndpoints {
 			new PostEndpoint( $this->namespace, 'read-site', [ $this, 'read_site' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'reread-changed', [ $this, 'reread_changed' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'start-translation', [ $this, 'start_translation' ], [ $this, 'admin_write_permissions_check' ] ),
-			new PostEndpoint( $this->namespace, 'drain-now', [ $this, 'drain_now' ], [ $this, 'drain_now_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'claim-extract', [ $this, 'claim_extract' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'submit-extract', [ $this, 'submit_extract' ], [ $this, 'admin_write_permissions_check' ] ),
 			new PostEndpoint( $this->namespace, 'extract-failed', [ $this, 'extract_failed' ], [ $this, 'admin_write_permissions_check' ] ),
@@ -110,20 +108,6 @@ class Indexing extends BaseApiEndpoints {
 			'queued' => $this->indexer->start_translation( $languages, rest_sanitize_boolean( $request->get_param( 'force' ) ) ),
 			'status' => $this->indexer->status(),
 		];
-	}
-
-	/** The site's own loopback kick; signature and freshness are the permission. */
-	public function drain_now_permissions_check( $request ) {
-		return LoopbackKick::verify( sanitize_text_field( (string) $request->get_param( 'ts' ) ), sanitize_text_field( (string) $request->get_param( 'sig' ) ), sanitize_text_field( (string) $request->get_param( 'nonce' ) ) );
-	}
-
-	public function drain_now( $request ) {
-		LoopbackKick::acknowledge();
-		if ( filter_var( $request->get_param( 'probe' ), FILTER_VALIDATE_BOOLEAN ) ) {
-			return [ 'healthy' => true ];
-		}
-
-		return $this->indexer->drain_now();
 	}
 
 	public function enqueue( $request ) {
@@ -324,8 +308,6 @@ class Indexing extends BaseApiEndpoints {
 	public function status( $request ) {
 		unset( $request );
 
-		LoopbackKick::fire();
-
 		return $this->indexer->status() + [ 'pins' => $this->pin_details() ];
 	}
 
@@ -339,13 +321,7 @@ class Indexing extends BaseApiEndpoints {
 		$result['pages'] = $this->pages( $request );
 		$result['status'] = $this->indexer->status() + [ 'pins' => $this->pin_details() ];
 		$result['translations'] = \TranslateWP\Components\DashboardTranslations::summary( new IndexQueue(), (array) \TranslateWP\Components\Options::get( 'languages.list', [] ), time() );
-		if ( array_filter(
-            $result['status']['languages'],
-            static function ( array $count ): bool {
-				return $count['pending_push'] > 0; }
-        ) ) {
-			LoopbackKick::fire();
-		}
+
 		return $result;
 	}
 

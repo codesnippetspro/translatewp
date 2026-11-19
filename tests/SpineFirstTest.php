@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use TranslateWP\Components\IndexQueue;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\TranslationFingerprint;
 use TranslateWP\Components\TranslationProxySettings;
@@ -128,7 +127,7 @@ assert_true( $expected === ( $de_items[0]['cache']['hash'] ?? '' ), 'The German 
 assert_true( '00000000-0000-4000-8000-0000000000aa' === ( $de_items[0]['cache']['siteId'] ?? '' ), 'The cache reference names this site' );
 assert_true( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'Starting translation must schedule the drain' );
 $kicks = array_filter( $GLOBALS['wp_test_actions_fired'] ?? [], static fn( $fired ) => 'translatewp_loopback_kick' === ( $fired['tag'] ?? '' ) );
-assert_true( [] !== $kicks, 'Starting translation must fire the loopback kick' );
+assert_true( [] === $kicks && false !== wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::WAKE_HOOK ), 'Starting translation schedules a service wake without calling itself' );
 
 // Releasing the claims and starting again adds nothing: live rows are kept.
 foreach ( $push_rows as $row ) {
@@ -137,23 +136,6 @@ foreach ( $push_rows as $row ) {
 assert_true( 0 === $indexer->start_translation( [ 'de', 'it' ] ), 'A second start must not duplicate live rows' );
 // A new language fans out just that language.
 assert_true( 1 === $indexer->start_translation( [ 'fr' ] ), 'Adding a language fans out that language only' );
-
-// ---------------------------------------------------------------------------
-// The loopback kick verifies only a fresh signature from this site.
-// ---------------------------------------------------------------------------
-$timestamp = (string) time();
-$nonce = str_repeat( 'a', 32 );
-$signature = rtrim( strtr( base64_encode( hash_hmac( 'sha256', "drain\n" . $timestamp . "\n" . $nonce, hash( 'sha256', 'secret-site-token' ), true ) ), '+/', '-_' ), '=' );
-assert_true( LoopbackKick::verify( $timestamp, $signature, $nonce ), 'A fresh kick signed with the site key must verify' );
-$stale_timestamp = (string) ( time() - 600 );
-$stale_signature = rtrim( strtr( base64_encode( hash_hmac( 'sha256', "drain\n" . $stale_timestamp . "\n" . $nonce, hash( 'sha256', 'secret-site-token' ), true ) ), '+/', '-_' ), '=' );
-assert_true( ! LoopbackKick::verify( $stale_timestamp, $stale_signature, $nonce ), 'A correctly signed but stale kick must not verify' );
-assert_true( ! LoopbackKick::verify( $timestamp, 'wrong', str_repeat( 'c', 32 ) ), 'A wrong signature must not verify' );
-$route_nonce = str_repeat( 'b', 32 );
-$route_signature = rtrim( strtr( base64_encode( hash_hmac( 'sha256', "drain\n" . $timestamp . "\n" . $route_nonce, hash( 'sha256', 'secret-site-token' ), true ) ), '+/', '-_' ), '=' );
-$endpoint = new Indexing( 'translatewp', TRANSLATEWP_VERSION, $indexer );
-assert_true( true === $endpoint->drain_now_permissions_check( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/drain-now', [ 'ts' => $timestamp, 'sig' => $route_signature, 'nonce' => $route_nonce ], [], '' ) ), 'The drain-now route accepts the site\'s own kick' );
-assert_true( false === $endpoint->drain_now_permissions_check( new WP_REST_Request( 'POST', '/translatewp/v1/indexing/drain-now', [ 'ts' => $timestamp, 'sig' => 'nope', 'nonce' => str_repeat( 'c', 32 ) ], [], '' ) ), 'The drain-now route refuses a foreign kick' );
 
 // ---------------------------------------------------------------------------
 // A site with nothing read falls back to per-language extraction.

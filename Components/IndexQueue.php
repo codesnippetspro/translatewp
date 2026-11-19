@@ -58,10 +58,10 @@ class IndexQueue {
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
 	public const DEFERRED_REFILLS_OPTION = 'translatewp_deferred_refill_rows';
-	public const DUE_RESULT_OPTION = 'translatewp_queue_due_result';
-	public const DUE_HINT_OPTION = 'translatewp_queue_due_hint';
+
+
 	public const DUPLICATE_SWEEP_OPTION = 'translatewp_queue_duplicate_sweep';
-	private const DUE_PROBE_SECONDS = 60;
+
 	private const META_BACKGROUND_REFRESH = '_twp_background_refresh';
 	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
 	private const META_REFILL_FINISHED = '_twp_refill_finished';
@@ -74,6 +74,28 @@ class IndexQueue {
 
 	public const STALE_GROUP_LEXICON   = 'lexicon';
 	public const STALE_GROUP_LOCALIZER = 'localizer';
+
+	private static bool $mutating_rows = false;
+
+	private static function mutate_rows( callable $work, $default ) {
+		if ( self::$mutating_rows ) {
+			return $work();
+		}
+		$result = $default;
+		MutationLock::run(
+			'queue_rows',
+			static function () use ( $work, &$result ): void {
+				self::$mutating_rows = true;
+				try {
+					$result = $work();
+				} finally {
+					self::$mutating_rows = false;
+				}
+			},
+			0
+		);
+		return $result;
+	}
 
 	public static function register_post_type(): void {
 		register_post_type(
@@ -223,6 +245,10 @@ class IndexQueue {
 	 * Rows already live (pending/claimed/done) are left untouched.
 	 */
 	public function enqueue( array $rows ): int {
+		return self::mutate_rows( fn () => $this->enqueue_unlocked( $rows ), 0 );
+	}
+
+	private function enqueue_unlocked( array $rows ): int {
 		$inserted = 0;
 
 		foreach ( $rows as $row ) {
@@ -292,6 +318,10 @@ class IndexQueue {
 	 * do rows last indexed at or after $modified_at (the object's last save).
 	 */
 	public function enqueue_rewarm( array $rows, int $modified_at = 0 ): int {
+		return self::mutate_rows( fn () => $this->enqueue_rewarm_unlocked( $rows, $modified_at ), 0 );
+	}
+
+	private function enqueue_rewarm_unlocked( array $rows, int $modified_at = 0 ): int {
 		$inserted = 0;
 
 		foreach ( $rows as $row ) {
@@ -353,6 +383,10 @@ class IndexQueue {
 	}
 
 	public function enqueue_retranslate( array $rows, bool $force = true ): int {
+		return self::mutate_rows( fn () => $this->enqueue_retranslate_unlocked( $rows, $force ), 0 );
+	}
+
+	private function enqueue_retranslate_unlocked( array $rows, bool $force = true ): int {
 		$queued = 0;
 		$rows = array_values( $rows );
 		foreach ( $rows as $index => $row ) {
@@ -625,7 +659,6 @@ class IndexQueue {
 						if ( ! TranslationReadiness::complete_refill( $language ) ) {
 							return;
 						}
-						PageCachePurge::purge_all( 'retranslation settled' );
 						foreach ( $rows as $id ) {
 							update_post_meta( $id, self::META_REFILL_FINISHED, 1 );
 							delete_post_meta( $id, self::META_RETRANSLATING );
@@ -642,6 +675,21 @@ class IndexQueue {
 	 * rows are unique per object and language, so a done row is one translated
 	 * page in one language.
 	 */
+	public function pending_read_rows(): array {
+		$rows = [];
+		foreach ( $this->due_row_ids( [ 'stage' => self::STAGE_EXTRACT ], BackgroundEngine::MAX_READ_PAGES ) as $id ) {
+			$rows[] = [
+				'id' => (int) $id,
+				'object_type' => (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ),
+				'object_id' => (int) get_post_meta( $id, self::META_OBJECT_ID, true ),
+				'url' => (string) get_post_meta( $id, self::META_URL, true ),
+				'status' => $this->row_status( (int) $id ),
+				'stage' => self::STAGE_EXTRACT,
+			];
+		}
+		return $rows;
+	}
+
 	public function completed_rows(): array {
 		$rows = [];
 
@@ -674,17 +722,25 @@ class IndexQueue {
 	 * delete the rest. Returns how many stale rows were removed.
 	 */
 	public function collapse_stale_duplicates( bool $settled_only = false ): int {
+		return self::mutate_rows( fn () => $this->collapse_stale_duplicates_unlocked( $settled_only ), 0 );
+	}
+
+	private function collapse_stale_duplicates_unlocked( bool $settled_only = false ): int {
 		$by_key = [];
+		$snapshots = [];
 
 		foreach ( $this->all_row_ids() as $post_id ) {
 			$url       = (string) get_post_meta( $post_id, self::META_URL, true );
 			$language  = (string) get_post_meta( $post_id, self::META_LANGUAGE, true );
 			$canonical = TranslationUrl::canonicalize( $url );
-			$key       = ( '' !== $canonical ? $canonical : $url ) . "\n" . $language;
+			$key       = $settled_only
+				? (string) get_post_meta( $post_id, self::META_OBJECT_TYPE, true ) . '|' . (string) get_post_meta( $post_id, self::META_OBJECT_ID, true ) . '|' . $language
+				: ( '' !== $canonical ? $canonical : $url ) . "\n" . $language;
 
-			$protected = $this->active_background_row( (int) $post_id ) || ( $settled_only && in_array( $this->row_status( (int) $post_id ), [ self::STATUS_PENDING, self::STATUS_CLAIMED ], true ) );
+			$protected = $this->active_background_row( (int) $post_id ) || ( $settled_only && self::STATUS_DONE !== $this->row_status( (int) $post_id ) );
 			$key .= $protected ? "\nactive:" . $post_id : '';
 			$by_key[ $key ][] = (int) $post_id;
+			$snapshots[ $post_id ] = $this->duplicate_snapshot( (int) $post_id );
 		}
 
 		$deleted = 0;
@@ -721,6 +777,10 @@ class IndexQueue {
 			}
 
 			foreach ( $ids as $stale_id ) {
+				wp_cache_delete( (string) $stale_id, 'post_meta' );
+				if ( $this->duplicate_snapshot( $stale_id ) !== $snapshots[ $stale_id ] ) {
+					continue;
+				}
 				if ( wp_delete_post( $stale_id, true ) ) {
 					$deleted++;
 				}
@@ -730,8 +790,19 @@ class IndexQueue {
 		return $deleted;
 	}
 
+	private function duplicate_snapshot( int $id ): array {
+		return [
+			$this->row_status( $id ),
+			(string) get_post_field( 'post_content', $id ),
+			(string) get_post_meta( $id, self::META_UPDATED_AT, true ),
+			(string) get_post_meta( $id, self::META_STAGE, true ),
+			(string) get_post_meta( $id, self::META_RETRANSLATE, true ),
+			(string) get_post_meta( $id, self::META_RETRANSLATING, true ),
+		];
+	}
+
 	public function maintain_duplicates(): void {
-		if ( QueueExecution::is_reduced() || QueueExecution::expired() ) {
+		if ( QueueExecution::expired() ) {
 			return;
 		}
 		QueueExecution::run(
@@ -752,6 +823,10 @@ class IndexQueue {
 	 * (re)enter the push stage with a fresh payload; in-flight rows dedupe.
 	 */
 	public function enqueue_push( array $row ) {
+		return self::mutate_rows( fn () => $this->enqueue_push_unlocked( $row ), false );
+	}
+
+	private function enqueue_push_unlocked( array $row ) {
 		return $this->enqueue_push_row( $row, 'miss' === (string) $row['object_type'] );
 	}
 
@@ -838,6 +913,19 @@ class IndexQueue {
 	 * sent again; a page without a row gets a new one. Returns the row id.
 	 */
 	public function enqueue_miss_page( array $row, array $items ) {
+		return self::mutate_rows(
+            function () use ( $row, $items ) {
+                $id = $this->enqueue_miss_page_unlocked( $row, $items );
+                if ( false !== $id ) {
+                      update_option( BackgroundEngine::VISITOR_HINT_OPTION, bin2hex( random_bytes( 8 ) ), false );
+                }
+                return $id;
+            },
+            false
+        );
+	}
+
+	private function enqueue_miss_page_unlocked( array $row, array $items ) {
 		$object_type = (string) $row['object_type'];
 		$object_id   = (int) $row['object_id'];
 		$language    = (string) $row['language'];
@@ -931,8 +1019,13 @@ class IndexQueue {
 	 * requesting visitor's own segments, never a full tick).
 	 */
 	public function claim_rows( array $ids ): array {
+		return self::mutate_rows( fn () => $this->claim_rows_unlocked( $ids ), [] );
+	}
+
+	private function claim_rows_unlocked( array $ids ): array {
 		$claimed = [];
 		foreach ( array_map( 'intval', $ids ) as $post_id ) {
+			wp_cache_delete( (string) $post_id, 'post_meta' );
 			if ( $this->retire_unpublished_row( $post_id ) ) {
 				continue;
 			}
@@ -961,60 +1054,6 @@ class IndexQueue {
 		}
 
 		return $claimed;
-	}
-
-	public function has_due_work(): bool {
-		QueueExecution::run(
-			function (): void {
-				wp_cache_delete( self::DUE_RESULT_OPTION, 'options' );
-				wp_cache_delete( 'notoptions', 'options' );
-				$result = get_option( self::DUE_RESULT_OPTION, [] );
-				if ( (int) ( $result['checkedAt'] ?? 0 ) > $this->now() - self::DUE_PROBE_SECONDS ) {
-					return;
-				}
-				$hint = get_option( self::DUE_HINT_OPTION, [] );
-				$seen = (int) ( $hint['nextAt'] ?? PHP_INT_MAX ) <= $this->now() ? (string) ( $hint['token'] ?? '' ) : '';
-				$result['checkedAt'] = $this->now();
-				update_option( self::DUE_RESULT_OPTION, $result, false );
-				$due = [] !== $this->due_row_ids( [], 1 ) || [] !== $this->due_row_ids(
-					[
-						'status' => self::STATUS_CLAIMED,
-						'claimed_before' => $this->now() - self::STALE_CLAIM_SECONDS,
-					],
-					1
-				);
-				update_option(
-                    self::DUE_RESULT_OPTION,
-                    [
-						'due' => $due,
-						'checkedAt' => $this->now(),
-						'seenHint' => $seen,
-					],
-                    false
-                );
-			}
-		);
-		return true === self::cached_due_work();
-	}
-
-	public static function signal_due_work( int $next_at ): void {
-		update_option(
-            self::DUE_HINT_OPTION,
-            [
-				'nextAt' => $next_at,
-				'token' => bin2hex( random_bytes( 8 ) ),
-			],
-            false
-        );
-	}
-
-	public static function cached_due_work(): ?bool {
-		$result = get_option( self::DUE_RESULT_OPTION, [] );
-		$hint = get_option( self::DUE_HINT_OPTION, [] );
-		if ( $hint && (int) ( $hint['nextAt'] ?? PHP_INT_MAX ) <= time() && ( $hint['token'] ?? '' ) !== ( $result['seenHint'] ?? '' ) ) {
-			return true;
-		}
-		return $result ? ! empty( $result['due'] ) : ( $hint ? false : null );
 	}
 
 	private function due_row_ids( array $filters, int $limit ): array {
@@ -1073,6 +1112,10 @@ class IndexQueue {
 	 * tab that closed, a crashed drain) are reclaimed first.
 	 */
 	public function claim_batch( string $stage, int $limit ): array {
+		return self::mutate_rows( fn () => $this->claim_batch_unlocked( $stage, $limit ), [] );
+	}
+
+	private function claim_batch_unlocked( string $stage, int $limit ): array {
 		$this->reclaim_stale();
 
 		$candidates = $this->due_row_ids( [ 'stage' => $stage ], $limit );
@@ -1080,6 +1123,7 @@ class IndexQueue {
 		$claimed = [];
 		foreach ( $candidates as $post_id ) {
 			$post_id = (int) $post_id;
+			wp_cache_delete( (string) $post_id, 'post_meta' );
 			if ( $this->retire_unpublished_row( $post_id ) ) {
 				continue;
 			}
@@ -1181,6 +1225,10 @@ class IndexQueue {
 	 * extract stage while its last successful payload keeps serving.
 	 */
 	public function enqueue_read( array $rows ): int {
+		return self::mutate_rows( fn () => $this->enqueue_read_unlocked( $rows ), 0 );
+	}
+
+	private function enqueue_read_unlocked( array $rows ): int {
 		$queued = 0;
 
 		foreach ( $rows as $row ) {
@@ -1249,6 +1297,10 @@ class IndexQueue {
 	 * way.
 	 */
 	public function reread_for_rewarm( string $object_type, int $object_id, string $url, string $page_title, int $modified_at ): ?bool {
+		return self::mutate_rows( fn () => $this->reread_for_rewarm_unlocked( $object_type, $object_id, $url, $page_title, $modified_at ), null );
+	}
+
+	private function reread_for_rewarm_unlocked( string $object_type, int $object_id, string $url, string $page_title, int $modified_at ): ?bool {
 		$read_id = $this->find_row( $object_type, $object_id, self::READ_LANGUAGE );
 		if ( null === $read_id ) {
 			return null;
@@ -1371,6 +1423,10 @@ class IndexQueue {
 	 * translated when it lands. Returns how many pages were queued.
 	 */
 	public function reread_changed(): int {
+		return self::mutate_rows( fn () => $this->reread_changed_unlocked(), 0 );
+	}
+
+	private function reread_changed_unlocked(): int {
 		$requeued = 0;
 
 		foreach ( $this->read_rows() as $row ) {
@@ -1653,6 +1709,10 @@ class IndexQueue {
 	 * attempt (used when a drain runs out of its time budget).
 	 */
 	public function release( int $id ): bool {
+		return self::mutate_rows( fn () => $this->release_unlocked( $id ), false );
+	}
+
+	private function release_unlocked( int $id ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
 		}
@@ -1773,6 +1833,10 @@ class IndexQueue {
 	 * goes back to the extract stage. Returns how many were revived.
 	 */
 	public function retry_failed( ?string $language = null ): int {
+		return self::mutate_rows( fn () => $this->retry_failed_unlocked( $language ), 0 );
+	}
+
+	private function retry_failed_unlocked( ?string $language = null ): int {
 		$revived = 0;
 
 		foreach ( $this->all_row_ids() as $post_id ) {
@@ -1919,6 +1983,10 @@ class IndexQueue {
 	 * the row is not dead.
 	 */
 	public function revive_failed_row( int $id ): ?array {
+		return self::mutate_rows( fn () => $this->revive_failed_row_unlocked( $id ), null );
+	}
+
+	private function revive_failed_row_unlocked( int $id ): ?array {
 		if ( self::STATUS_DEAD !== $this->row_status( $id ) ) {
 			return null;
 		}
@@ -2048,7 +2116,11 @@ class IndexQueue {
 		return $counts;
 	}
 
-	private function reclaim_stale(): void {
+	public function reclaim_stale(): void {
+		self::mutate_rows( fn () => $this->reclaim_stale_unlocked(), null );
+	}
+
+	private function reclaim_stale_unlocked(): void {
 		$cutoff = $this->now() - self::STALE_CLAIM_SECONDS;
 
 		$claimed_ids = get_posts(
@@ -2068,6 +2140,10 @@ class IndexQueue {
 		);
 
 		foreach ( $claimed_ids as $post_id ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
+			wp_cache_delete( (string) $post_id, 'post_meta' );
 			$post_id    = (int) $post_id;
 			$claimed_at = (int) get_post_meta( $post_id, self::META_CLAIMED_AT, true );
 			if ( $claimed_at > 0 && $claimed_at <= $cutoff ) {

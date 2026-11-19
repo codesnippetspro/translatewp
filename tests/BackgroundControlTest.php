@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use TranslateWP\Components\BackgroundSwitch;
 use TranslateWP\Components\IndexQueue;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\ProEligibility;
 use TranslateWP\Components\QueueExecution;
 use TranslateWP\Functionality\CronFallback;
@@ -29,78 +28,32 @@ function queue_query_count(): int {
 function control_row( IndexQueue $queue, int $object_id ): int {
 	return (int) $queue->enqueue_push( [ 'object_type' => 'miss', 'object_id' => $object_id, 'url' => 'https://example.com/shop/', 'language' => 'it', 'page_title' => '', 'priority' => 50, 'payload' => wp_json_encode( [ [ 'groupId' => 'group-' . $object_id, 'markerPayload' => '⟪item_0001⟫Shop' ] ] ) ] );
 }
-function expire_control_probe(): void {
-	$result = get_option( IndexQueue::DUE_RESULT_OPTION, [] );
-	$result['checkedAt'] = time() - 61;
-	update_option( IndexQueue::DUE_RESULT_OPTION, $result, false );
-}
-
-[ $queue, $indexer, $cron ] = control_fixture();
-$GLOBALS['wp_test_get_posts_calls'] = [];
-$cron->maybe_run_on_front_end();
-check_control( 0 === queue_query_count(), 'An unprimed idle visitor performs zero queue queries' );
-check_control( false !== get_transient( 'translatewp_cron_fallback_kick' ), 'An idle check reserves the minute gate too' );
-delete_transient( 'translatewp_cron_fallback_kick' );
-$cron->maybe_run_on_front_end();
-check_control( 0 === queue_query_count(), 'An idle visitor after the minute gate expires still performs zero queue queries' );
-
-$counter = new class() extends CronFallback {
-	public int $checks = 0;
-	public function is_behind(): bool { ++$this->checks; return true; }
-};
-$counter->maybe_run_on_front_end();
-check_control( 0 === $counter->checks, 'The persisted gate is checked before is_behind' );
-
-check_control( ! $queue->has_due_work(), 'The worker records an empty queue' );
-$probes = queue_query_count();
-check_control( 2 === $probes, 'The idle worker probes pending and abandoned claims once' );
-$queue->has_due_work();
-QueueExecution::run( static function (): void {} );
-check_control( $probes === queue_query_count(), 'Other workers reuse the persisted probe within a minute' );
-expire_control_probe();
-$queue->has_due_work();
-check_control( $probes + 2 === queue_query_count(), 'A worker refreshes the result after the minute' );
-$GLOBALS['wp_test_get_posts_calls'] = [];
-delete_transient( 'translatewp_cron_fallback_kick' );
-$cron->maybe_run_on_front_end();
-check_control( 0 === queue_query_count(), 'A primed idle visitor performs zero queue queries' );
-
-$id = control_row( $queue, 321 );
-Indexer::schedule_drain();
-wp_unschedule_event( (int) wp_next_scheduled( Indexer::DRAIN_HOOK ), Indexer::DRAIN_HOOK );
-$GLOBALS['wp_test_get_posts_calls'] = [];
-delete_transient( 'translatewp_cron_fallback_kick' );
-$cron->maybe_run_on_front_end();
-check_control( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ) && 0 === queue_query_count(), 'A persisted producer hint recovers a lost event without a visitor query' );
-check_control( IndexQueue::STATUS_PENDING === get_post_meta( $id, '_twp_status', true ), 'Recovery leaves processing to the worker' );
 
 [ $queue ] = control_fixture();
-Indexer::schedule_drain( 120 );
-$queue->has_due_work();
-check_control( false === IndexQueue::cached_due_work(), 'A future producer hint respects its backoff' );
-$hint = get_option( IndexQueue::DUE_HINT_OPTION );
-$hint['nextAt'] = time() - 1;
-update_option( IndexQueue::DUE_HINT_OPTION, $hint, false );
-check_control( true === IndexQueue::cached_due_work(), 'A future hint is not consumed by an earlier empty probe' );
+$page = $queue->enqueue_push( [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 50, 'payload' => '[{"groupId":"page","markerPayload":"Page body"}]' ] );
+$miss = control_row( $queue, 123 );
+$queue->claim_rows( [ $page, $miss ] ); $queue->complete( $page ); $queue->complete( $miss );
+$queue->maintain_duplicates();
+check_control( null !== get_post( $page ) && null !== get_post( $miss ), 'Automatic cleanup never treats a page and a visitor miss as duplicates' );
+$other = control_row( $queue, 456 ); $queue->claim_rows( [ $other ] ); $queue->complete( $other );
+$dead = control_row( $queue, 789 ); $queue->claim_rows( [ $dead ] );
+for ( $i = 0; $i < 3; ++$i ) { $queue->fail( $dead, 'failed' ); $queue->claim_rows( [ $dead ] ); }
+$queue->collapse_stale_duplicates( true );
+check_control( null !== get_post( $other ) && null !== get_post( $dead ), 'Distinct object identities and the only copy of failed visitor work survive cleanup' );
+$copy = array_values( array_filter( $GLOBALS['wp_test_inserted_posts'], static fn ( array $post ): bool => $post['ID'] === $page ) )[0]; unset( $copy['ID'] ); $duplicate = wp_insert_post( $copy );
+$queue->collapse_stale_duplicates( true );
+check_control( null === get_post( $page ) && null !== get_post( $duplicate ), 'Only settled true duplicates of the same object and language collapse' );
 
-[ $queue, $indexer, $cron ] = control_fixture();
-$old = control_row( $queue, 1 );
-$queue->track_refill( $old );
-$queue->claim_rows( [ $old ] ); $queue->complete( $old ); $queue->mark_translated( [ $old ] );
-$new = control_row( $queue, 2 );
-$queue->claim_rows( [ $new ] ); $queue->complete( $new ); $queue->mark_translated( [ $new ] );
-$active = control_row( $queue, 3 ); $queue->track_refill( $active );
-$visitor = control_row( $queue, 4 );
-$queue->claim_rows( [ $visitor ] );
-$cron->run_maintenance();
-check_control( false === get_post( $old ) || null === get_post( $old ), 'Worker maintenance removes a settled duplicate without an admin page' );
-$payload = json_decode( IndexQueue::decode_payload( (string) get_post_field( 'post_content', $new ) ), true );
-check_control( [ 'group-1', 'group-2' ] === array_column( $payload, 'groupId' ), 'Duplicate collapse retains both miss payloads' );
-$queries = queue_query_count();
-$cron->run_maintenance();
-check_control( $queries === queue_query_count(), 'A second maintenance pass reuses the site-wide minute gate' );
-check_control( null !== get_post( $active ) && null !== get_post( $visitor ), 'Maintenance keeps active refill and visitor work separate' );
-check_control( $queue->requires_background_refresh( $active ) && ! $queue->requires_background_refresh( $visitor ), 'Compaction never marks a visitor row as background work' );
+[ $queue ] = control_fixture();
+$old = control_row( $queue, 123 ); $queue->claim_rows( [ $old ] ); $queue->complete( $old );
+$copy = $GLOBALS['wp_test_inserted_posts'][0]; unset( $copy['ID'] ); $new = wp_insert_post( $copy );
+$GLOBALS['wp_test_after_post_update'] = static function () use ( $old ): void {
+    update_post_meta( $old, '_twp_status', IndexQueue::STATUS_PENDING );
+    wp_update_post( [ 'ID' => $old, 'post_content' => '[{"groupId":"new-arrival","markerPayload":"New visitor work"}]' ] );
+};
+$queue->collapse_stale_duplicates( true );
+check_control( null !== get_post( $old ) && IndexQueue::STATUS_PENDING === get_post_meta( $old, '_twp_status', true ), 'A row reopened between the snapshot and deletion is retained' );
+
 
 [ $queue, $indexer, $cron ] = control_fixture();
 $GLOBALS['wp_test_remote_get_response'] = [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode( [ 'plan' => 'free', 'entitled' => false, 'backgroundPaused' => true ] ) ];
@@ -126,13 +79,11 @@ function check_paused_entries( Indexer $indexer, CronFallback $cron ): void {
 	$GLOBALS['wp_test_remote_request_calls'] = [];
 	$before = $GLOBALS['wp_test_inserted_posts'];
 	check_control( ! QueueExecution::run( static function () use ( &$work ): void { ++$work; } ), 'Paused run refuses its callback' );
-	check_control( ! QueueExecution::run_reduced(), 'Paused reduced mode refuses its callback' );
-	check_control( ! LoopbackKick::fire(), 'Paused workers send no self-request' );
-	LoopbackKick::probe();
-	$cron->maybe_run_on_front_end(); $cron->run_after_flush(); $cron->maybe_run_in_admin(); $cron->run_maintenance();
+	check_control( 'paused' === \TranslateWP\Components\BackgroundEngine::step()['state'], 'Paused steps refuse every driver' );
+	\TranslateWP\Components\BackgroundEngine::cron();
 	$indexer->ensure_spine(); $indexer->schedule_spine_refresh();
 	Indexer::refill_crawler_page( 123, 'https://example.com/shop/', 'it' );
-	$indexer->drain_tick(); $indexer->drain_now();
+	$indexer->drain_tick();
 	check_control( 0 === $work && 0 === queue_query_count() && [] === $GLOBALS['wp_test_remote_request_calls'], 'All paused entry points avoid work, queue reads and kicks' );
 	check_control( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) && ! get_option( Indexer::SPINE_PENDING_OPTION, false ) && ! get_option( Indexer::SPINE_CHECKED_OPTION, false ), 'Pause does not consume spine setup or reschedule a disabled drain' );
 	check_control( $before === $GLOBALS['wp_test_inserted_posts'], 'Paused crawler and spine paths add no rows' );

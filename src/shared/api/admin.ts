@@ -328,3 +328,13 @@ export const actOnLexiconCandidate = async (id: string, action: CandidateAction,
 {
     return await apiFetch({ path: '/translatewp/v1/admin/lexicon-candidates/action', method: 'POST', data: { id, action, ...(language ? { language } : {}) } });
 };
+
+export type BackgroundStep = {
+    state: 'more' | 'done' | 'busy' | 'paused';
+    pending: { read: number; push: number; refill: number; visitor: number };
+    error?: { code: string; message: string };
+    v: 1;
+};
+
+export const runBackgroundStep = async (signal?: AbortSignal): Promise<BackgroundStep> =>
+    await apiFetch({ path: '/translatewp/v1/background/admin-step', method: 'POST', data: {}, signal }) as BackgroundStep;

@@ -356,10 +356,11 @@ class TranslationJobs extends BaseApiEndpoints {
 
 		if ( $accepted > 0 ) {
 			\TranslateWP\Functionality\Indexer::schedule_drain();
-			if ( function_exists( 'spawn_cron' ) ) {
+			\TranslateWP\Components\BackgroundEngine::visitor_wake();
+			$mode = $subscribe ? \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids ) : 'cron';
+			if ( 'inline' !== $mode && function_exists( 'spawn_cron' ) ) {
 				spawn_cron();
 			}
-			\TranslateWP\Components\LoopbackKick::fire();
 		}
 
 		$response = [

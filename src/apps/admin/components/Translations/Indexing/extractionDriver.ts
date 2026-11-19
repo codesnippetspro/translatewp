@@ -135,6 +135,7 @@ export type ScanProgress = {
 };
 
 export type IndexStatus = {
+    background?: import('@/shared/api/admin').BackgroundStep;
     readerError?: string;
     firstPassDone?: boolean;
     languages: Record<string, LanguageIndexStatus>;

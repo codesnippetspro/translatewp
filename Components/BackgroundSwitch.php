@@ -16,7 +16,11 @@ class BackgroundSwitch {
 		if ( ! isset( $response['backgroundPaused'] ) || ! is_bool( $response['backgroundPaused'] ) ) {
 			return;
 		}
-		if ( $response['backgroundPaused'] ) {
+		self::set_paused( $response['backgroundPaused'] );
+	}
+
+	public static function set_paused( bool $paused ): void {
+		if ( $paused ) {
 			update_option( self::OPTION, true, false );
 		} elseif ( delete_option( self::OPTION ) ) {
 			Indexer::schedule_drain();

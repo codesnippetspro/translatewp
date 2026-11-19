@@ -67,17 +67,31 @@ $answer = static function ( string $language, array $hashes ): array {
 $heal = new ReadinessReconcile( 'translatewp', TRANSLATEWP_VERSION, $indexer, $answer, static fn (): int => 10_000 );
 
 $heal->run();
-assert_true( 1 === (int) get_option( ReadinessReconcile::CURSOR_OPTION, 0 ), 'The first scheduled run advances the persisted cursor to the second batch' );
+assert_true( 1 === (int) ( (array) get_option( ReadinessReconcile::STEP_CURSOR_OPTION, [] ) )['offset'], 'The first scheduled run advances the persisted cursor to the second batch' );
 $heal->run();
-assert_true( 2 === (int) get_option( ReadinessReconcile::CURSOR_OPTION, 0 ), 'The second scheduled run advances to the third batch' );
+assert_true( 2 === (int) ( (array) get_option( ReadinessReconcile::STEP_CURSOR_OPTION, [] ) )['offset'], 'The second scheduled run advances to the third batch' );
 $heal->run();
-assert_true( 0 === (int) get_option( ReadinessReconcile::CURSOR_OPTION, 0 ), 'The third scheduled run wraps the cursor back to the start' );
+assert_true( 0 === (int) ( (array) get_option( ReadinessReconcile::STEP_CURSOR_OPTION, [] ) )['offset'], 'The third scheduled run wraps the cursor back to the start' );
 
 foreach ( [ 'fr', 'de', 'it' ] as $language ) {
 	$row = array_values( array_filter( $queue->list_rows(), static fn ( array $item ): bool => $language === $item['language'] ) )[0];
 	assert_true( TranslationReadiness::is_ready( $row ), 'Every language is proven ready once the cursor has walked all batches: ' . $language );
 }
 
+
+$rows = $queue->list_rows();
+$target = $rows[1];
+$seen = [];
+$lookup = static function ( string $language, array $hashes ) use ( &$seen ): array {
+    $seen[] = $language;
+    return array_fill_keys( $hashes, '⟪item_0001⟫Ready' );
+};
+update_option( ReadinessReconcile::STEP_CURSOR_OPTION, [ 'offset' => 0, 'row' => $target['id'], 'cursor' => 1 ], false );
+$heal = new ReadinessReconcile( '', '', $indexer, $lookup, static fn (): int => 10000, false );
+add_filter( 'translatewp_readiness_skip_proven', static fn (): bool => false );
+$heal->step_run( new \TranslateWP\Components\ReadinessBudget() );
+assert_true( [ $target['language'] ] === $seen, 'An in-progress page follows its identity when row positions change' );
+remove_filter( 'translatewp_readiness_skip_proven' );
 if ( $failures > 0 ) {
 	fwrite( STDERR, "ReadinessCursorTest failed with {$failures} assertion(s)\n" );
 	exit( 1 );

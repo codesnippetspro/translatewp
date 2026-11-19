@@ -24,6 +24,7 @@ import { elapsedLabel, indexFailureMessage, indexProgressMessage } from '@/apps/
 import { ScheduledTasksLateNotice } from '@/apps/admin/components/Translations/Indexing/ScheduledTasksLateNotice';
 import { ScanProgressBar } from '@/shared/components/ScanProgressBar';
 import { RetranslatePages } from '@/apps/admin/components/Translations/Indexing/RetranslatePages';
+import { useBackgroundStep } from '@/shared/hooks/useBackgroundStep';
 import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
@@ -62,6 +63,8 @@ export const LanguagesIndexing = () =>
     const liveStatus = useTranslationReadiness();
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
     const [status, setStatus] = useState<IndexStatus | null>(null);
+    const background = useBackgroundStep(status?.background?.state === 'paused');
+    const backgroundPaused = (background.step?.state ?? status?.background?.state) === 'paused';
     useEffect(() => { if (liveStatus) setStatus(liveStatus); }, [liveStatus]);
     const [statusFailed, setStatusFailed] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -80,6 +83,7 @@ export const LanguagesIndexing = () =>
     const extractingRef = useRef(false);
     const waitingReadStartedAtRef = useRef(0);
     const waitingReadStoppedRef = useRef(false);
+    useEffect(() => { if (backgroundPaused) extractingRef.current = false; }, [backgroundPaused]);
     const pinSelectRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() =>
@@ -293,14 +297,14 @@ export const LanguagesIndexing = () =>
         + Object.values(status?.languages ?? {}).reduce((sum, count) => sum + (count.pending_extract ?? 0), 0);
     useEffect(() =>
     {
-        if (isRunning || extractingRef.current || waitingReads < 1 || waitingReadStoppedRef.current
+        if (backgroundPaused || isRunning || extractingRef.current || waitingReads < 1 || waitingReadStoppedRef.current
             || Date.now() - waitingReadStartedAtRef.current < WAITING_READ_RETRY_MS)
         {
             return;
         }
 
         void handleReadWaitingPages();
-    }, [waitingReads, isRunning]);
+    }, [waitingReads, isRunning, backgroundPaused]);
 
     const handleStopIndexing = () =>
     {
@@ -346,6 +350,13 @@ export const LanguagesIndexing = () =>
 
     return (
         <div className="flex w-full min-w-0 flex-col gap-6">
+            {backgroundPaused && <p role="status">{__('Background translation is paused.', 'translate')}</p>}
+            {background.pending && <p role="status">{sprintf(
+                /* translators: 1: pages waiting to be read, 2: translations waiting, 3: refreshes waiting. */
+                __("Please don't close this page. Waiting: %1$d to read, %2$d to translate, %3$d to refresh.", 'translate'),
+                background.step!.pending.read, background.step!.pending.push, background.step!.pending.refill,
+            )}</p>}
+            {background.failed && <p role="alert">{__('Background work could not be checked. This page will try again automatically.', 'translate')}</p>}
             <section className="flex flex-col gap-2" aria-labelledby="twp-reading-translating">
                 <h3 id="twp-reading-translating" className="font-semibold text-lg text-translatewp-neutral m-0">
                     {__('Reading and translating', 'translate')}
@@ -382,7 +393,7 @@ export const LanguagesIndexing = () =>
                     <Button
                         variant="primary"
                         onClick={isRunning ? handleStopIndexing : () => void handleIndexSite()}
-                        disabled={!isRunning && (status === null || statusFailed)}
+                        disabled={backgroundPaused || (!isRunning && (status === null || statusFailed))}
                     >
                         {isRunning
                             ? __('Stop', 'translate')

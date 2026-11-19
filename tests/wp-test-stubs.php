@@ -407,6 +407,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_lexicon_meta']         = [];
 	$GLOBALS['wp_test_post_types']           = [ 'post', 'page', 'attachment' ];
 	$GLOBALS['wp_test_scheduled']            = [];
+	$GLOBALS['wp_test_scheduled_args']       = [];
 	$GLOBALS['wp_test_scheduled_log']        = [];
 	$GLOBALS['wp_test_index_complete_fail']  = false;
 	$GLOBALS['wp_test_translation_job_responses']    = [];
@@ -649,6 +650,9 @@ function update_option( $name, $value ) {
 	if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
 		$key = substr( $name, strlen( 'translatewp_' ) );
 		$GLOBALS['wp_test_options_store'][ $key ] = $value;
+		$after_write = $GLOBALS['wp_test_after_option_write'][ $name ] ?? null;
+		unset( $GLOBALS['wp_test_after_option_write'][ $name ] );
+		if ( is_callable( $after_write ) ) { $after_write(); }
 		return true;
 	}
 
@@ -895,6 +899,9 @@ function wp_update_post( array $postarr, $wp_error = false ) {
 		if ( (int) $post['ID'] === (int) ( $postarr['ID'] ?? 0 ) ) {
 			$store[ $index ] = array_merge( $post, $postarr );
 			$GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] = $store;
+			$after_update = $GLOBALS['wp_test_after_post_update'] ?? null;
+			unset( $GLOBALS['wp_test_after_post_update'] );
+			if ( is_callable( $after_update ) ) { $after_update(); }
 			return (int) $postarr['ID'];
 		}
 	}
@@ -1132,19 +1139,19 @@ function wp_next_scheduled( string $hook ) {
 
 function wp_unschedule_event( int $timestamp, string $hook ): bool {
 	unset( $timestamp );
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return true;
 }
 
 function wp_unschedule_hook( string $hook ): int {
 	$cleared = isset( $GLOBALS['wp_test_scheduled'][ $hook ] ) ? 1 : 0;
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return $cleared;
 }
 
 function wp_clear_scheduled_hook( string $hook ): int {
 	$cleared = isset( $GLOBALS['wp_test_scheduled'][ $hook ] ) ? 1 : 0;
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return $cleared;
 }
 
@@ -1204,6 +1211,7 @@ function wp_print_styles( $handles = false ): void {
 
 function wp_schedule_single_event( int $timestamp, string $hook, array $args = [] ) {
 	$GLOBALS['wp_test_scheduled'][ $hook ] = $timestamp;
+	$GLOBALS['wp_test_scheduled_args'][ $hook ] = $args;
 	$GLOBALS['wp_test_scheduled_log'][]    = [ 'hook' => $hook, 'timestamp' => $timestamp, 'args' => $args ];
 	return true;
 }
@@ -2223,4 +2231,13 @@ if ( ! function_exists( 'wp_styles' ) ) {
 		}
 		return $GLOBALS['wp_test_styles'];
 	}
+}
+
+function _get_cron_array(): array {
+	$cron = [];
+	foreach ( $GLOBALS['wp_test_scheduled'] ?? [] as $hook => $at ) {
+		$cron[ $at ][ $hook ]['test'] = [ 'args' => $GLOBALS['wp_test_scheduled_args'][ $hook ] ?? [] ];
+	}
+	ksort( $cron );
+	return $cron;
 }

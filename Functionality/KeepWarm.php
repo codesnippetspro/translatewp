@@ -3,7 +3,6 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\PageExclusion;
-use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\CacheVersions;
 use TranslateWP\Components\DebouncedTask;
 use TranslateWP\Components\IndexQueue;
@@ -13,6 +12,7 @@ use TranslateWP\Components\TranslationStore;
 
 class KeepWarm {
 
+	public const BACKGROUND_HOOKS = [ self::VERSIONED_REFILL_HOOK, self::LEXICON_DEBOUNCE_HOOK, self::SETTINGS_DEBOUNCE_HOOK, self::REWARM_DEBOUNCE_HOOK ];
 	public const VERSIONED_REFILL_HOOK = 'translatewp_versioned_refill';
 	public const LEXICON_DEBOUNCE_HOOK  = 'translatewp_lexicon_stale_debounce';
 	public const SETTINGS_DEBOUNCE_HOOK = 'translatewp_settings_rebuild_debounce';
@@ -80,6 +80,11 @@ class KeepWarm {
 	}
 
 	public function rewarm_saved_object( int $post_id, string $post_type ): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::REWARM_DEBOUNCE_HOOK, [ $post_id, $post_type ] );
+			return;
+		}
+
 		if ( ! SiteConnection::is_connected() ) {
 			return;
 		}
@@ -150,6 +155,11 @@ class KeepWarm {
 	}
 
 	public function mark_lexicon_stale(): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::LEXICON_DEBOUNCE_HOOK, [] );
+			return;
+		}
+
 		CacheVersions::bump_lexicon_version();
 		self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
@@ -181,6 +191,11 @@ class KeepWarm {
 	 * loop.
 	 */
 	public function rebuild_after_settings_change(): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::SETTINGS_DEBOUNCE_HOOK, [] );
+			return;
+		}
+
 		$pending = get_option( self::PENDING_LANGUAGES_OPTION, null );
 		delete_option( self::PENDING_LANGUAGES_OPTION );
 		$pending = is_array( $pending ) ? $pending : [ self::ALL_LANGUAGES ];
@@ -218,13 +233,18 @@ class KeepWarm {
 			}
 			TranslationStore::bump_cache_generation( array_keys( $languages ) );
 			Indexer::schedule_drain();
-			LoopbackKick::fire();
+
 		}
 
 		return $queued;
 	}
 
 	public function refill_versioned_changes(): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [] );
+			return;
+		}
+
 		self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER );
 	}
 
