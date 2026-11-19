@@ -2,6 +2,11 @@ import { TextEncoder } from 'util';
 import { webcrypto } from 'crypto';
 
 import { CacheFirstTranslator } from '@/shared/lib/translations/CacheFirstTranslator';
+import { computeFingerprintHash } from '@/shared/lib/translations/fingerprintPayload';
+import { HeadTitleTranslator } from '@/shared/lib/translations/headTitle';
+
+// The fingerprint 1.1.1 computed for the title "Store hours" (es to ja, default settings).
+const PINNED_STORE_HOURS_HASH = '945799284bacf920b42761de80ceeeaab822284fdf2c96f94c02b8cebc654b12';
 
 if (typeof globalThis.TextEncoder === 'undefined')
 {
@@ -215,5 +220,134 @@ describe('Translator.translateSeoString', () =>
         const bumped = new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja', store: new HydrationStore(backend, 2) });
         expect(await bumped.translateSeoString('Store hours', 'seo:title')).toBe('Store hours neu (JA)');
         expect(bumpedLog.filter(entry => entry.url.includes('/cache/lookup'))).toHaveLength(1);
+    });
+});
+
+describe('HeadTitleTranslator through the real cache client', () =>
+{
+    const originalFetch = globalThis.fetch;
+    const originalTranslateWP = window.TranslateWP;
+    const TITLE = 'Garden Lantern – SwagDemo';
+
+    beforeEach(() =>
+    {
+        installContext();
+        jest.spyOn(Math, 'random').mockReturnValue(1);
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try { window.localStorage.clear(); } catch { /* jsdom storage */ }
+        document.title = TITLE;
+    });
+
+    afterEach(() =>
+    {
+        globalThis.fetch = originalFetch;
+        Object.defineProperty(window, 'TranslateWP', { value: originalTranslateWP, configurable: true, writable: true });
+        jest.restoreAllMocks();
+    });
+
+    async function hashOf(translator: CacheFirstTranslator, text: string): Promise<string>
+    {
+        return computeFingerprintHash({
+            markerPayload: `⟪item_0001⟫${text}`,
+            sourceLang: 'es',
+            targetLang: 'ja',
+            contextKind: 'attribute',
+            settings: translator._createCacheClient().aiSettings,
+        });
+    }
+
+    // Answers the lookup from the stored payloads given by hash; the miss
+    // proxy refuses the report, so nothing is polled afterwards.
+    function storedFetch(stored: Map<string, string>, log: FetchLog[]): typeof fetch
+    {
+        return (async (url: string | URL, init?: RequestInit) =>
+        {
+            const href = String(url);
+            const body = init?.body ? JSON.parse(String(init.body)) : null;
+            log.push({ url: href, body });
+            if (href.includes('/v1/translation/cache/lookup'))
+            {
+                const items: Record<string, string | null> = {};
+                for (const hash of new URL(href).searchParams.getAll('hash')) items[hash] = stored.get(hash) ?? null;
+                return { ok: true, status: 200, json: async () => ({ items }) } as unknown as Response;
+            }
+            return { ok: false, status: 400, json: async () => ({}) } as unknown as Response;
+        }) as unknown as typeof fetch;
+    }
+
+    const lookups = (log: FetchLog[]): FetchLog[] => log.filter(entry => entry.url.includes('/cache/lookup'));
+    const misses = (log: FetchLog[]): FetchLog[] => log.filter(entry => entry.url.endsWith('/miss'));
+    const jobs = (log: FetchLog[]): FetchLog[] => log.filter(entry => entry.url.includes('/create-job'));
+    const reported = (log: FetchLog[]): string[] => misses(log).flatMap(entry =>
+        (entry.body as { items: { markerPayload: string }[] }).items.map(item => item.markerPayload));
+
+    it('asks for both title pieces and the whole title in one lookup and reports one miss in the new form', async () =>
+    {
+        const log: FetchLog[] = [];
+        globalThis.fetch = storedFetch(new Map(), log);
+        const translator = new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja' });
+
+        await new HeadTitleTranslator(undefined, 'SwagDemo').translate(translator);
+
+        expect(lookups(log)).toHaveLength(1);
+        expect(new URL(lookups(log)[0].url).searchParams.getAll('hash').sort()).toEqual((await Promise.all(
+            ['Garden Lantern', 'SwagDemo', TITLE].map(text => hashOf(translator, text))
+        )).sort());
+        expect(misses(log)).toHaveLength(1);
+        expect(reported(log)).toEqual(['⟪item_0001⟫Garden Lantern', '⟪item_0001⟫SwagDemo']);
+        expect(jobs(log)).toHaveLength(0);
+        expect(document.title).toBe(TITLE);
+    });
+
+    it('uses a translation stored under the whole title and reports nothing', async () =>
+    {
+        const log: FetchLog[] = [];
+        const translator = new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja' });
+        globalThis.fetch = storedFetch(new Map([[await hashOf(translator, TITLE), '⟪item_0001⟫Lanterna – SwagDemo']]), log);
+
+        await new HeadTitleTranslator(undefined, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('Lanterna – SwagDemo');
+        expect(lookups(log)).toHaveLength(1);
+        expect(misses(log)).toHaveLength(0);
+    });
+
+    it('still asks for the pieces when the whole title was stored unchanged', async () =>
+    {
+        const log: FetchLog[] = [];
+        const translator = new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja' });
+        globalThis.fetch = storedFetch(new Map([[await hashOf(translator, TITLE), `⟪item_0001⟫${TITLE}`]]), log);
+
+        await new HeadTitleTranslator(undefined, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe(TITLE);
+        expect(reported(log)).toEqual(['⟪item_0001⟫Garden Lantern', '⟪item_0001⟫SwagDemo']);
+    });
+
+    it('serves the stored page title piece over the whole title', async () =>
+    {
+        const log: FetchLog[] = [];
+        const translator = new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja' });
+        globalThis.fetch = storedFetch(new Map([
+            [await hashOf(translator, 'Garden Lantern'), '⟪item_0001⟫Lanterna da giardino'],
+            [await hashOf(translator, TITLE), '⟪item_0001⟫Lanterna – SwagDemo'],
+        ]), log);
+
+        await new HeadTitleTranslator(undefined, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
+        expect(misses(log)).toHaveLength(0);
+    });
+
+    it('keeps the hash a title without the site name had before', async () =>
+    {
+        const log: FetchLog[] = [];
+        globalThis.fetch = storedFetch(new Map(), log);
+        document.title = 'Store hours';
+
+        await new HeadTitleTranslator(undefined, 'SwagDemo').translate(new CacheFirstTranslator({ sourceLang: 'es', targetLang: 'ja' }));
+
+        expect(new URL(lookups(log)[0].url).searchParams.getAll('hash')).toEqual([PINNED_STORE_HOURS_HASH]);
+        expect(reported(log)).toEqual(['⟪item_0001⟫Store hours']);
     });
 });

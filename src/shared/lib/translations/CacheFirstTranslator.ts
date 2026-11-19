@@ -160,6 +160,8 @@ export class CacheFirstTranslator extends Translator
             remaining = unresolved;
         }
 
+        remaining = remaining.filter(group => this._needsMissReport(group, groupsForCache, translatedById));
+
         // The miss proxy recomputes fingerprints, so client hashes never enter
         // the mutable request. Accepted work is delivered by SSE when possible.
         const failures: TranslationGroupFailure[] = [];

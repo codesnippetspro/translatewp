@@ -1,15 +1,17 @@
 import { HeadTitleTranslator, type SeoStringTranslator } from '@/shared/lib/translations/headTitle';
+import type { SeoStringRequest } from '@/shared/lib/translations/Translator';
 
-type Call = { source: string; contextKey: string };
+type Call = SeoStringRequest[];
 
 function fakeTranslator(map: Record<string, string | null>): { translator: SeoStringTranslator; calls: Call[] }
 {
     const calls: Call[] = [];
     const translator: SeoStringTranslator = {
-        async translateSeoString(source, contextKey)
+        async translateSeoStrings(requests, contextKey)
         {
-            calls.push({ source, contextKey });
-            return Object.prototype.hasOwnProperty.call(map, source) ? map[source] : null;
+            expect(contextKey).toBe('seo:title');
+            calls.push(requests);
+            return requests.map(({ source }) => Object.prototype.hasOwnProperty.call(map, source) ? map[source] : null);
         },
     };
     return { translator, calls };
@@ -40,7 +42,7 @@ describe('HeadTitleTranslator', () =>
         expect(document.title).toBe('Weekly schedule (PL)');
         expect(og?.getAttribute('content')).toBe('Weekly schedule (PL)');
         // The og:title mirrors the title, so it reuses that one resolution.
-        expect(calls).toEqual([{ source: 'Weekly schedule', contextKey: 'seo:title' }]);
+        expect(calls).toEqual([[{ source: 'Weekly schedule' }]]);
     });
 
     it('translates an og:title that differs from the page title on its own', async () =>
@@ -55,67 +57,7 @@ describe('HeadTitleTranslator', () =>
 
         expect(document.title).toBe('Weekly schedule (PL)');
         expect(og?.getAttribute('content')).toBe('Zestaw notatników HARBOR');
-        expect(calls).toHaveLength(2);
-    });
-
-    it('asks for a differing og:title together with the page title, not after it', async () =>
-    {
-        const meta = setHead('About us – Acme', 'Our team');
-        const asked: string[] = [];
-        const answers: Array<(value: string | null) => void> = [];
-        const translator: SeoStringTranslator = {
-            translateSeoString: source => new Promise<string | null>(resolve =>
-            {
-                asked.push(source);
-                answers.push(value => resolve(value));
-            }),
-        };
-
-        const done = new HeadTitleTranslator(document).translate(translator);
-        await Promise.resolve();
-
-        // All parts are waiting at once, so they travel in one lookup and one miss report.
-        expect(asked).toEqual(['About us', 'Acme', 'Our team']);
-
-        answers[2]('Unser Team');
-        answers[1](null);
-        answers[0]('Über uns');
-        await done;
-        expect(document.title).toBe('Über uns – Acme');
-        expect(meta?.getAttribute('content')).toBe('Unser Team');
-    });
-
-    it('translates the page title apart from the site name it is joined to', async () =>
-    {
-        const og = setHead('Garden Lantern – SwagDemo', 'Garden Lantern');
-        const { translator, calls } = fakeTranslator({ 'Garden Lantern': 'Lanterna da giardino' });
-
-        await new HeadTitleTranslator(document).translate(translator);
-
-        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
-        expect(og?.getAttribute('content')).toBe('Lanterna da giardino');
-        expect(calls.map(call => call.source)).toEqual(['Garden Lantern', 'SwagDemo']);
-    });
-
-    it('keeps every separator of a paged title as written', async () =>
-    {
-        setHead('Shop | Page 2 | SwagDemo');
-        const { translator } = fakeTranslator({ Shop: 'Negozio', 'Page 2': 'Pagina 2' });
-
-        await new HeadTitleTranslator(document).translate(translator);
-
-        expect(document.title).toBe('Negozio | Pagina 2 | SwagDemo');
-    });
-
-    it('does not split a hyphenated word', async () =>
-    {
-        setHead('Wi-Fi setup');
-        const { translator, calls } = fakeTranslator({ 'Wi-Fi setup': 'Configurazione Wi-Fi' });
-
-        await new HeadTitleTranslator(document).translate(translator);
-
-        expect(document.title).toBe('Configurazione Wi-Fi');
-        expect(calls.map(call => call.source)).toEqual(['Wi-Fi setup']);
+        expect(calls).toEqual([[{ source: 'Weekly schedule' }, { source: 'Notebook bundle HARBOR' }]]);
     });
 
     it('keeps the source title when nothing is translated yet', async () =>
@@ -152,10 +94,7 @@ describe('HeadTitleTranslator', () =>
         await controller.translate(translator); // second switch must re-read the source, not the translated title
 
         expect(document.title).toBe('Weekly schedule (PL)');
-        expect(calls).toEqual([
-            { source: 'Weekly schedule', contextKey: 'seo:title' },
-            { source: 'Weekly schedule', contextKey: 'seo:title' },
-        ]);
+        expect(calls).toEqual([[{ source: 'Weekly schedule' }], [{ source: 'Weekly schedule' }]]);
     });
 
     it('does nothing when restore runs before any translation', () =>
@@ -180,12 +119,12 @@ describe('HeadTitleTranslator with a server-named source title', () =>
         meta.setAttribute('name', 'translatewp-source-title');
         meta.setAttribute('content', 'Par mums - Harbor Dance Studio');
         document.head.appendChild(meta);
-        const { translator, calls } = fakeTranslator({ 'Par mums': 'About us' });
+        const { translator, calls } = fakeTranslator({ 'Par mums - Harbor Dance Studio': 'About us - Harbor Dance Studio' });
 
         const subject = new HeadTitleTranslator();
         await subject.translate(translator);
 
-        expect(calls.map(call => call.source)).toEqual(['Par mums', 'Harbor Dance Studio']);
+        expect(calls).toEqual([[{ source: 'Par mums - Harbor Dance Studio' }]]);
         expect(document.title).toBe('About us - Harbor Dance Studio');
         expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('About us - Harbor Dance Studio');
 
@@ -200,7 +139,7 @@ describe('HeadTitleTranslator on a switch that yields no translation', () =>
     {
         setHead('Page not found - Site');
         const subject = new HeadTitleTranslator();
-        await subject.translate(fakeTranslator({ 'Page not found': 'Pagina non trovata' }).translator);
+        await subject.translate(fakeTranslator({ 'Page not found - Site': 'Pagina non trovata - Site' }).translator);
         expect(document.title).toBe('Pagina non trovata - Site');
 
         await subject.translate(fakeTranslator({}).translator);
@@ -218,5 +157,89 @@ describe('HeadTitleTranslator on a switch that yields no translation', () =>
         await subject.translate(fakeTranslator({}).translator);
         expect(document.title).toBe('Pagina non trovata - Site');
         meta.remove();
+    });
+});
+
+describe('HeadTitleTranslator with the site name', () =>
+{
+    const asked = (calls: Call[]): string[][] => calls.map(call => call.map(request => request.source));
+
+    it('asks for the product title and the site name apart, in one call, with the whole title only looked up', async () =>
+    {
+        const og = setHead('Garden Lantern – SwagDemo', 'Garden Lantern');
+        const { translator, calls } = fakeTranslator({ 'Garden Lantern': 'Lanterna da giardino' });
+
+        await new HeadTitleTranslator(document, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
+        expect(og?.getAttribute('content')).toBe('Lanterna da giardino');
+        expect(calls).toEqual([[
+            { source: 'Garden Lantern', coveredBy: 'Garden Lantern – SwagDemo' },
+            { source: 'SwagDemo', coveredBy: 'Garden Lantern – SwagDemo' },
+            { source: 'Garden Lantern – SwagDemo', lookupOnly: true },
+            { source: 'Garden Lantern' },
+        ]]);
+    });
+
+    it('splits off a site name that leads the title', async () =>
+    {
+        setHead('SwagDemo | Just another shop');
+        const { translator } = fakeTranslator({ 'Just another shop': 'Solo un altro negozio' });
+
+        await new HeadTitleTranslator(document, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('SwagDemo | Solo un altro negozio');
+    });
+
+    it.each([
+        ['Rock – Paper – Scissors – Site', 'Site', 'Rock – Paper – Scissors'],
+        ['5 - 10 Tips – Site', 'Site', '5 - 10 Tips'],
+        ['Mon – Fri Hours | Shop', 'Shop', 'Mon – Fri Hours'],
+    ])('keeps the page part of %j whole', async (title, siteName, page) =>
+    {
+        setHead(title);
+        const { translator, calls } = fakeTranslator({});
+
+        await new HeadTitleTranslator(document, siteName).translate(translator);
+
+        expect(asked(calls)).toEqual([[page, siteName, title]]);
+    });
+
+    it.each([
+        ['A < B: Guide', 'Site'],
+        ['Welcome to Our Site', 'Our Site'],
+        ['Garden Lantern – SwagDemo', ''],
+        ['SwagDemo', 'SwagDemo'],
+    ])('asks for %j whole, as before, when the site name is not joined at an edge', async (title, siteName) =>
+    {
+        setHead(title);
+        const { translator, calls } = fakeTranslator({});
+
+        await new HeadTitleTranslator(document, siteName).translate(translator);
+
+        expect(calls).toEqual([[{ source: title }]]);
+    });
+
+    it('uses the translation stored for the whole title when the page part has none', async () =>
+    {
+        setHead('Garden Lantern – SwagDemo');
+        const { translator } = fakeTranslator({ 'Garden Lantern – SwagDemo': 'Lanterna da giardino – SwagDemo' });
+
+        await new HeadTitleTranslator(document, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
+    });
+
+    it('prefers the page part over the translation stored for the whole title', async () =>
+    {
+        setHead('Garden Lantern – SwagDemo');
+        const { translator } = fakeTranslator({
+            'Garden Lantern': 'Lanterna da giardino',
+            'Garden Lantern – SwagDemo': 'Lanterna – SwagDemo',
+        });
+
+        await new HeadTitleTranslator(document, 'SwagDemo').translate(translator);
+
+        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
     });
 });

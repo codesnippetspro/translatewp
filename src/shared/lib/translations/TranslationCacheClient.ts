@@ -17,6 +17,11 @@ export type GroupCacheMeta = {
     markerPayload: string;
     hash: string;
     siteId: string;
+    // Looked up with the rest but never reported as a miss.
+    lookupOnly?: boolean;
+    // A group not reported as a miss when the group with this hash was served
+    // with a translation that differs from its source.
+    coveredBy?: string;
 };
 
 export type TranslationCachePlan = {
