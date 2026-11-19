@@ -154,7 +154,7 @@ if ( null === $mysqld ) {
 } else {
 	$started = queue_metadata_start_server( $mysqld );
 	if ( is_string( $started ) ) {
-		if ( getenv( 'TWP_TEST_MYSQLD' ) ) {
+		if ( getenv( 'TWP_TEST_DB_BIN' ) ) {
 			qm_assert( false, 'The requested MySQL server did not start: ' . $started );
 		} else {
 			echo "QueueMetadataTest: real engine skipped: {$started}\n";

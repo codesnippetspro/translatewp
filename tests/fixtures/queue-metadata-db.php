@@ -92,9 +92,9 @@ class QueueMetadataTestDb {
 	}
 }
 
-/** Finds a mysqld binary: TWP_TEST_MYSQLD, Homebrew, then Local's bundled servers. */
+/** Finds a mysqld or mariadbd binary: TWP_TEST_DB_BIN, Homebrew, then Local's bundled servers. */
 function queue_metadata_find_mysqld(): ?string {
-	$explicit = getenv( 'TWP_TEST_MYSQLD' );
+	$explicit = getenv( 'TWP_TEST_DB_BIN' );
 	if ( $explicit ) {
 		return is_executable( $explicit ) ? $explicit : null;
 	}
@@ -139,17 +139,28 @@ function queue_metadata_start_server( string $mysqld ) {
 	$remove = static function () use ( $dir ): void {
 		exec( 'rm -rf ' . escapeshellarg( $dir ) );
 	};
-	$common = '--no-defaults --datadir=' . escapeshellarg( $dir . '/data' ) . ' --log-error=' . escapeshellarg( $dir . '/err.log' );
-	exec( escapeshellarg( $mysqld ) . ' ' . $common . ' --initialize-insecure 2>&1', $out, $code );
+	$basedir = dirname( $mysqld, 2 );
+	$mariadb = 'mariadbd' === basename( $mysqld );
+	$common  = '--no-defaults --basedir=' . escapeshellarg( $basedir ) . ' --datadir=' . escapeshellarg( $dir . '/data' );
+	if ( $mariadb ) {
+		$init   = escapeshellarg( $basedir . '/bin/mariadb-install-db' ) . ' ' . $common . ' --auth-root-authentication-method=normal --skip-test-db';
+		$common .= ' --lc-messages-dir=' . escapeshellarg( $basedir . '/share/mariadb' ) . ' --plugin-dir=' . escapeshellarg( $basedir . '/lib/plugin' );
+		$extra   = ' --skip-networking=0';
+	} else {
+		$init  = escapeshellarg( $mysqld ) . ' ' . $common . ' --initialize-insecure';
+		$extra = ' --mysqlx=OFF --skip-log-bin';
+	}
+	$common .= ' --log-error=' . escapeshellarg( $dir . '/err.log' );
+	exec( $init . ' --log-error=' . escapeshellarg( $dir . '/err.log' ) . ' 2>&1', $out, $code );
 	if ( 0 !== $code ) {
 		$log = (string) @file_get_contents( $dir . '/err.log' );
 		$remove();
-		return 'initialize failed: ' . trim( implode( ' ', $out ) . ' ' . substr( $log, -300 ) );
+		return 'initialize failed: ' . trim( substr( implode( ' ', $out ), -300 ) . ' ' . substr( $log, -300 ) );
 	}
 	$cmd = escapeshellarg( $mysqld ) . ' ' . $common
 		. ' --port=' . $port . ' --bind-address=127.0.0.1 --socket=' . escapeshellarg( $socket )
 		. ' --pid-file=' . escapeshellarg( $dir . '/mysqld.pid' )
-		. ' --mysqlx=OFF --skip-log-bin --max-allowed-packet=1M > /dev/null 2>&1 & echo $!';
+		. $extra . ' --max-allowed-packet=1M > /dev/null 2>&1 & echo $!';
 	$pid = (int) shell_exec( $cmd );
 	$stop = static function () use ( $pid, $dir, $remove ): void {
 		if ( $pid > 0 ) {
