@@ -161,6 +161,8 @@ export class CacheFirstTranslator extends Translator
             remaining = unresolved;
         }
 
+        remaining = remaining.filter(group => this._needsMissReport(group, groupsForCache, translatedById));
+
         // A blocked service cannot deliver what a miss report would request.
         if (remaining.length && isServiceBlocked())
         {

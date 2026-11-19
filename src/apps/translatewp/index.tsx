@@ -75,7 +75,7 @@ export const TranslateWP = () =>
         new HydrationStore(undefined, window.TranslateWP.context.cache_version, window.TranslateWP.context.cache_versions ?? {})
     );
     const missCoalescerRef = useRef<MissReportCoalescer>(new MissReportCoalescer());
-    const headTitleRef = useRef<HeadTitleTranslator>(new HeadTitleTranslator());
+    const headTitleRef = useRef<HeadTitleTranslator>(new HeadTitleTranslator(undefined, window.TranslateWP.context.site_name ?? ''));
     const pageUnloadingRef = useRef(false);
     useEffect(() =>
     {

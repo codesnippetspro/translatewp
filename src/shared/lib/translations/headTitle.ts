@@ -1,3 +1,6 @@
+import { hasTranslationLetters } from '@/shared/lib/translations/hasTranslationLetters';
+import type { SeoStringRequest } from '@/shared/lib/translations/Translator';
+
 // The server-rendered <title> and og:title are a crawler's source of truth and
 // only catch up once the warm-up back-fill stores the title. For a person
 // switching language in the browser, that lag is seconds of a source-language
@@ -12,13 +15,22 @@ const OG_TITLE_SELECTOR = 'meta[property="og:title"]';
 // translation back as if it were source text.
 export const SOURCE_TITLE_SELECTOR = 'meta[name="translatewp-source-title"]';
 export const SOURCE_OG_TITLE_SELECTOR = 'meta[name="translatewp-source-og-title"]';
+// The separator WordPress and SEO plugins put between a page title and the
+// site name: one to three marks with spaces around them (" – ", " | ", " :: ").
+const SITE_NAME_AT_END = /^(.*?)(\s+[^\p{L}\p{N}\s]{1,3}\s+)$/su;
+const SITE_NAME_AT_START = /^(\s+[^\p{L}\p{N}\s]{1,3}\s+)(.*)$/su;
 
 export type SeoStringTranslator = {
-    translateSeoString(
-        source: string,
+    translateSeoStrings(
+        requests: SeoStringRequest[],
         contextKey: string,
         options?: { signal?: AbortSignal }
-    ): Promise<string | null>;
+    ): Promise<(string | null)[]>;
+};
+
+type TitlePlan = {
+    requests: SeoStringRequest[];
+    resolve: (translated: Map<string, string | null>) => string | null;
 };
 
 /**
@@ -34,10 +46,12 @@ export class HeadTitleTranslator
     #originalOgTitle: string | null = null;
     #captured = false;
     #wroteTitle = false;
+    readonly #siteName: string;
 
-    constructor(doc: Document | undefined = globalThis.document)
+    constructor(doc: Document | undefined = globalThis.document, siteName = '')
     {
         this.#doc = doc;
+        this.#siteName = siteName.trim();
     }
 
     async translate(translator: SeoStringTranslator, options: { signal?: AbortSignal } = {}): Promise<void>
@@ -51,14 +65,14 @@ export class HeadTitleTranslator
         const og = doc.querySelector(OG_TITLE_SELECTOR);
         const ogSource = (this.#originalOgTitle ?? '').trim();
 
-        // The og:title usually mirrors the page title and reuses its
-        // translation. When it differs, both are asked for at once, so they
-        // share one lookup and one miss report instead of a second round.
         const ogDiffers = Boolean(og && ogSource && ogSource !== titleSource);
-        const [titleTranslation, ownOgTranslation] = await Promise.all([
-            titleSource ? translator.translateSeoString(titleSource, SEO_TITLE_CONTEXT_KEY, options) : null,
-            ogDiffers ? translator.translateSeoString(ogSource, SEO_TITLE_CONTEXT_KEY, options) : null,
-        ]);
+        const titlePlan = planTitle(titleSource, this.#siteName);
+        const ogPlan = ogDiffers ? planTitle(ogSource, this.#siteName) : null;
+        const requests = [...titlePlan.requests, ...(ogPlan?.requests ?? [])];
+        const answers = await translator.translateSeoStrings(requests, SEO_TITLE_CONTEXT_KEY, options);
+        const translated = new Map(requests.map((request, index) => [request.source, answers[index] ?? null]));
+        const titleTranslation = titleSource ? titlePlan.resolve(translated) : null;
+        const ownOgTranslation = ogPlan ? ogPlan.resolve(translated) : null;
 
         if (options.signal?.aborted) return;
 
@@ -102,4 +116,49 @@ export class HeadTitleTranslator
         this.#originalOgTitle = og ? (sourceOgTitle ?? sourceTitle ?? og.getAttribute('content') ?? '') : null;
         this.#captured = true;
     }
+}
+
+/**
+ * The pieces a title is translated in. A title that starts or ends with the
+ * site name joined by a spaced separator is asked for as the page title and the
+ * site name; its whole text is only looked up, for a translation stored before.
+ * Any other title is one piece.
+ */
+function planTitle(source: string, siteName: string): TitlePlan
+{
+    const whole: TitlePlan = { requests: [{ source }], resolve: translated => translated.get(source) ?? null };
+    if (!siteName || source === siteName) return whole;
+
+    let page = '';
+    let join: ((pageText: string, siteText: string) => string) | null = null;
+    const atEnd = source.endsWith(siteName) ? SITE_NAME_AT_END.exec(source.slice(0, -siteName.length)) : null;
+    const atStart = source.startsWith(siteName) ? SITE_NAME_AT_START.exec(source.slice(siteName.length)) : null;
+    if (atEnd && hasTranslationLetters(atEnd[1]))
+    {
+        page = atEnd[1];
+        join = (pageText, siteText) => `${pageText}${atEnd[2]}${siteText}`;
+    }
+    else if (atStart && hasTranslationLetters(atStart[2]))
+    {
+        page = atStart[2];
+        join = (pageText, siteText) => `${siteText}${atStart[1]}${pageText}`;
+    }
+    if (!join) return whole;
+
+    const joinParts = join;
+    return {
+        requests: [
+            { source: page, coveredBy: source },
+            { source: siteName, coveredBy: source },
+            { source, lookupOnly: true },
+        ],
+        resolve: (translated) =>
+        {
+            const pageTranslation = translated.get(page);
+            const siteTranslation = translated.get(siteName);
+            if (pageTranslation) return joinParts(pageTranslation, siteTranslation ?? siteName);
+
+            return translated.get(source) ?? (siteTranslation ? joinParts(page, siteTranslation) : null);
+        },
+    };
 }
