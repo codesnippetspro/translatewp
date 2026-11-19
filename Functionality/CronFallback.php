@@ -231,7 +231,10 @@ class CronFallback {
 		}
 
 		if ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) || false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) ) {
-			return true;
+			$next = wp_next_scheduled( Indexer::DRAIN_HOOK );
+			if ( false === $next || (int) $next <= time() - self::OVERDUE_SECONDS ) {
+				return true;
+			}
 		}
 		foreach ( self::REFILL_HOOKS as $hook ) {
 			if ( $this->scheduled_is_late( $hook ) ) {

@@ -104,4 +104,21 @@ if ( in_array( $case, [ 'lock', 'all' ], true ) ) {
     check_lifecycle( false !== strpos( CronFallback::notice_message(), 'database' ), 'Unsupported named locks are visible in the Dashboard' );
     $GLOBALS['wpdb'] = $previous;
 }
+if ( in_array( $case, [ 'metadata', 'all' ], true ) ) {
+    lifecycle_fixture();
+    $html = '<html><head><title>Shop | Our site</title><meta property="og:title" content="Share our shop"><meta name="twitter:title" content="Shop on social"><meta name="description" content="Read about our shop"><meta property="og:description" content="Share our products"><meta name="twitter:description" content="See our products"></head><body><p>Welcome</p></body></html>';
+    $free = \TranslateWP\Components\RenderedPageExtraction::extract( $html );
+    $payloads = array_column( $free, 'markerPayload' );
+    check_lifecycle( in_array( '⟪item_0001⟫Share our shop', $payloads, true ) && in_array( '⟪item_0001⟫Shop on social', $payloads, true ), 'Background reads warm whole share titles with the existing marker' );
+    check_lifecycle( ! in_array( '⟪item_0001⟫Read about our shop', $payloads, true ), 'Free background reads do not warm paid descriptions' );
+    set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+    wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => true );
+    $pro = \TranslateWP\Components\RenderedPageExtraction::extract( $html );
+    $contexts = array_column( $pro, 'contextKey' );
+    foreach ( [ 'seo:meta_description', 'seo:og_description', 'seo:twitter_description' ] as $context ) {
+        check_lifecycle( in_array( $context, $contexts, true ), 'Entitled background reads warm each supported description' );
+    }
+    $titles = array_values( array_filter( $pro, static fn( array $group ): bool => '⟪item_0001⟫Shop | Our site' === $group['markerPayload'] ) );
+    check_lifecycle( 1 === count( $titles ) && 'seo:title' === $titles[0]['contextKey'] && 'attribute' === $titles[0]['contextKind'], 'Whole title warming retains the visitor title context and marker contract' );
+}
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";

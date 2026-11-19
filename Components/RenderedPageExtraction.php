@@ -82,9 +82,16 @@ class RenderedPageExtraction {
 				'contextKind' => 'attribute',
 			];
 		}
-		$meta_contexts = [ 'og:title' => 'seo:title', 'twitter:title' => 'seo:title' ];
+		$meta_contexts = [
+			'og:title' => 'seo:title',
+			'twitter:title' => 'seo:title',
+		];
 		if ( ProEligibility::unlocks_pro_features() ) {
-			$meta_contexts += [ 'description' => 'seo:meta_description', 'og:description' => 'seo:og_description', 'twitter:description' => 'seo:twitter_description' ];
+			$meta_contexts += [
+				'description' => 'seo:meta_description',
+				'og:description' => 'seo:og_description',
+				'twitter:description' => 'seo:twitter_description',
+			];
 		}
 		foreach ( $document->getElementsByTagName( 'meta' ) as $meta ) {
 			$name = strtolower( $meta->getAttribute( 'name' ) );
