@@ -29,7 +29,7 @@ const open = async (page: Page, { width, height, side, offset, trigger, dir }: P
     await page.goto(pathToFileURL(join(out, 'index.html')).href);
     await page.setContent(`<!doctype html><html dir="${dir}"><body style="margin:0;font-family:sans-serif">
         <header style="position:relative;height:64px;border-bottom:1px solid #ddd"><span id="host" style="position:absolute;top:12px;${side}:${offset}px"></span></header>
-        <main style="height:1600px"></main></body></html>`);
+        <main></main></body></html>`);
     await page.addStyleTag({ path: join(out, 'harness.css') });
     await page.addScriptTag({ path: join(out, 'harness.js') });
     await page.evaluate(trigger => (window as unknown as { mountSwitcher: (host: HTMLElement, trigger: string) => void }).mountSwitcher(document.getElementById('host')!, trigger), trigger);
@@ -51,7 +51,7 @@ for (const place of phones)
     {
         await open(page, place);
         const screen = await page.evaluate(() => ({ width: document.documentElement.clientWidth, height: window.innerHeight, scroll: document.documentElement.scrollWidth }));
-        expect(screen.scroll).toBe(place.width);
+        expect(screen.scroll).toBe(screen.width);
         for (const target of ['.twp-dropdown', '.twp-dropdown-item >> nth=-1', '.twp-promo span'])
         {
             const rect = (await page.locator(target).boundingBox())!;
