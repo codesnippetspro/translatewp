@@ -57,6 +57,8 @@ class IndexQueue {
 	private const META_JOB_OUTCOME = '_twp_job_outcome';
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
+	public const DEFERRED_REFILLS_OPTION = 'translatewp_deferred_refill_rows';
+	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
 	private const META_REFILL_FINISHED = '_twp_refill_finished';
 	// A read row re-queued because its page changed; its next reading is translated.
 	private const META_TRANSLATE_ON_READ = '_twp_translate_on_read';
@@ -327,10 +329,10 @@ class IndexQueue {
 		return $inserted;
 	}
 
-	public function rows_before_lexicon_changes( array $times ): array {
+	public function rows_before_lexicon_changes( array $times, ?array $ids = null ): array {
 		return array_values(
             array_filter(
-                $this->list_rows(),
+                $this->list_rows( $ids ),
                 static function ( array $row ) use ( $times ): bool {
 					$changed_at = (int) ( $times[ $row['language'] ] ?? 0 );
 					$translated_at = (int) get_post_meta( (int) $row['id'], self::META_TRANSLATED_AT, true );
@@ -346,7 +348,19 @@ class IndexQueue {
 	public function enqueue_retranslate( array $rows, bool $force = true ): int {
 		$queued = 0;
 
-		foreach ( $rows as $row ) {
+		$rows = array_values( $rows );
+		foreach ( $rows as $index => $row ) {
+			if ( QueueExecution::expired() ) {
+				update_option(
+                    self::DEFERRED_REFILLS_OPTION,
+                    [
+						'rows' => array_slice( $rows, $index ),
+						'force' => $force,
+					],
+                    false
+                );
+				break;
+			}
 			$object_type = (string) $row['object_type'];
 			$object_id   = (int) $row['object_id'];
 			$language    = (string) $row['language'];
@@ -440,15 +454,34 @@ class IndexQueue {
 		return $queued;
 	}
 
+	public function resume_deferred_refills(): void {
+		$work = get_option( self::DEFERRED_REFILLS_OPTION, false );
+		if ( ! is_array( $work ) || empty( $work['rows'] ) ) {
+			delete_option( self::DEFERRED_REFILLS_OPTION );
+			return;
+		}
+		if ( QueueExecution::expired() ) {
+			return;
+		}
+		$row = array_shift( $work['rows'] );
+		$this->enqueue_retranslate( [ $row ], ! empty( $work['force'] ) );
+		if ( $work['rows'] ) {
+			update_option( self::DEFERRED_REFILLS_OPTION, $work, false );
+		} else {
+			delete_option( self::DEFERRED_REFILLS_OPTION );
+		}
+		\TranslateWP\Functionality\Indexer::schedule_drain();
+	}
+
 	/**
 	 * Every queue row shaped for the admin page list: object identity, page
 	 * url/title, language, its stage/status, the retranslate flag, the failure
 	 * reason, and the time its status last changed.
 	 */
-	public function list_rows(): array {
+	public function list_rows( ?array $ids = null ): array {
 		$rows = [];
 
-		foreach ( $this->all_row_ids() as $post_id ) {
+		foreach ( $ids ?? $this->all_row_ids() as $post_id ) {
 			if ( self::READ_LANGUAGE === (string) get_post_meta( $post_id, self::META_LANGUAGE, true ) ) {
 				continue;
 			}
@@ -462,7 +495,7 @@ class IndexQueue {
 				'stage'       => (string) get_post_meta( $post_id, self::META_STAGE, true ),
 				'status'      => $this->row_status( $post_id ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
-				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
+				'retranslating' => $this->is_refill( $post_id ),
 				'reason'      => (string) get_post_meta( $post_id, self::META_FAIL_REASON, true ),
 				'updated'     => (int) get_post_meta( $post_id, self::META_UPDATED_AT, true ),
 				'claimed_at'  => (int) get_post_meta( $post_id, self::META_CLAIMED_AT, true ),
@@ -483,6 +516,11 @@ class IndexQueue {
 	public function is_translated( int $id ): bool {
 		return self::STATUS_DONE === $this->row_status( $id )
 			&& (int) get_post_meta( $id, self::META_TRANSLATED_AT, true ) > 0;
+	}
+
+	private function is_refill( int $id ): bool {
+		return (int) get_post_meta( $id, self::META_RETRANSLATING, true ) > 0
+			&& ! get_post_meta( $id, self::META_REFILL_FINISHED, true ) && ! $this->is_translated( $id );
 	}
 
 	public function mark_translated( array $ids ): void {
@@ -531,6 +569,7 @@ class IndexQueue {
 						PageCachePurge::purge_all( 'retranslation settled' );
 						foreach ( $rows as $id ) {
 							update_post_meta( $id, self::META_REFILL_FINISHED, 1 );
+							delete_post_meta( $id, self::META_RETRANSLATING );
 						}
 					}
 				}
@@ -671,6 +710,9 @@ class IndexQueue {
 		update_post_meta( $existing_id, self::META_ATTEMPTS, 0 );
 		update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
 		update_post_meta( $existing_id, self::META_RETRANSLATE, 0 );
+		delete_post_meta( $existing_id, self::META_RETRANSLATING );
+		delete_post_meta( $existing_id, self::META_REFILL_FINISHED );
+		delete_post_meta( $existing_id, '_twp_reader_not_before' );
 		update_post_meta( $existing_id, self::META_PAGE_TITLE, (string) ( $row['page_title'] ?? '' ) );
 		delete_post_meta( $existing_id, self::META_CLAIMED_AT );
 		delete_post_meta( $existing_id, self::META_STARTED_AT );
@@ -800,7 +842,7 @@ class IndexQueue {
 				'payload'     => self::decode_payload( (string) get_post_field( 'post_content', $post_id ) ),
 				'attempts'    => (int) get_post_meta( $post_id, self::META_ATTEMPTS, true ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
-				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
+				'retranslating' => $this->is_refill( $post_id ),
 			];
 		}
 
@@ -878,7 +920,7 @@ class IndexQueue {
 				'payload'     => self::decode_payload( (string) get_post_field( 'post_content', $post_id ) ),
 				'attempts'    => (int) get_post_meta( $post_id, self::META_ATTEMPTS, true ),
 				'retranslate' => (int) get_post_meta( $post_id, self::META_RETRANSLATE, true ) > 0,
-				'retranslating' => (int) get_post_meta( $post_id, self::META_RETRANSLATING, true ) > 0 && ! $this->is_translated( $post_id ),
+				'retranslating' => $this->is_refill( $post_id ),
 			];
 		}
 
@@ -936,6 +978,7 @@ class IndexQueue {
 			update_post_meta( $id, self::META_FAIL_REASON, '' );
 			update_post_meta( $id, self::META_UPDATED_AT, $this->now() );
 			delete_post_meta( $id, self::META_CLAIMED_AT );
+			delete_post_meta( $id, self::META_PREVIOUS_READ );
 
 			return true;
 		}
@@ -952,7 +995,7 @@ class IndexQueue {
 	/**
 	 * Queue the site's pages for reading only, one row per page with
 	 * no language. A page already read is read again: its row returns to the
-	 * extract stage with its payload dropped.
+	 * extract stage while its last successful payload keeps serving.
 	 */
 	public function enqueue_read( array $rows ): int {
 		$queued = 0;
@@ -972,6 +1015,9 @@ class IndexQueue {
 				continue;
 			}
 
+			if ( $this->is_finished_read_row( $existing_id ) ) {
+				update_post_meta( $existing_id, self::META_PREVIOUS_READ, (string) get_post_field( 'post_content', $existing_id ) );
+			}
 			update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
 			update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
 			update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
@@ -981,12 +1027,13 @@ class IndexQueue {
 			update_post_meta( $existing_id, self::META_PAGE_TITLE, (string) ( $row['page_title'] ?? '' ) );
 			delete_post_meta( $existing_id, self::META_CLAIMED_AT );
 			delete_post_meta( $existing_id, self::META_STARTED_AT );
+
 			wp_update_post(
-				[
-					'ID'           => $existing_id,
+                [
+					'ID' => $existing_id,
 					'post_content' => '',
 				]
-			);
+            );
 			$queued++;
 		}
 
@@ -1070,7 +1117,7 @@ class IndexQueue {
 	 */
 	public function read_items( string $object_type, int $object_id ): array {
 		$row_id = $this->find_row( $object_type, $object_id, self::READ_LANGUAGE );
-		if ( null === $row_id || ! $this->is_finished_read_row( $row_id ) ) {
+		if ( null === $row_id || self::READ_LANGUAGE !== (string) get_post_meta( $row_id, self::META_LANGUAGE, true ) ) {
 			return [];
 		}
 
@@ -1079,6 +1126,10 @@ class IndexQueue {
 			if ( 'publish' !== get_post_status( $object_id ) || $modified > (int) get_post_meta( $row_id, self::META_UPDATED_AT, true ) ) {
 				return [];
 			}
+		}
+		if ( ! $this->is_finished_read_row( $row_id ) ) {
+			$previous = json_decode( self::decode_payload( (string) get_post_meta( $row_id, self::META_PREVIOUS_READ, true ) ), true );
+			return is_array( $previous ) ? $previous : [];
 		}
 		return $this->read_row( $row_id )['items'];
 	}
@@ -1296,7 +1347,7 @@ class IndexQueue {
 
 		if ( $is_final ) {
 			if ( ! $merged ) {
-				return $this->complete( $id );
+				return self::READ_LANGUAGE === (string) get_post_meta( $id, self::META_LANGUAGE, true ) ? $this->store_payload( $id, '[]' ) : $this->complete( $id );
 			}
 
 			return $this->store_payload( $id, (string) wp_json_encode( array_values( $merged ) ) );
@@ -1861,6 +1912,14 @@ class IndexQueue {
 		);
 
 		return $ids ? (int) $ids[0] : null;
+	}
+
+	public function row_ids_after( int $after, int $limit ): array {
+		global $wpdb;
+		return array_map(
+			'intval',
+			$wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'private' AND ID > %d ORDER BY ID ASC LIMIT %d", self::POST_TYPE, $after, $limit ) )
+		);
 	}
 
 	private function all_row_ids(): array {

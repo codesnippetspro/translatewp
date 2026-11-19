@@ -263,6 +263,12 @@ class WP_Testwpdb {
 	}
 
 	public function get_col( string $query ): array {
+		if ( false !== strpos( $this->last_query, 'ID > %d ORDER BY ID ASC LIMIT %d' ) ) {
+			[ $type, $after, $limit ] = $this->prepared_args;
+			$ids = array_values( array_filter( $GLOBALS[ wp_test_blog_store( 'wp_test_posts' ) ][ $type ] ?? [], static fn( $id ): bool => $id > $after ) );
+			sort( $ids, SORT_NUMERIC );
+			return array_slice( $ids, 0, (int) $limit );
+		}
 		unset( $query );
 
 		if ( preg_match( '/^SELECT (option_name FROM wp_options|meta_key FROM wp_sitemeta) WHERE/', $this->last_query, $table ) ) {
@@ -706,6 +712,7 @@ function wp_test_blog_store( string $name ): string {
 }
 
 function get_posts( array $args = [] ) {
+	$GLOBALS['wp_test_get_posts_calls'][] = $args;
 	$post_type = $args['post_type'] ?? 'post';
 
 	if ( 'any' === $post_type && isset( $args['meta_key'] ) ) {
@@ -1207,6 +1214,7 @@ function wp_remote_post( string $url, array $args = [] ) {
 }
 
 function wp_remote_request( string $url, array $args = [] ) {
+	$GLOBALS['wp_test_remote_request_calls'][] = [ 'url' => $url, 'args' => $args ];
 	$path   = (string) parse_url( $url, PHP_URL_PATH );
 	$method = strtoupper( (string) ( $args['method'] ?? 'GET' ) );
 	$body   = json_decode( (string) ( $args['body'] ?? '' ), true );

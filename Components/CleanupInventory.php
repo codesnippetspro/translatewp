@@ -75,6 +75,9 @@ class CleanupInventory {
 		Indexer::SPINE_CHECKED_OPTION,
 		Indexer::READER_FAILURE_OPTION,
 		Indexer::REPAIR_RETRY_OPTION,
+		Indexer::LAST_KICK_OPTION,
+		IndexQueue::DEFERRED_REFILLS_OPTION,
+		\TranslateWP\Functionality\LexiconChanges::SEED_CURSOR_OPTION,
 		QueueExecution::LAST_REDUCED_OPTION,
 		QueueExecution::PHASE_OPTION,
 		ReadinessReconcile::REDUCED_CURSOR_OPTION,
@@ -116,6 +119,7 @@ class CleanupInventory {
 	public const TRANSIENTS = [
 		LoopbackKick::HEALTH_TRANSIENT,
 		LoopbackKick::FAILURE_TRANSIENT,
+		MutationLock::FAILURE_TRANSIENT,
 		'translatewp_loopback_probe',
 		'translatewp_pairing_verified',
 		TranslationStoreSync::REQUEUE_CHECK_TRANSIENT,

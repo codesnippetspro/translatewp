@@ -73,6 +73,7 @@ class Indexer {
 	private const TITLE_MARKER       = '⟪item_0001⟫';
 	public const REPAIR_JOB_FIELD = 'purpose';
 	public const REPAIR_JOB_PURPOSE = 'background_refresh';
+	public const LAST_KICK_OPTION = 'translatewp_background_kick_at';
 	public const REPAIR_RETRY_OPTION = 'translatewp_background_refresh_retry_at';
 	public const REPAIR_RETRY_SECONDS = 7200;
 	public const REPAIR_PAGE_LIMIT = 50;
@@ -1033,7 +1034,8 @@ class Indexer {
 
 	public function kick_due_drain(): void {
 		$next = wp_next_scheduled( self::DRAIN_HOOK );
-		if ( SiteConnection::is_connected() && $next && $next <= time() && (int) get_option( self::LAST_DRAIN_OPTION, 0 ) <= time() - self::RESCHEDULE_DELAY_SECONDS ) {
+		if ( SiteConnection::is_connected() && $next && $next <= time() && (int) get_option( self::LAST_DRAIN_OPTION, 0 ) <= time() - self::RESCHEDULE_DELAY_SECONDS && (int) get_option( self::LAST_KICK_OPTION, 0 ) <= time() - 60 ) {
+			update_option( self::LAST_KICK_OPTION, time(), false );
 			LoopbackKick::fire();
 		}
 	}
@@ -1059,6 +1061,9 @@ class Indexer {
 
 	public function reduced_read( ReadinessBudget $budget ): void {
 		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
+			return;
+		}
+		if ( CronFallback::run_refill_maintenance() ) {
 			return;
 		}
 		if ( get_option( self::SPINE_PENDING_OPTION, false ) ) {
@@ -1363,7 +1368,7 @@ class Indexer {
 
 		$repair = false;
 		foreach ( $language_rows as $row ) {
-			$repair = $repair || ! empty( $row['retranslating'] ) || ! empty( $row['retranslate'] );
+			$repair = $repair || ! empty( $row['retranslating'] );
 		}
 		$job = $this->create_job( $language, $repair );
 		if ( '' === $job['id'] ) {
@@ -1613,7 +1618,7 @@ class Indexer {
 	private function add_row_to_groups( array &$groups, array $row, array $items ): void {
 		$language    = (string) $row['language'];
 		$retranslate = ! empty( $row['retranslate'] );
-		$repair = $retranslate || ! empty( $row['retranslating'] );
+		$repair = ! empty( $row['retranslating'] );
 		$key         = $language . '|' . ( $retranslate ? '1' : '0' ) . '|' . ( $repair ? '1' : '0' );
 
 		if ( ! isset( $groups[ $key ] ) ) {

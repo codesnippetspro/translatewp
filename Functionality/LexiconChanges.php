@@ -10,12 +10,15 @@ use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\PlainText;
 use TranslateWP\Components\MutationLock;
+use TranslateWP\Components\QueueExecution;
 use TranslateWP\Components\TranslationProxySettings;
 use TranslateWP\Entities\CPTs\Lexicon;
 
 class LexiconChanges {
 
 	public const SEEDED_OPTION = 'translatewp_lexicon_changes_seeded';
+	public const SEED_CURSOR_OPTION = 'translatewp_lexicon_seed_refill_cursor';
+	private const SEED_BATCH_SIZE = 10;
 	public const SNAPSHOTS_OPTION = 'translatewp_lexicon_change_snapshots';
 	private static array $pending = [];
 
@@ -69,14 +72,40 @@ class LexiconChanges {
 		}
 		Options::update( 'cache.lexicon_changed_at', $times );
 		update_option( self::SNAPSHOTS_OPTION, $snapshots, false );
+		update_option( self::SEED_CURSOR_OPTION, 0, false );
 		update_option( self::SEEDED_OPTION, true, false );
-		$queue = new IndexQueue();
-		$rows = $queue->rows_before_lexicon_changes( $times );
-		if ( $rows && $queue->enqueue_retranslate( $rows, false ) > 0 ) {
-			TranslationStore::bump_cache_generation( array_values( array_unique( array_column( $rows, 'language' ) ) ) );
-			Indexer::schedule_drain();
-			LoopbackKick::fire();
+		Indexer::schedule_drain();
+		LoopbackKick::fire();
+	}
+
+	public static function run_seed_batch(): void {
+		if ( false === get_option( self::SEED_CURSOR_OPTION, false ) ) {
+			return;
 		}
+		QueueExecution::run(
+			static function (): void {
+				$queue = new IndexQueue();
+				$cursor = (int) get_option( self::SEED_CURSOR_OPTION, 0 );
+				$ids = $queue->row_ids_after( $cursor, self::SEED_BATCH_SIZE );
+				$times = (array) Options::get( 'cache.lexicon_changed_at', [] );
+				foreach ( $ids as $id ) {
+					if ( QueueExecution::expired() ) {
+						Indexer::schedule_drain();
+						return;
+					}
+					$rows = $queue->rows_before_lexicon_changes( $times, [ $id ] );
+					if ( $rows && $queue->enqueue_retranslate( $rows, false ) > 0 ) {
+						TranslationStore::bump_cache_generation( array_column( $rows, 'language' ) );
+					}
+					update_option( self::SEED_CURSOR_OPTION, $id, false );
+				}
+				if ( count( $ids ) < self::SEED_BATCH_SIZE ) {
+					delete_option( self::SEED_CURSOR_OPTION );
+				} else {
+					Indexer::schedule_drain( 60 );
+				}
+			}
+		);
 	}
 
 	public function edited( int $post_id ): void {

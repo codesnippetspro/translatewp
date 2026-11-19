@@ -6,6 +6,7 @@ use TranslateWP\Components\AdminNotices;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\QueueExecution;
+use TranslateWP\Components\MutationLock;
 use TranslateWP\Components\CrawlerDetection;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationStore;
@@ -14,6 +15,7 @@ class CronFallback {
 
 	public const DISMISS_ACTION = 'translatewp_dismiss_cron_late';
 	public const MAINTENANCE_HOOK = 'translatewp_background_queue_maintenance';
+	private const REFILL_HOOKS = [ KeepWarm::LEXICON_DEBOUNCE_HOOK, KeepWarm::SETTINGS_DEBOUNCE_HOOK, KeepWarm::VERSIONED_REFILL_HOOK ];
 
 	/** Per-user flag, suffixed with the user id, that hides the late-cron notice for a day after its X. */
 	private const DISMISSED_TRANSIENT = 'translatewp_cron_late_dismissed_';
@@ -106,6 +108,11 @@ class CronFallback {
 			return;
 		}
 
+		self::run_refill_maintenance();
+		if ( QueueExecution::expired() ) {
+			return;
+		}
+
 		if ( $this->scheduled_is_late( ReadinessReconcile::HOOK ) ) {
 			$this->clear_if_late( ReadinessReconcile::HOOK );
 			do_action( ReadinessReconcile::HOOK );
@@ -115,6 +122,33 @@ class CronFallback {
 			$this->clear_if_late( TranslationStoreSync::BACKFILL_HOOK );
 			do_action( TranslationStoreSync::BACKFILL_HOOK );
 		}
+	}
+
+	public static function run_refill_maintenance(): bool {
+		if ( ! SiteConnection::is_connected() || QueueExecution::expired() ) {
+			return false;
+		}
+		if ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) ) {
+			( new IndexQueue() )->resume_deferred_refills();
+			return true;
+		}
+		if ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) ) {
+			LexiconChanges::run_seed_batch();
+			return true;
+		}
+		$ran = false;
+		foreach ( self::REFILL_HOOKS as $hook ) {
+			$next = wp_next_scheduled( $hook );
+			if ( false !== $next && (int) $next <= time() - self::OVERDUE_SECONDS ) {
+				wp_unschedule_event( (int) $next, $hook );
+				do_action( $hook );
+				$ran = true;
+				if ( QueueExecution::is_reduced() ) {
+					break;
+				}
+			}
+		}
+		return $ran;
 	}
 
 	/**
@@ -131,7 +165,7 @@ class CronFallback {
 			return;
 		}
 
-		if ( ! $this->announced_late && ! $this->is_behind() && ! get_option( Indexer::READER_FAILURE_OPTION, false ) ) {
+		if ( ! $this->announced_late && ! $this->is_behind() && ! get_option( Indexer::READER_FAILURE_OPTION, false ) && ! get_transient( MutationLock::FAILURE_TRANSIENT ) ) {
 			return;
 		}
 
@@ -144,6 +178,9 @@ class CronFallback {
 
 	public static function notice_message(): string {
 
+		if ( get_transient( MutationLock::FAILURE_TRANSIENT ) ) {
+			return __( 'Background translation is waiting because the database does not support its worker lock. Ask your host to enable named database locks.', 'translate' );
+		}
 		$reader_error = (string) get_option( Indexer::READER_FAILURE_OPTION, '' );
 		if ( 'page_tls_failed' === $reader_error ) {
 			return __( 'Background reading could not verify the site HTTPS certificate. Fix the certificate or the site local DNS. Translation work for unread pages is waiting.', 'translate' );
@@ -191,6 +228,15 @@ class CronFallback {
 	public function is_behind(): bool {
 		if ( ! SiteConnection::is_connected() ) {
 			return false;
+		}
+
+		if ( false !== get_option( LexiconChanges::SEED_CURSOR_OPTION, false ) || false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) ) {
+			return true;
+		}
+		foreach ( self::REFILL_HOOKS as $hook ) {
+			if ( $this->scheduled_is_late( $hook ) ) {
+				return true;
+			}
 		}
 
 		// An overdue drain event counts only while push work waits in the
