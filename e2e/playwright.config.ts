@@ -16,7 +16,7 @@ export default defineConfig({
         trace: 'retain-on-failure',
         // Chromium hides scrollbars when headless; visitors' browsers show them,
         // and a dragged switcher must land exactly where it is let go with one showing.
-        launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] },
+        launchOptions: { args: ['--use-mock-keychain', '--password-store=basic'], ignoreDefaultArgs: ['--hide-scrollbars'] },
     },
     outputDir: './results',
 });

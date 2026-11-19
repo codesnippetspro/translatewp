@@ -313,7 +313,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
 
     return (
         <section
-            className="flex flex-col gap-3"
+            className="flex flex-col gap-3 mt-5"
             id={PENDING_PAGES_SECTION}
             ref={pendingSectionRef}
             aria-labelledby="twp-indexed-pages"
