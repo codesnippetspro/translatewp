@@ -48,7 +48,7 @@ $menus->add_admin_menu();
 
 $titles = $GLOBALS['wp_test_submenu_titles'];
 
-assert_true( [ 'translatewp', 'translatewp-seo', 'translatewp-lexicon', 'translatewp-settings' ] === array_keys( $titles ), 'Exactly the Dashboard, SEO Tools, Lexicon and Settings pages are registered in that order' );
+assert_true( [ 'translatewp', 'translatewp-seo', 'translatewp-lexicon', 'translatewp-settings', 'translatewp-support' ] === array_keys( $titles ), 'Exactly the Dashboard, SEO Tools, Lexicon, Settings and Support pages are registered in that order' );
 assert_true( 'SEO Tools' === ( $titles['translatewp-seo']['page'] ?? '' ), 'SEO Tools carries its own page title' );
 assert_true( [] === ( $GLOBALS['wp_test_removed_slugs'] ?? [] ), 'Every registered page stays visible in the menu' );
 
