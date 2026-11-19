@@ -13,15 +13,7 @@ class BlackFridayNotice {
 	private const CODE_SNIPPETS_OFFER_URL = 'https://codesnippets.pro/black-friday/';
 
 	private static function can_manage(): bool {
-		if ( Access::can_administer() ) {
-			return true;
-		}
-		foreach ( Access::CAPABILITIES as $capability ) {
-			if ( Access::can( $capability ) ) {
-				return true;
-			}
-		}
-		return false;
+		return is_network_admin() ? current_user_can( 'manage_network_options' ) : Access::can_administer();
 	}
 
 	private static function has_orbital(): bool {
