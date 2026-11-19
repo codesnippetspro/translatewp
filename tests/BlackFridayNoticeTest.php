@@ -34,10 +34,12 @@ function assert_true( bool $condition, string $message ): void {
 	}
 }
 
-const LEAD         = '<strong>Black Friday</strong>';
-const TWP_LINE     = 'Lock in Orbital at $59 a year (instead of $119), or Lifetime at $249. Ends 7 December.';
+const LEAD         = '<strong>TranslateWP Black Friday offer is here!</strong>';
+const CS_ONLY_LEAD = '<strong>Black Friday:</strong>';
+const TWP_LINE     = 'Until 7 December, lock in Orbital at $59 a year (instead of $119), or Lifetime at $249.';
 const TWP_BUTTON   = '<a class="button button-secondary" href="https://translatewp.ai/black-friday/" target="_blank" rel="noopener noreferrer">See the TranslateWP offer</a>';
-const CS_LINE      = 'Code Snippets Pro: save up to 40% this Black Friday, until 1 December.';
+const CS_LINE      = 'Get your Code Snippets Pro discount too: up to 40% off until 1 December.';
+const CS_ONLY_LINE = 'Code Snippets Pro is up to 40% off until 1 December.';
 const CS_BUTTON    = '<a class="button button-secondary" href="https://codesnippets.pro/black-friday/" target="_blank" rel="noopener noreferrer">See the Code Snippets offer</a>';
 const NOTICE_SHAPE = '#^<div class="notice notice-info is-dismissible" data-translatewp-dismiss="[a-z_]+" data-nonce="[^"]+"><p><strong>[^<]+</strong> [^<]+(?:<br>[^<]+)*</p><p><a class="button button-secondary" [^>]+>[^<]+</a>(?: <a class="button button-secondary" [^>]+>[^<]+</a>)*</p></div>$#';
 
@@ -67,10 +69,10 @@ function expected( bool $twp, bool $cs ): string {
 	if ( ! $twp && ! $cs ) {
 		return '';
 	}
-	$lines   = array_merge( $twp ? [ TWP_LINE ] : [], $cs ? [ CS_LINE ] : [] );
+	$lines   = $twp ? array_merge( [ TWP_LINE ], $cs ? [ CS_LINE ] : [] ) : [ CS_ONLY_LINE ];
 	$buttons = array_merge( $twp ? [ TWP_BUTTON ] : [], $cs ? [ CS_BUTTON ] : [] );
 	return '<div class="notice notice-info is-dismissible" data-translatewp-dismiss="' . BlackFridayNotice::DISMISS_ACTION . '" data-nonce="nonce-' . BlackFridayNotice::DISMISS_ACTION . '">'
-		. '<p>' . LEAD . ' ' . implode( '<br>', $lines ) . '</p><p>' . implode( ' ', $buttons ) . '</p></div>';
+		. '<p>' . ( $twp ? LEAD : CS_ONLY_LEAD ) . ' ' . implode( '<br>', $lines ) . '</p><p>' . implode( ' ', $buttons ) . '</p></div>';
 }
 
 // --- every account state against every moment ---
@@ -99,7 +101,8 @@ foreach ( [ false, true ] as $orbital ) {
 seed( true );
 $orbital_inside = notice( '2026-11-27T12:00:00Z' );
 if ( ! $code_snippets_pro ) {
-	assert_true( str_contains( $orbital_inside, LEAD . ' ' . CS_LINE . '</p><p>' . CS_BUTTON . '</p>' ), 'Orbital on Black Friday sees the lead, the Code Snippets line and its button, got ' . $orbital_inside );
+	assert_true( str_contains( $orbital_inside, '<p>' . CS_ONLY_LEAD . ' ' . CS_ONLY_LINE . '</p><p>' . CS_BUTTON . '</p>' ), 'Orbital on Black Friday sees the Black Friday lead, the Code Snippets line on its own and its button, got ' . $orbital_inside );
+	assert_true( ! str_contains( $orbital_inside, 'TranslateWP Black Friday offer' ) && ! str_contains( $orbital_inside, ' too' ), 'Orbital on Black Friday sees neither the TranslateWP lead nor "too", got ' . $orbital_inside );
 }
 assert_true( ! str_contains( $orbital_inside, 'Orbital at' ) && ! str_contains( $orbital_inside, 'translatewp.ai/black-friday' ), 'Orbital never sees the TranslateWP offer' );
 
