@@ -149,6 +149,9 @@ class ProEligibility {
 			'entitled'           => false,
 			'latest_version'     => '',
 			'latest_released_at' => '',
+			'latest_tested'      => '',
+			'latest_requires'    => '',
+			'latest_requires_php' => '',
 			'package_url'        => '',
 			'upgrade'            => null,
 			'capabilities'       => self::default_capabilities(),
@@ -175,10 +178,19 @@ class ProEligibility {
 			'entitled'           => $entitled,
 			'latest_version'     => $latest_version,
 			'latest_released_at' => $latest_released_at,
+			'latest_tested'      => self::version_number( $latest['tested'] ?? null ),
+			'latest_requires'    => self::version_number( $latest['requires'] ?? null ),
+			'latest_requires_php' => self::version_number( $latest['requires_php'] ?? null ),
 			'package_url'        => $package_url,
 			'upgrade'            => self::parse_upgrade( $payload['upgrade'] ?? null ),
 			'capabilities'       => self::parse_capabilities( $payload ),
 		];
+	}
+
+	public static function version_number( $value ): string {
+		$value = is_string( $value ) ? trim( $value ) : '';
+
+		return 1 === preg_match( '/^\d+(\.\d+){0,2}$/', $value ) ? $value : '';
 	}
 
 	private static function parse_upgrade( $upgrade ): ?array {

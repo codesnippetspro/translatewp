@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality\Admin;
 
 use TranslateWP\Components\SiteExport;
+use TranslateWP\Components\AdminNotices;
 
 /**
  * The wp-admin export action: an administrator follows the "Export your
@@ -57,6 +58,7 @@ class Export {
 			return;
 		}
 
+		AdminNotices::mark_action_required();
 		echo '<div class="notice notice-error is-dismissible" data-twp-export-failed><p>' . esc_html( SiteExport::message( $code ) ) . '</p></div>';
 	}
 

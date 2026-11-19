@@ -100,19 +100,20 @@ describe('the last setup step pushes an entitled site to install Pro', () =>
         document.body.innerHTML = '';
     });
 
-    it('the last step offers Install Pro and finish as the primary action for an entitled site without the addon', async () =>
+    it('the last step offers Install Pro and finish next to the primary Finish for an entitled site without the addon', async () =>
     {
         mockApi.installPro.mockResolvedValue({ ok: true, code: '', message: '' });
         const container = await renderLastStep(pro());
 
-        const primary = button(container, 'Install Pro and finish');
-        expect(primary).toBeDefined();
-        expect(primary!.className).toContain('is-primary');
+        const withPro = button(container, 'Install Pro and finish');
+        expect(withPro).toBeDefined();
+        expect(withPro!.className).toContain('is-secondary');
+        expect(button(container, 'Finish')!.className).toContain('is-primary');
         expect(button(container, 'Open Dashboard')).toBeUndefined();
-        expect(button(container, 'Finish without Pro')).toBeDefined();
+        expect(button(container, 'Finish without Pro')).toBeUndefined();
         expect(container.textContent).toContain('Your account includes Pro');
 
-        await act(async () => { primary!.click(); });
+        await act(async () => { withPro!.click(); });
         await settle();
 
         expect(mockApi.installPro).toHaveBeenCalledTimes(1);
@@ -132,7 +133,7 @@ describe('the last setup step pushes an entitled site to install Pro', () =>
         expect(mockApi.finishSetup).toHaveBeenCalledTimes(1);
     });
 
-    it('a failed install keeps Finish without Pro available', async () =>
+    it('a failed install keeps Finish available', async () =>
     {
         mockApi.installPro.mockResolvedValue({ ok: false, code: 'package_unavailable', message: 'The Pro package is not ready yet.' });
         const container = await renderLastStep(pro());
@@ -142,7 +143,7 @@ describe('the last setup step pushes an entitled site to install Pro', () =>
 
         expect(mockApi.finishSetup).not.toHaveBeenCalled();
         expect(container.querySelector('[role="alert"]')?.textContent).toBe('The Pro package is not ready yet.');
-        const without = button(container, 'Finish without Pro');
+        const without = button(container, 'Finish');
         expect(without?.disabled).toBe(false);
 
         await act(async () => { without!.click(); });
@@ -154,13 +155,13 @@ describe('the last setup step pushes an entitled site to install Pro', () =>
     it('keeps the plain Finish for a Free account and for an active addon', async () =>
     {
         let container = await renderLastStep(undefined);
-        expect(footerButtons(container)).toContain('Open Dashboard');
+        expect(footerButtons(container)).toContain('Finish');
         expect(footerButtons(container)).not.toContain('Install Pro and finish');
         act(() => root?.unmount());
         document.body.innerHTML = '';
 
         container = await renderLastStep(pro({ installed: true, active: true, installedVersion: '1.2.0' }));
-        expect(footerButtons(container)).toContain('Open Dashboard');
-        expect(footerButtons(container)).not.toContain('Finish without Pro');
+        expect(footerButtons(container)).toContain('Finish');
+        expect(footerButtons(container)).not.toContain('Activate Pro and finish');
     });
 });

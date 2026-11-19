@@ -54,7 +54,7 @@ describe('DOMExtractor administrator-only links', () =>
 
 describe('debug panel privacy', () =>
 {
-    it.each(['wpadminbar', 'query-monitor-main', 'query-monitor', 'debug-bar', 'querylist', '.qm'])(
+    it.each(['wpadminbar', 'query-monitor-main', 'query-monitor', 'query-monitor-container', 'debug-bar', 'querylist', '.qm'])(
         'excludes diagnostic text and attributes under %s, including direct subtree collection', selector =>
         {
             document.body.innerHTML = `<p>Public content</p><aside ${selector.startsWith('.')

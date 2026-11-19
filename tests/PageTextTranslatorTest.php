@@ -106,6 +106,21 @@ assert_same(
 $result = PageTextTranslator::translate( '<div class="translatewp-no-translate"><img alt="Contact"></div><code><img alt="Contact"></code>', $map );
 assert_same( '<div class="translatewp-no-translate"><img alt="Contact"></div><code><img alt="Contact"></code>', $result['html'], 'Attributes inside opted-out or skipped elements are untouched' );
 
+// --- The head tags a search result or a shared link shows ---
+$head = '<meta name="description" content="Call us on"><meta property="og:title" content="Contact"><meta property="og:description" content="Unknown text">'
+	. '<meta name="twitter:title" content="Contact"><meta name="twitter:description" content="Call us on"><meta property="og:site_name" content="Contact"><meta name="keywords" content="Contact">';
+$result = PageTextTranslator::translate( $head, $map );
+assert_same(
+	'<meta name="description" content="Rufen Sie uns an unter"><meta property="og:title" content="Kontakt"><meta property="og:description" content="Unknown text">'
+	. '<meta name="twitter:title" content="Kontakt"><meta name="twitter:description" content="Rufen Sie uns an unter"><meta property="og:site_name" content="Contact"><meta name="keywords" content="Contact">',
+	$result['html'],
+	'The description, Open Graph and Twitter title and description are translated when known; other meta tags never are'
+);
+assert_same( 0, $result['missing'], 'A head meta tag is never a missing translation' );
+
+$result = PageTextTranslator::translate( $head, $map, PageTextTranslator::TRANSLATED_ATTRIBUTES, [ 'og:title' ] );
+assert_same( true, false !== strpos( $result['html'], '<meta name="description" content="Call us on">' ) && false !== strpos( $result['html'], '<meta property="og:title" content="Kontakt">' ), 'Only the listed meta tags are translated' );
+
 // --- An empty map translates nothing and reports the text as missing ---
 $result = PageTextTranslator::translate( '<p>Contact</p>', [] );
 assert_same( '<p>Contact</p>', $result['html'], 'With no translations the page is unchanged' );

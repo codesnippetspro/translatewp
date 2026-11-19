@@ -12,6 +12,7 @@ import {
     toMissReportItems,
 } from '@/shared/lib/translations/missReportBackoff';
 import { canonicalizePageUrl } from '@/shared/lib/translations/pageUrl';
+import { blockedByPolicy, isServiceBlocked, SERVICE_BLOCKED_ERROR } from '@/shared/lib/translations/serviceBlock';
 import type { TranslationCacheClient, TranslationCachePlan } from '@/shared/lib/translations/TranslationCacheClient';
 import { TranslationEventClient } from '@/shared/lib/translations/TranslationEventClient';
 import {
@@ -138,7 +139,7 @@ export class CacheFirstTranslator extends Translator
         //    which already counts demand once (no double-count).
         let remaining = groupsForCache.filter(group => !applied.has(group.hash));
         if (applied.size > 0 && remaining.length === 0) this.#sendHitLocalBeacon(cacheClient);
-        if (remaining.length)
+        if (remaining.length && !isServiceBlocked())
         {
             throwIfAborted();
             emitOptions.onGroupServeStarted?.(remaining.flatMap(group => group.group.entries));
@@ -161,6 +162,16 @@ export class CacheFirstTranslator extends Translator
         }
 
         remaining = remaining.filter(group => this._needsMissReport(group, groupsForCache, translatedById));
+
+        // A blocked service cannot deliver what a miss report would request.
+        if (remaining.length && isServiceBlocked())
+        {
+            emitOptions.onGroupServeFailed?.(remaining.flatMap(group => group.group.entries));
+            return {
+                translatedById,
+                failures: remaining.map(group => ({ groupId: group.group.id, error: SERVICE_BLOCKED_ERROR })),
+            };
+        }
 
         // The miss proxy recomputes fingerprints, so client hashes never enter
         // the mutable request. Accepted work is delivered by SSE when possible.
@@ -245,6 +256,7 @@ export class CacheFirstTranslator extends Translator
         catch (error)
         {
             if ((error as Error)?.name === 'AbortError') throw error;
+            if (await blockedByPolicy(error)) return groups;
             console.warn('[TranslateWP] Cache lookup failed; will retry via miss path.', error);
             return groups;
         }

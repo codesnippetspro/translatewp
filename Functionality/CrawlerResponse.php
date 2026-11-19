@@ -98,14 +98,20 @@ class CrawlerResponse {
 			$map = 0 === TranslationStore::pending_count( $source, $locale, $post_id )
 				? TranslationStore::for_url( $source, $locale, $post_id )
 				: [];
+		} else {
+			// The head the SEO plugin prints now (title, description) can differ
+			// from the one last read; what visitors reported since is in the store.
+			$map += TranslationStore::for_url( $source, $locale, $post_id );
 		}
 
 		if ( $map ) {
-			// Alt text is a Pro translation; a Terrestrial crawler page keeps it as written.
-			$attributes = ProEligibility::unlocks_pro_features()
+			// Alt text and the description tags are Pro translations; a Terrestrial crawler page keeps them as written.
+			$pro        = ProEligibility::unlocks_pro_features();
+			$attributes = $pro
 				? PageTextTranslator::TRANSLATED_ATTRIBUTES
 				: array_values( array_diff( PageTextTranslator::TRANSLATED_ATTRIBUTES, [ 'alt' ] ) );
-			$translated = PageTextTranslator::translate( $html, $map, $attributes );
+			$meta       = $pro ? PageTextTranslator::TRANSLATED_META : [ 'og:title', 'twitter:title' ];
+			$translated = PageTextTranslator::translate( $html, $map, $attributes, $meta );
 			if ( 0 === $translated['missing'] && $translated['translated'] > 0 ) {
 				return $translated['html'];
 			}

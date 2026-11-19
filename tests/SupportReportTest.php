@@ -102,6 +102,10 @@ assert_true( strpos( $text, '-- Plugin events' ) < strpos( $text, '-- Plugin --'
 assert_true( false !== strpos( $text, 'Languages: en-us (default), lv' ), 'the languages are listed' );
 assert_true( false !== strpos( $text, 'Site connected to the account' ), 'the plugin events are appended' );
 assert_true( false !== strpos( $text, 'Version: ' . TRANSLATEWP_VERSION ), 'the plugin version is named' );
+assert_true( false !== strpos( $text, 'Blocked by CSP: no' ), 'a site whose policy lets the service through says so' );
+\TranslateWP\Components\ServiceBlockNotice::record( 'https://api.translatewp.ai', '/shop/' );
+assert_true( 1 === preg_match( '#Blocked by CSP: https://api\.translatewp\.ai on /shop/ at \d{4}-\d\d-\d\d \d\d:\d\d UTC#', DebugInfo::text() ), 'a recorded block is named with the page it was seen on' );
+\TranslateWP\Components\ServiceBlockNotice::clear();
 
 // --- a ticket is Pro-only, goes by email with the report attached, and reports when the mailer refused it ---
 $endpoint = new Transparency( 'translatewp', TRANSLATEWP_VERSION );

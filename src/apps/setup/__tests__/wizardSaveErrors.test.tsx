@@ -130,10 +130,10 @@ describe('the wizard never swallows a save error', () =>
         mockApi.finishSetup.mockRejectedValueOnce({ code: 'invalid_default_language', message: 'A default language is required' });
         const container = await renderWizard('translation');
 
-        await act(async () => { primary(container, 'Open Dashboard')!.click(); });
+        await act(async () => { primary(container, 'Finish')!.click(); });
         await settle();
 
         expect(container.querySelector('[role="alert"]')?.textContent).toBe('A default language is required');
-        expect(primary(container, 'Open Dashboard')?.disabled).toBe(false);
+        expect(primary(container, 'Finish')?.disabled).toBe(false);
     });
 });

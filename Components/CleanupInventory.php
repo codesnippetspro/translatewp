@@ -85,6 +85,7 @@ class CleanupInventory {
 	public const UNINSTALL_POST_META_KEYS = [ PageExclusion::META_KEY ];
 
 	public const USER_META_KEYS = [
+		BlackFridayNotice::DISMISSED_META,
 		'translatewp_coexistence_dismissed',
 		'translatewp_cache_notice_dismissed',
 		'translatewp_finish_setup_dismissed',
