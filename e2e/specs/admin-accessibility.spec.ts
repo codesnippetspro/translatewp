@@ -49,7 +49,11 @@ test('search focus remains visible in wp-admin and feedback has an accessible na
 	await expect(search.locator('..')).toHaveCSS('outline-style', 'solid');
 	expect(await search.locator('..').evaluate(element => parseFloat(getComputedStyle(element).outlineWidth)))
 		.toBeGreaterThan(0);
-	await page.goto('/wp-admin/admin.php?page=translatewp#support');
+	const support = page.getByRole('navigation', { name: 'TranslateWP navigation' })
+		.getByRole('link', { name: 'Support', exact: true });
+	await support.click();
+	await expect(page).toHaveURL(/\/wp-admin\/admin\.php\?page=translatewp-support$/);
+	await expect(support).toHaveAttribute('aria-current', 'page');
 	await expect(page.getByRole('textbox', {
 		name: 'Tell us what would make TranslateWP better', exact: true,
 	})).toBeVisible();

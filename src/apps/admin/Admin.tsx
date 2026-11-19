@@ -25,10 +25,9 @@ import { Lexicon } from '@/apps/admin/components/Lexicon';
 import { SeoTools } from '@/apps/admin/components/SeoTools';
 import { SettingsPage } from '@/apps/admin/components/SettingsPage';
 import { SlugClashActions } from '@/apps/admin/components/SlugClashActions';
+import { SupportPage } from '@/apps/admin/components/SupportPage';
 
-// Four pages. Every previous slug forwards to the page and section that
-// owns it now (useNavigate), so old links and bookmarks keep working.
-const ROUTES = ['/', '/lexicon', '/seo', '/settings'];
+const ROUTES = ['/', '/lexicon', '/seo', '/settings', '/support'];
 const SAVED_MESSAGE_MS = 3000;
 const TOAST_CLASS = 'fixed! bottom-6 end-6 z-50 flex max-w-[92vw] items-center gap-3 rounded-lg px-4 py-3 text-sm shadow-[0_4px_16px_rgba(0,0,0,0.12)]';
 
@@ -249,6 +248,7 @@ export const Admin = () =>
                     { !isLoading && !bootstrapFailed && route === '/lexicon' && <Lexicon /> }
                     { !isLoading && !bootstrapFailed && route === '/seo' && <SeoTools /> }
                     { !isLoading && !bootstrapFailed && route === '/settings' && <SettingsPage /> }
+                    { !isLoading && !bootstrapFailed && route === '/support' && <SupportPage /> }
                     { !isLoading && !bootstrapFailed && !ROUTES.includes(route) && <DashboardPage /> }
                 </div>
             </div>
