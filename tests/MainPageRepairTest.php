@@ -80,7 +80,7 @@ wp_test_set_filter( 'translatewp_translation_job_request_body', static fn( array
 wp_test_set_filter( 'translatewp_translation_batch_request_body', static fn( array $body ): array => array_merge( $body, [ 'byok' => [ [ 'provider' => 'openai', 'modelId' => 'test', 'apiKey' => 'test-only' ] ] ] ) );
 $indexer->step_push( new ReadinessBudget() );
 check_repair( 'background_refresh' === ( creates()[0]['body']['purpose'] ?? '' ), 'Lexicon or settings refills carry the dedicated job marker' );
-check_repair( ! isset( creates()[0]['body']['byok'] ) && ! isset( batches()[0]['body']['byok'] ), 'Repair work never bypasses its managed-only routing through own providers' );
+check_repair( isset( creates()[0]['body']['byok'] ) && isset( batches()[0]['body']['byok'] ), 'Lexicon or settings refills keep the site\'s own providers' );
 check_repair( 1 === count( batches() ) && 1 === count( batches()[0]['body']['items'] ), 'An acknowledged repair job receives its translation batch' );
 
 
@@ -90,7 +90,7 @@ check_repair( 1 === count( batches() ) && 1 === count( batches()[0]['body']['ite
 wp_test_set_filter( 'translatewp_quota_handoff_providers', static fn() => [ [ 'provider' => 'openai', 'modelId' => 'test', 'apiKey' => 'test-only' ] ] );
 $GLOBALS['wp_test_translation_job_responses'] = [ [ 'response' => [ 'code' => 429 ], 'body' => wp_json_encode( [ 'code' => 'limit_exceeded', 'error' => 'Usage limit reached' ] ) ] ];
 $indexer->step_push( new ReadinessBudget() );
-check_repair( 1 === count( creates() ) && ! isset( creates()[0]['body']['byok'] ), 'Repair does not use active own-provider handoff or switch providers after a usage refusal' );
+check_repair( 1 === count( creates() ) && isset( creates()[0]['body']['byok'] ), 'Repair uses the active own-provider handoff like any job' );
 
 [ $indexer, $queue, $id ] = repair_row( true );
 $GLOBALS['wp_test_translation_job_responses'] = [ [ 'response' => [ 'code' => 201 ], 'body' => wp_json_encode( [ 'jobId' => '00000000-0000-4000-8000-000000000099' ] ) ] ];
