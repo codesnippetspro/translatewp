@@ -37,6 +37,23 @@ foreach ( $parity_cases as $case ) {
 	);
 }
 
+$separator_cases = [
+	[ "\u{a0}/\u{a0}Garden Lantern", [ "\u{a0}/\u{a0}", 'Garden Lantern', '' ] ],
+	[ 'Home / ', [ '', 'Home', ' / ' ] ],
+	[ ' › Accessories', [ ' › ', 'Accessories', '' ] ],
+	[ 'Next »', [ '', 'Next »', '' ] ],
+	[ 'Shop / Accessories', [ '', 'Shop / Accessories', '' ] ],
+	[ "\n\t\tDescription\t\t", [ '', "\n\t\tDescription\t\t", '' ] ],
+	[ ' / 25', [ '', ' / 25', '' ] ],
+];
+
+foreach ( $separator_cases as $case ) {
+	assert_true(
+		$case[1] === TranslationWhitespace::separator_edges( $case[0] ),
+		'Separator edges mismatch for ' . json_encode( $case[0] )
+	);
+}
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "TranslationWhitespaceParityTest failed with {$failures} assertion(s)\n" );
 	exit( 1 );

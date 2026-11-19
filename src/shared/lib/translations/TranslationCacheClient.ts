@@ -6,6 +6,7 @@ import {
     type TranslationFingerprintSettings,
 } from '@/shared/lib/translations/fingerprintPayload';
 import { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
+import { splitSeparatorEdges } from '@/shared/lib/translations/translationWhitespace';
 
 export const TRANSLATION_CACHE_SCHEMA_VERSION = TRANSLATION_FINGERPRINT_SCHEMA_VERSION;
 
@@ -323,7 +324,7 @@ export class TranslationCacheClient
             type: entry.type,
             node: entry.node,
             attributeName: entry.attributeName,
-            value: entry.value,
+            value: splitSeparatorEdges(entry.value).core,
         }));
     }
 

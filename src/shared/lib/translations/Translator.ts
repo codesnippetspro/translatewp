@@ -18,6 +18,7 @@ import {
     TRANSLATION_PUSH_BATCH_MAX_MARKER_PAYLOAD_BYTES,
 } from '@/shared/lib/translations/pushBatchLimits';
 import { TranslatableEntry } from '@/shared/lib/translations/TranslatableEntry';
+import { withSeparatorEdges } from '@/shared/lib/translations/translationWhitespace';
 import segmentRegistry from '@/shared/lib/translations/segmentRegistry';
 
 const JOB_STATUS_POLL_INTERVAL_MS = 1000;
@@ -767,7 +768,8 @@ export class Translator
                 options.onEntryTranslated?.(entry.withTranslation(entry.value), false);
                 continue;
             }
-            const translatedValue = translatedBySourceValue.get(entry.value);
+            const translatedValue = translatedBySourceValue.get(entry.value)
+                ?? withSeparatorEdges(entry.value, translatedBySourceValue);
             if (undefined === translatedValue)
             {
                 unmatchedEntries++;
