@@ -266,7 +266,7 @@ class InMemoryIndexQueue extends IndexQueue {
 		return true;
 	}
 
-	public function fail( int $id, string $reason ): bool {
+	public function fail( int $id, string $reason, bool $backoff = false ): bool {
 		$key = $this->find( $id );
 		if ( null === $key || self::STATUS_CLAIMED !== $this->rows[ $key ]['status'] ) {
 			return false;

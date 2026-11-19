@@ -1338,7 +1338,7 @@ class Indexer {
 				update_post_meta( (int) $row['id'], '_twp_redirect_target', $error_data['target'] );
 			}
 			$this->reader_failed( $html->get_error_code() );
-			$this->queue->fail( (int) $row['id'], $html->get_error_code() );
+			$this->queue->fail( (int) $row['id'], $html->get_error_code(), true );
 			return 1;
 		}
 		try {

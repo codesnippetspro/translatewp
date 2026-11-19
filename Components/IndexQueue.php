@@ -2056,7 +2056,7 @@ class IndexQueue {
 				foreach ( $ids as $id ) {
 					$changes[ (int) $id ] = $this->version_metadata( (string) get_post_meta( (int) $id, self::META_LANGUAGE, true ) );
 					if ( '' !== $unbatched_job ) {
-						$changes[ (int) $id ][ '_twp_unbatched_job' ] = $unbatched_job;
+						$changes[ (int) $id ]['_twp_unbatched_job'] = $unbatched_job;
 					}
 				}
 				return QueueMetadata::write( $changes );
@@ -2195,18 +2195,18 @@ class IndexQueue {
 	 * Record a failure: retry (back to pending) until the attempt cap, then
 	 * dead-letter with the reason kept for the ops log.
 	 */
-	public function fail( int $id, string $reason ): bool {
-		return self::mutate_rows( fn () => $this->fail_unlocked( $id, $reason ), false );
+	public function fail( int $id, string $reason, bool $backoff = false ): bool {
+		return self::mutate_rows( fn () => $this->fail_unlocked( $id, $reason, $backoff ), false );
 	}
 
-	private function fail_unlocked( int $id, string $reason ): bool {
+	private function fail_unlocked( int $id, string $reason, bool $backoff ): bool {
 		if ( self::STATUS_CLAIMED !== $this->row_status( $id ) ) {
 			return false;
 		}
 
 		$attempts = (int) get_post_meta( $id, self::META_ATTEMPTS, true ) + 1;
 
-		if ( $attempts < self::MAX_ATTEMPTS && ( QueueExecution::is_bounded() || 0 === strpos( $reason, 'page_' ) ) ) {
+		if ( $attempts < self::MAX_ATTEMPTS && ( QueueExecution::is_bounded() || $backoff ) ) {
 			update_post_meta( $id, '_twp_reader_not_before', $this->now() + 60 * $attempts );
 		}
 		update_post_meta( $id, self::META_ATTEMPTS, $attempts );

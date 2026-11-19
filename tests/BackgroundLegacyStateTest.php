@@ -154,7 +154,7 @@ foreach ( [ '/category/recipes/', 'https://WWW.EXAMPLE.COM/studio/category/recip
 		[ 'response' => [ 'code' => 200 ], 'body' => '<p>Our studio</p>', 'headers' => [ 'content-type' => 'text/html' ] ],
 	];
 	$indexer = new Indexer( '', '', null, null, false );
-	$indexer->step_read( new \TranslateWP\Components\ReadinessBudget() );
+	$indexer->step_read( new \TranslateWP\Components\ReadinessBudget( 8 ) );
 	$requests = $GLOBALS['wp_test_remote_get_urls'];
 	check_legacy( 'https://example.com/studio/category/recipes' === $requests[0], 'An old www address is read over HTTPS on the current subdirectory home' );
 	check_legacy( $same_page ? $target === $requests[1] : 1 === count( $requests ), 'The reader follows only redirects to the same canonical page' );
