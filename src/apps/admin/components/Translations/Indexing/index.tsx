@@ -63,7 +63,12 @@ export const LanguagesIndexing = () =>
     const liveStatus = useTranslationReadiness();
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
     const [status, setStatus] = useState<IndexStatus | null>(null);
-    const background = useBackgroundStep(status?.background?.state === 'paused');
+    const background = useBackgroundStep(status?.background?.state === 'paused', () => requestConfirmation({
+        title: __('Leave the Indexing page?', 'translate'),
+        message: __('Translation is still running. Please keep this page open until it finishes.', 'translate'),
+        confirmLabel: __('Leave page', 'translate'),
+        cancelLabel: __('Keep open', 'translate'),
+    }));
     const backgroundPaused = (background.step?.state ?? status?.background?.state) === 'paused';
     useEffect(() => { if (liveStatus) setStatus(liveStatus); }, [liveStatus]);
     const [statusFailed, setStatusFailed] = useState(false);

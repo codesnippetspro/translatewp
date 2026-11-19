@@ -337,4 +337,14 @@ export type BackgroundStep = {
 };
 
 export const runBackgroundStep = async (signal?: AbortSignal): Promise<BackgroundStep> =>
-    await apiFetch({ path: '/translatewp/v1/background/admin-step', method: 'POST', data: {}, signal }) as BackgroundStep;
+{
+    const result = await apiFetch({ path: '/translatewp/v1/background/admin-step', method: 'POST', data: {}, signal }) as Partial<BackgroundStep> | null;
+    const states: BackgroundStep['state'][] = ['more', 'done', 'busy', 'paused'];
+    const pending = result?.pending ?? (result?.state === 'paused' ? { read: 0, push: 0, refill: 0, visitor: 0 } : undefined);
+    if (result?.v !== 1 || !states.includes(result.state!) || !pending
+        || ![pending.read, pending.push, pending.refill, pending.visitor].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0))
+    {
+        throw new Error('Invalid background step response');
+    }
+    return { ...result, state: result.state!, pending, v: 1 };
+};

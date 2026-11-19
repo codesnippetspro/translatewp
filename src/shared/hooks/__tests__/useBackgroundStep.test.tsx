@@ -11,8 +11,9 @@ const answer = (state: BackgroundStep['state'], pending = 1): BackgroundStep => 
 describe('Indexing background fallback', () => {
     let root: Root;
     let latest: ReturnType<typeof useBackgroundStep>;
-    const Probe = ({ paused = false }: { paused?: boolean }) => { latest = useBackgroundStep(paused); return null; };
-    beforeEach(() => { jest.useFakeTimers(); (runBackgroundStep as jest.Mock).mockReset().mockResolvedValue(answer('more')); root = createRoot(document.createElement('div')); });
+    const requestLeave = jest.fn<Promise<boolean>, []>();
+    const Probe = ({ paused = false }: { paused?: boolean }) => { latest = useBackgroundStep(paused, requestLeave); return null; };
+    beforeEach(() => { requestLeave.mockReset().mockResolvedValue(false); jest.useFakeTimers(); (runBackgroundStep as jest.Mock).mockReset().mockResolvedValue(answer('more')); root = createRoot(document.createElement('div')); });
     afterEach(async () => { await act(async () => root.unmount()); jest.useRealTimers(); });
     const mount = async (paused = false) => { await act(async () => root.render(<Probe paused={paused} />)); };
 
@@ -39,6 +40,21 @@ describe('Indexing background fallback', () => {
         const after = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(after);
         expect(after.defaultPrevented).toBe(false);
         expect(latest!.pending).toBe(false);
+    });
+
+    it('asks through the existing dialog and stays guarded when leaving is declined', async () => {
+        await mount();
+        const link = document.createElement('a');
+        link.href = '/wp-admin/';
+        document.body.append(link);
+        const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+        await act(async () => { link.dispatchEvent(click); });
+        expect(click.defaultPrevented).toBe(true);
+        expect(requestLeave).toHaveBeenCalledTimes(1);
+        const before = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(before);
+        expect(before.defaultPrevented).toBe(true);
+        link.remove();
     });
 
     it('stops the loop while paused and resumes only when pause is cleared', async () => {
