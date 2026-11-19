@@ -66,7 +66,7 @@ class Indexer {
 	private const PINS_OPTION = 'translatewp_index_priority_pins';
 	private const REPORTED_OPTION = 'translatewp_index_reported_languages';
 	public const FIRST_PASS_OPTION = 'translatewp_first_pass_done_at';
-	private const LAST_DRAIN_OPTION = 'translatewp_index_last_drain';
+	public const LAST_DRAIN_OPTION = 'translatewp_index_last_drain';
 	private const JOB_POST_TIMEOUT_SECONDS = 30;
 	private const FALLBACK_LINK_CAP = 50;
 	private const TITLE_CONTEXT_KEY = 'seo:title';
@@ -116,14 +116,14 @@ class Indexer {
 	}
 
 	public function ensure_spine(): void {
-		if ( SiteConnection::is_connected() && ! get_option( self::SPINE_CHECKED_OPTION, false ) ) {
+		if ( ! \TranslateWP\Components\BackgroundSwitch::off() && SiteConnection::is_connected() && ! get_option( self::SPINE_CHECKED_OPTION, false ) ) {
 			update_option( self::SPINE_CHECKED_OPTION, true, false );
 			$this->schedule_spine_refresh();
 		}
 	}
 
 	public function schedule_spine_refresh(): void {
-		if ( SiteConnection::is_connected() ) {
+		if ( ! \TranslateWP\Components\BackgroundSwitch::off() && SiteConnection::is_connected() ) {
 			update_option( self::SPINE_PENDING_OPTION, true, false );
 			self::schedule_drain();
 			LoopbackKick::fire();
@@ -135,7 +135,7 @@ class Indexer {
 	}
 
 	public static function refill_crawler_page( int $post_id, string $url, string $language ): void {
-		if ( ! SiteConnection::is_connected() || 0 >= $post_id || 'publish' !== get_post_status( $post_id ) || PageExclusion::is_excluded( $post_id ) || ! in_array( $language, self::target_languages( null ), true ) ) {
+		if ( \TranslateWP\Components\BackgroundSwitch::off() || ! SiteConnection::is_connected() || 0 >= $post_id || 'publish' !== get_post_status( $post_id ) || PageExclusion::is_excluded( $post_id ) || ! in_array( $language, self::target_languages( null ), true ) ) {
 			return;
 		}
 		$url = (string) get_permalink( $post_id );
@@ -1009,8 +1009,12 @@ class Indexer {
 	}
 
 	public static function schedule_drain( int $delay_seconds = 0 ): void {
+		if ( \TranslateWP\Components\BackgroundSwitch::off() ) {
+			return;
+		}
 		$due = time() + max( 0, $delay_seconds );
 		$next = wp_next_scheduled( self::DRAIN_HOOK );
+		IndexQueue::signal_due_work( false === $next ? $due : min( $due, (int) $next ) );
 		if ( false === $next || $due < (int) $next ) {
 			if ( false !== $next ) {
 				wp_unschedule_event( (int) $next, self::DRAIN_HOOK );
@@ -1121,6 +1125,7 @@ class Indexer {
 			return $result;
 		}
 
+		$this->queue->maintain_duplicates();
 		$scheduled = wp_next_scheduled( self::DRAIN_HOOK );
 		if ( $scheduled && (int) $scheduled <= time() ) {
 			wp_unschedule_event( (int) $scheduled, self::DRAIN_HOOK );

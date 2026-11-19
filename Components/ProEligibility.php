@@ -369,6 +369,9 @@ class ProEligibility {
 			return self::state_from_error( $response );
 		}
 
+		if ( is_array( $response ) ) {
+			BackgroundSwitch::observe( $response );
+		}
 		return self::parse( is_array( $response ) ? $response : [] );
 	}
 

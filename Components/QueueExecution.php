@@ -19,6 +19,9 @@ class QueueExecution {
 	private static ?ReadinessBudget $budget = null;
 
 	public static function run( callable $work ): bool {
+		if ( BackgroundSwitch::off() ) {
+			return false;
+		}
 		if ( self::$active ) {
 			$work();
 			return true;
@@ -29,6 +32,9 @@ class QueueExecution {
 				self::$active = true;
 				try {
 					$work();
+					if ( ! self::expired() && ! BackgroundSwitch::off() ) {
+						( new IndexQueue() )->has_due_work();
+					}
 				} finally {
 					self::$active = false;
 				}
@@ -38,6 +44,9 @@ class QueueExecution {
 	}
 
 	public static function run_reduced(): bool {
+		if ( BackgroundSwitch::off() ) {
+			return false;
+		}
 		return self::run(
 			static function (): void {
 				if ( LoopbackKick::healthy() ) {

@@ -3,6 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\AdminNotices;
+use TranslateWP\Components\BackgroundSwitch;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\LoopbackKick;
 use TranslateWP\Components\QueueExecution;
@@ -47,11 +48,10 @@ class CronFallback {
 	}
 
 	public function maybe_run_on_front_end(): void {
-		if ( $this->is_background_request() || is_admin() || CrawlerDetection::is_crawler_request() || ! $this->should_kick() ) {
+		if ( BackgroundSwitch::off() || $this->is_background_request() || is_admin() || CrawlerDetection::is_crawler_request() || ! $this->should_kick() ) {
 			return;
 		}
 
-		$this->throttle();
 		$this->announced_late = true;
 		if ( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) ) {
 			Indexer::schedule_drain( Indexer::RESCHEDULE_DELAY_SECONDS );
@@ -68,7 +68,7 @@ class CronFallback {
 	}
 
 	public function run_after_flush(): void {
-		if ( $this->is_background_request() || is_admin() || CrawlerDetection::is_crawler_request() || ! LoopbackKick::unhealthy() ) {
+		if ( BackgroundSwitch::off() || $this->is_background_request() || is_admin() || CrawlerDetection::is_crawler_request() || ! LoopbackKick::unhealthy() ) {
 			return;
 		}
 		$finished = function_exists( 'fastcgi_finish_request' ) ? fastcgi_finish_request()
@@ -79,11 +79,10 @@ class CronFallback {
 	}
 
 	public function maybe_run_in_admin(): void {
-		if ( $this->is_background_request() || ! $this->should_kick() ) {
+		if ( BackgroundSwitch::off() || $this->is_background_request() || ! $this->should_kick() ) {
 			return;
 		}
 
-		$this->throttle();
 		$this->announced_late = true;
 		LoopbackKick::probe();
 		QueueExecution::run( [ $this, 'run_batch' ] );
@@ -96,7 +95,7 @@ class CronFallback {
 	 * to a fresh time only while work remains.
 	 */
 	public function run_batch(): void {
-		if ( ! SiteConnection::is_connected() ) {
+		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() ) {
 			return;
 		}
 
@@ -107,10 +106,11 @@ class CronFallback {
 	}
 
 	public function run_maintenance(): void {
-		if ( ! SiteConnection::is_connected() ) {
+		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() ) {
 			return;
 		}
 
+		( new IndexQueue() )->maintain_duplicates();
 		self::run_refill_maintenance();
 		if ( QueueExecution::expired() ) {
 			return;
@@ -128,7 +128,7 @@ class CronFallback {
 	}
 
 	public static function run_refill_maintenance(): bool {
-		if ( ! SiteConnection::is_connected() || QueueExecution::expired() ) {
+		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() || QueueExecution::expired() ) {
 			return false;
 		}
 		if ( false !== get_option( IndexQueue::DEFERRED_REFILLS_OPTION, false ) ) {
@@ -235,7 +235,7 @@ class CronFallback {
 	 * left scheduled.
 	 */
 	public function is_behind(): bool {
-		if ( ! SiteConnection::is_connected() ) {
+		if ( BackgroundSwitch::off() || ! SiteConnection::is_connected() ) {
 			return false;
 		}
 
@@ -251,7 +251,8 @@ class CronFallback {
 			}
 		}
 
-		if ( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) && ( new IndexQueue() )->has_due_work() ) {
+		$due = IndexQueue::cached_due_work();
+		if ( false === wp_next_scheduled( Indexer::DRAIN_HOOK ) && ( true === $due || ( null === $due && (int) get_option( Indexer::LAST_DRAIN_OPTION, 0 ) > 0 ) ) ) {
 			return true;
 		}
 
@@ -259,7 +260,7 @@ class CronFallback {
 		// queue; a stale event on a queue the loopback kick already emptied
 		// is cleared instead.
 		if ( $this->scheduled_is_late( Indexer::DRAIN_HOOK ) ) {
-			if ( ( new IndexQueue() )->has_due_work() ) {
+			if ( false !== $due ) {
 				return true;
 			}
 			$this->clear_if_late( Indexer::DRAIN_HOOK );
@@ -281,11 +282,11 @@ class CronFallback {
 
 
 	private function should_kick(): bool {
-		if ( ! $this->is_behind() ) {
+		if ( false !== get_transient( self::KICK_TRANSIENT ) ) {
 			return false;
 		}
-
-		return false === get_transient( self::KICK_TRANSIENT );
+		$this->throttle();
+		return $this->is_behind();
 	}
 
 	private function throttle(): void {

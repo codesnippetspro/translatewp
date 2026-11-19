@@ -58,6 +58,10 @@ class IndexQueue {
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
 	public const DEFERRED_REFILLS_OPTION = 'translatewp_deferred_refill_rows';
+	public const DUE_RESULT_OPTION = 'translatewp_queue_due_result';
+	public const DUE_HINT_OPTION = 'translatewp_queue_due_hint';
+	public const DUPLICATE_SWEEP_OPTION = 'translatewp_queue_duplicate_sweep';
+	private const DUE_PROBE_SECONDS = 60;
 	private const META_BACKGROUND_REFRESH = '_twp_background_refresh';
 	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
 	private const META_REFILL_FINISHED = '_twp_refill_finished';
@@ -669,7 +673,7 @@ class IndexQueue {
 	 * the newest row (highest post id) per canonical URL and language and
 	 * delete the rest. Returns how many stale rows were removed.
 	 */
-	public function collapse_stale_duplicates(): int {
+	public function collapse_stale_duplicates( bool $settled_only = false ): int {
 		$by_key = [];
 
 		foreach ( $this->all_row_ids() as $post_id ) {
@@ -678,7 +682,8 @@ class IndexQueue {
 			$canonical = TranslationUrl::canonicalize( $url );
 			$key       = ( '' !== $canonical ? $canonical : $url ) . "\n" . $language;
 
-			$key .= $this->active_background_row( (int) $post_id ) ? "\nbackground:" . $post_id : '';
+			$protected = $this->active_background_row( (int) $post_id ) || ( $settled_only && in_array( $this->row_status( (int) $post_id ), [ self::STATUS_PENDING, self::STATUS_CLAIMED ], true ) );
+			$key .= $protected ? "\nactive:" . $post_id : '';
 			$by_key[ $key ][] = (int) $post_id;
 		}
 
@@ -690,7 +695,30 @@ class IndexQueue {
 			}
 
 			sort( $ids, SORT_NUMERIC );
-			array_pop( $ids );
+			$kept_id = array_pop( $ids );
+			if ( 'miss' === (string) get_post_meta( $kept_id, self::META_OBJECT_TYPE, true ) ) {
+				$payloads = [];
+				foreach ( array_merge( $ids, [ $kept_id ] ) as $id ) {
+					if ( 'miss' !== (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ) ) {
+						continue;
+					}
+					$payload = json_decode( self::decode_payload( (string) get_post_field( 'post_content', $id ) ), true );
+					$payloads[] = is_array( $payload ) ? $payload : [];
+				}
+				$groups = self::merged_items( ...$payloads );
+				if ( $groups ) {
+					$saved = wp_update_post(
+                        [
+							'ID' => $kept_id,
+							'post_content' => wp_slash( self::encode_payload( (string) wp_json_encode( array_values( $groups ) ) ) ),
+						],
+                        true
+                    );
+					if ( is_wp_error( $saved ) || ! $saved ) {
+						continue;
+					}
+				}
+			}
 
 			foreach ( $ids as $stale_id ) {
 				if ( wp_delete_post( $stale_id, true ) ) {
@@ -700,6 +728,23 @@ class IndexQueue {
 		}
 
 		return $deleted;
+	}
+
+	public function maintain_duplicates(): void {
+		if ( QueueExecution::is_reduced() || QueueExecution::expired() ) {
+			return;
+		}
+		QueueExecution::run(
+			function (): void {
+				wp_cache_delete( self::DUPLICATE_SWEEP_OPTION, 'options' );
+				wp_cache_delete( 'notoptions', 'options' );
+				if ( (int) get_option( self::DUPLICATE_SWEEP_OPTION, 0 ) > $this->now() - 60 ) {
+					return;
+				}
+				update_option( self::DUPLICATE_SWEEP_OPTION, $this->now(), false );
+				$this->collapse_stale_duplicates( true );
+			}
+		);
 	}
 
 	/**
@@ -817,15 +862,7 @@ class IndexQueue {
 		}
 
 		$stored = json_decode( self::decode_payload( (string) get_post_field( 'post_content', $existing_id ) ), true );
-		$merged = [];
-		foreach ( is_array( $stored ) ? $stored : [] as $item ) {
-			if ( is_array( $item ) && isset( $item['groupId'] ) ) {
-				$merged[ (string) $item['groupId'] ] = $item;
-			}
-		}
-		foreach ( $items as $item ) {
-			$merged[ (string) $item['groupId'] ] = $item;
-		}
+		$merged = self::merged_items( is_array( $stored ) ? $stored : [], $items );
 
 		$encoded = wp_json_encode( array_values( $merged ) );
 		if ( ! is_string( $encoded ) || '' === $encoded ) {
@@ -862,6 +899,18 @@ class IndexQueue {
 		}
 
 		return $kept;
+	}
+
+	private static function merged_items( array ...$payloads ): array {
+		$merged = [];
+		foreach ( $payloads as $payload ) {
+			foreach ( $payload as $item ) {
+				if ( is_array( $item ) && isset( $item['groupId'] ) ) {
+					$merged[ (string) $item['groupId'] ] = $item;
+				}
+			}
+		}
+		return array_values( $merged );
 	}
 
 	private static function valid_utf8_deep( $value ) {
@@ -915,13 +964,57 @@ class IndexQueue {
 	}
 
 	public function has_due_work(): bool {
-		return [] !== $this->due_row_ids( [], 1 ) || [] !== $this->due_row_ids(
-			[
-				'status' => self::STATUS_CLAIMED,
-				'claimed_before' => $this->now() - self::STALE_CLAIM_SECONDS,
-			],
-			1
+		QueueExecution::run(
+			function (): void {
+				wp_cache_delete( self::DUE_RESULT_OPTION, 'options' );
+				wp_cache_delete( 'notoptions', 'options' );
+				$result = get_option( self::DUE_RESULT_OPTION, [] );
+				if ( (int) ( $result['checkedAt'] ?? 0 ) > $this->now() - self::DUE_PROBE_SECONDS ) {
+					return;
+				}
+				$hint = get_option( self::DUE_HINT_OPTION, [] );
+				$seen = (int) ( $hint['nextAt'] ?? PHP_INT_MAX ) <= $this->now() ? (string) ( $hint['token'] ?? '' ) : '';
+				$result['checkedAt'] = $this->now();
+				update_option( self::DUE_RESULT_OPTION, $result, false );
+				$due = [] !== $this->due_row_ids( [], 1 ) || [] !== $this->due_row_ids(
+					[
+						'status' => self::STATUS_CLAIMED,
+						'claimed_before' => $this->now() - self::STALE_CLAIM_SECONDS,
+					],
+					1
+				);
+				update_option(
+                    self::DUE_RESULT_OPTION,
+                    [
+						'due' => $due,
+						'checkedAt' => $this->now(),
+						'seenHint' => $seen,
+					],
+                    false
+                );
+			}
 		);
+		return true === self::cached_due_work();
+	}
+
+	public static function signal_due_work( int $next_at ): void {
+		update_option(
+            self::DUE_HINT_OPTION,
+            [
+				'nextAt' => $next_at,
+				'token' => bin2hex( random_bytes( 8 ) ),
+			],
+            false
+        );
+	}
+
+	public static function cached_due_work(): ?bool {
+		$result = get_option( self::DUE_RESULT_OPTION, [] );
+		$hint = get_option( self::DUE_HINT_OPTION, [] );
+		if ( $hint && (int) ( $hint['nextAt'] ?? PHP_INT_MAX ) <= time() && ( $hint['token'] ?? '' ) !== ( $result['seenHint'] ?? '' ) ) {
+			return true;
+		}
+		return $result ? ! empty( $result['due'] ) : ( $hint ? false : null );
 	}
 
 	private function due_row_ids( array $filters, int $limit ): array {

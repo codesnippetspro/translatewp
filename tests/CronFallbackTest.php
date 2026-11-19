@@ -198,6 +198,7 @@ wp_test_reset( connected_options() );
 $sync = new TranslationStoreSync( 'translatewp', TRANSLATEWP_VERSION );
 $cron = new CronFallback( 'translatewp', TRANSLATEWP_VERSION );
 $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] = time() - 120;
+( new IndexQueue() )->has_due_work();
 assert_true( false === $cron->is_behind(), 'An overdue drain with an empty queue is not behind' );
 assert_true( false === wp_next_scheduled( Indexer::DRAIN_HOOK ), 'The stale drain event is cleared' );
 ob_start();

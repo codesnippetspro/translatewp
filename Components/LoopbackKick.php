@@ -25,6 +25,9 @@ class LoopbackKick {
 	private const PROBE_SECONDS = 0.25;
 
 	public static function fire(): bool {
+		if ( BackgroundSwitch::off() ) {
+			return false;
+		}
 		$token = (string) Options::get( 'site.token', '' );
 		if ( '' === $token || ! function_exists( 'rest_url' ) ) {
 			return false;
@@ -111,7 +114,7 @@ class LoopbackKick {
 	}
 
 	public static function probe(): void {
-		if ( self::healthy() || get_transient( self::PROBE_TRANSIENT ) || ! function_exists( 'rest_url' ) ) {
+		if ( BackgroundSwitch::off() || self::healthy() || get_transient( self::PROBE_TRANSIENT ) || ! function_exists( 'rest_url' ) ) {
 			return;
 		}
 		$token = (string) Options::get( 'site.token', '' );

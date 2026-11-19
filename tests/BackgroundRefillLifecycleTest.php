@@ -347,6 +347,9 @@ if ( in_array( $case, [ 'lost-drain', 'all' ], true ) ) {
         finally { $GLOBALS['wpdb'] = $database; }
         check_lifecycle( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'A consumed ' . $driver . ' drain retries after lock contention' );
         wp_unschedule_event( (int) wp_next_scheduled( Indexer::DRAIN_HOOK ), Indexer::DRAIN_HOOK );
+		$hint = get_option( IndexQueue::DUE_HINT_OPTION );
+		$hint['nextAt'] = time() - 1;
+		update_option( IndexQueue::DUE_HINT_OPTION, $hint, false );
         $cron = new CronFallback();
         check_lifecycle( $cron->is_behind(), 'Pending extraction is detected when its drain event is missing' );
         \TranslateWP\Components\LoopbackKick::acknowledge();
@@ -364,6 +367,9 @@ if ( in_array( $case, [ 'stale-claim-recovery', 'all' ], true ) ) {
     [ $queue ] = lifecycle_fixture(); $id = lifecycle_row( $queue, 321 ); $queue->claim_rows( [ $id ] );
     check_lifecycle( ! $queue->has_due_work(), 'Missing-event recovery does not steal a fresh claim' );
     update_post_meta( $id, '_twp_claimed_at', time() - IndexQueue::STALE_CLAIM_SECONDS - 1 );
+	$result = get_option( IndexQueue::DUE_RESULT_OPTION );
+	$result['checkedAt'] = time() - IndexQueue::STALE_CLAIM_SECONDS - 1;
+	update_option( IndexQueue::DUE_RESULT_OPTION, $result, false );
     check_lifecycle( $queue->has_due_work() && ( new CronFallback() )->is_behind(), 'An abandoned claim can restore its missing worker event' );
 }
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";
