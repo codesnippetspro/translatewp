@@ -60,7 +60,7 @@ describe('Dashboard widgets', () =>
         const html = renderToStaticMarkup(<DashboardMetricsContent data={populatedMetrics} />);
 
         expect(html).toContain('432');
-        expect(html).toContain('Page translations today');
+        expect(html).toContain('Page translations in the last 24 hours');
         expect(html).toContain('German');
         expect(html).toContain('French');
         expect(html).toContain('Welcome home');
@@ -80,9 +80,11 @@ describe('Dashboard widgets', () =>
         expect(html).not.toContain(EMPTY_TRANSLATIONS);
         expect(html).not.toContain(EMPTY_CONTENT);
         expect(html).not.toContain(EMPTY_LEXICON);
-        expect(html).toContain('finished since midnight, one per page and language');
-        expect(html).toContain('240 pieces of already translated text');
-        expect((html.match(/data-info-tip/g) ?? []).length).toBe(3);
+        expect(html).toContain('Currently ready pages completed in the last 24 hours, counted once per language.');
+        expect(html).toContain('>36%<');
+        expect(html).toContain('Share of lookups served from existing translations today and yesterday.');
+        expect(html).toContain('>240<');
+        expect(html).toContain('The Lexicon fixes how a word or phrase is translated');
     });
 
     test('links the Recent Lexicon Entries "View all" to the Lexicon page', () =>
@@ -105,7 +107,7 @@ describe('Dashboard widgets', () =>
         expect(html).not.toContain('Recent lexicon entries');
 
         // The numeric cards still render a genuine zero rather than being hidden.
-        expect(html).toContain('Page translations today');
+        expect(html).toContain('Page translations in the last 24 hours');
         expect(html).toContain('>0<');
     });
 
