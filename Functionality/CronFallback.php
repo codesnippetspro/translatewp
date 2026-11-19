@@ -183,13 +183,13 @@ class CronFallback {
 		}
 		$reader_error = (string) get_option( Indexer::READER_FAILURE_OPTION, '' );
 		if ( 'page_tls_failed' === $reader_error ) {
-			return __( 'Background reading could not verify the site HTTPS certificate. Fix the certificate or the site local DNS. Translation work for unread pages is waiting.', 'translate' );
+			return __( 'Background reading could not verify the site HTTPS certificate. Fix the certificate or the site local DNS. Translation work for unread pages is waiting.', 'translate' ) . ' ' . self::execution_mode_message();
 		}
 		if ( in_array( $reader_error, [ 'page_fetch_401', 'page_fetch_403' ], true ) ) {
-			return __( 'The site blocked its background page reader. Check HTTP authentication and security rules. Translation work for unread pages is waiting.', 'translate' );
+			return __( 'The site blocked its background page reader. Check HTTP authentication and security rules. Translation work for unread pages is waiting.', 'translate' ) . ' ' . self::execution_mode_message();
 		}
 		if ( 'page_parser_unavailable' === $reader_error ) {
-			return __( 'Background reading needs the PHP DOM extension. Enable it on the server so unread pages can be translated.', 'translate' );
+			return __( 'Background reading needs the PHP DOM extension. Enable it on the server so unread pages can be translated.', 'translate' ) . ' ' . self::execution_mode_message();
 		}
 		if ( ! LoopbackKick::unhealthy() ) {
 			return __( 'TranslateWP: scheduled tasks are running late. Translation work is waiting for a background request. Check WP-Cron and loopback requests if it does not resume.', 'translate' );
@@ -202,10 +202,16 @@ class CronFallback {
 		} else {
 			$cause = __( 'The site could not confirm its background worker. A security rule or hosting restriction may be blocking the request.', 'translate' );
 		}
-		$mode = self::can_finish_response()
+		return $cause . ' ' . self::execution_mode_message();
+	}
+
+	private static function execution_mode_message(): string {
+		if ( LoopbackKick::healthy() ) {
+			return __( 'Other queued translation work continues in the background.', 'translate' );
+		}
+		return self::can_finish_response()
 			? __( 'Background translation is running in reduced mode after page responses. Check the site loopback requests to restore normal background processing.', 'translate' )
 			: __( 'Translation work is waiting because this server cannot finish a page response before doing background work. Enable WP-Cron or fix the site loopback requests.', 'translate' );
-		return $cause . ' ' . $mode;
 	}
 
 	/** The notice X, posted by Functionality\Admin\NoticeDismiss. */

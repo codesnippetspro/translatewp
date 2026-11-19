@@ -20,6 +20,7 @@ class LoopbackKick {
 	public const FIRST_DISPATCH_OPTION = 'translatewp_loopback_first_dispatch';
 	private const PROBE_TRANSIENT = 'translatewp_loopback_probe';
 	private const HEALTH_SECONDS = 300;
+	public const LOGGED_FAILURE_TRANSIENT = 'translatewp_loopback_logged_failure';
 	private const UNKNOWN_SECONDS = 60;
 	private const PROBE_SECONDS = 0.25;
 
@@ -55,7 +56,11 @@ class LoopbackKick {
 		if ( is_wp_error( $response ) ) {
 			self::record_failure( $response );
 			set_transient( \TranslateWP\Functionality\Indexer::LOOPBACK_ERROR_TRANSIENT, self::failure_reason( $response ), self::FRESHNESS_SECONDS );
-			ActionLog::record( 'The site could not call itself to run the queue (loopback): ' . $response->get_error_code(), 'warning' );
+			$failure = self::failure_reason( $response ) . ':' . $response->get_error_code();
+			if ( get_transient( self::LOGGED_FAILURE_TRANSIENT ) !== $failure ) {
+				set_transient( self::LOGGED_FAILURE_TRANSIENT, $failure, self::HEALTH_SECONDS );
+				ActionLog::record( 'The site could not call itself to run the queue (loopback): ' . $response->get_error_code(), 'warning' );
+			}
 		}
 
 		return ! is_wp_error( $response );
@@ -93,6 +98,7 @@ class LoopbackKick {
 	public static function acknowledge(): void {
 		set_transient( self::HEALTH_TRANSIENT, time(), self::HEALTH_SECONDS );
 		delete_transient( self::FAILURE_TRANSIENT );
+		delete_transient( self::LOGGED_FAILURE_TRANSIENT );
 	}
 
 	public static function healthy(): bool {

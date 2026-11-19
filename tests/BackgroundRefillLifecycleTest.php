@@ -19,6 +19,7 @@ function check_lifecycle( bool $ok, string $message ): void {
 function lifecycle_fixture(): array {
     wp_test_reset( [ 'site' => [ 'id' => '00000000-0000-4000-8000-000000000001', 'token' => 'test-token' ], 'languages' => [ 'list' => [ 'en' => [ 'locale' => 'en', 'slug' => 'en', 'default' => true, 'active' => true ], 'it' => [ 'locale' => 'it', 'slug' => 'it', 'active' => true ] ] ] ] );
     $GLOBALS['wp_test_remote_request_calls'] = [];
+    unset( $GLOBALS['wp_test_loopback_response'] );
     return [ new IndexQueue(), new Indexer( '', '', null, null, false ) ];
 }
 function lifecycle_row( IndexQueue $queue, int $object_id ): int {
@@ -120,5 +121,94 @@ if ( in_array( $case, [ 'metadata', 'all' ], true ) ) {
     }
     $titles = array_values( array_filter( $pro, static fn( array $group ): bool => '⟪item_0001⟫Shop | Our site' === $group['markerPayload'] ) );
     check_lifecycle( 1 === count( $titles ) && 'seo:title' === $titles[0]['contextKey'] && 'attribute' === $titles[0]['contextKind'], 'Whole title warming retains the visitor title context and marker contract' );
+}
+if ( in_array( $case, [ 'reader', 'all' ], true ) ) {
+    [ $queue, $indexer ] = lifecycle_fixture();
+    $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/page/', 'page_title' => '', 'language' => 'it', 'priority' => 10 ] ] );
+    $id = $queue->list_rows()[0]['id'];
+    $GLOBALS['wp_test_remote_get_response'] = new WP_Error( 'http_request_failed', 'cURL error 60: certificate verification failed' );
+    $last = 0;
+    for ( $i = 0; $i < 4; ++$i ) {
+        delete_option( Indexer::NEXT_READER_OPTION );
+        delete_post_meta( $id, '_twp_reader_not_before' );
+        $indexer->reduced_read( new ReadinessBudget() );
+        check_lifecycle( IndexQueue::STATUS_PENDING === $queue->list_rows()[0]['status'], 'An unreadable TLS page remains pending beyond the terminal retry limit' );
+        $next = (int) get_post_meta( $id, '_twp_reader_not_before', true );
+        check_lifecycle( $next > time() && $next > $last, 'TLS retries persist an increasing backoff' );
+        $last = $next;
+    }
+}
+if ( in_array( $case, [ 'mode', 'all' ], true ) ) {
+    lifecycle_fixture();
+    update_option( Indexer::READER_FAILURE_OPTION, 'page_tls_failed', false );
+    set_transient( \TranslateWP\Components\LoopbackKick::FAILURE_TRANSIENT, 'certificate', 300 );
+    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'cannot finish a page response' ), 'The reader notice says work is waiting when response finishing is unavailable' );
+    if ( ! function_exists( 'fastcgi_finish_request' ) ) { function fastcgi_finish_request(): bool { return true; } }
+    check_lifecycle( false !== strpos( CronFallback::notice_message(), 'reduced mode' ), 'The reader notice also names reduced mode on a supported server' );
+}
+if ( in_array( $case, [ 'routing', 'all' ], true ) ) {
+    foreach ( [ 'reduced', 'worker', 'cron', 'admin' ] as $driver ) {
+      foreach ( [ true, false ] as $echo ) {
+        [ $queue, $indexer ] = lifecycle_fixture();
+        $id = lifecycle_row( $queue, 321 );
+        $queue->track_refill( $id );
+        for ( $attempt = 0; $attempt < 3; ++$attempt ) { $queue->claim_rows( [ $id ] ); $queue->fail( $id, 'temporary_provider_failure' ); }
+        $queue->retry_failed();
+        check_lifecycle( $queue->list_rows()[0]['retranslating'], 'Retrying a settled refill restarts its completion tracking' );
+        if ( ! $echo ) { $GLOBALS['wp_test_translation_job_responses'] = [ [ 'response' => [ 'code' => 201 ], 'body' => wp_json_encode( [ 'jobId' => '00000000-0000-4000-8000-000000000099' ] ) ] ]; }
+        if ( 'reduced' === $driver ) { $indexer->reduced_push( new ReadinessBudget() ); }
+        elseif ( 'worker' === $driver ) { $indexer->drain_now(); }
+        elseif ( 'cron' === $driver ) { $indexer->drain_tick(); }
+        else { $indexer->drain_rows( [ $id ] ); }
+        $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+        check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'Retried refill purpose survives progress settlement through the ' . $driver . ' driver' );
+        if ( ! $echo ) {
+            $batches = array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => false !== strpos( $r['path'], '/batches' ) );
+            check_lifecycle( [] === $batches, 'The ' . $driver . ' driver pushes nothing without a purpose echo' );
+        }
+      }
+    }
+}
+if ( in_array( $case, [ 'failure-log', 'all' ], true ) ) {
+    lifecycle_fixture();
+    $GLOBALS['wp_test_loopback_response'] = new WP_Error( 'http_request_failed', 'cURL error 60: certificate verification failed' );
+    for ( $i = 0; $i < 10; ++$i ) { \TranslateWP\Components\LoopbackKick::fire(); }
+    $errors = array_filter( \TranslateWP\Components\ActionLog::entries(), static fn( array $r ): bool => false !== strpos( $r['message'], 'could not call itself' ) );
+    check_lifecycle( 1 === count( $errors ), 'Repeated unchanged loopback failures do not flood the action log' );
+}
+if ( in_array( $case, [ 'rewarm-routing', 'all' ], true ) ) {
+    [ $queue, $indexer ] = lifecycle_fixture();
+    $row = [ 'object_type' => 'page', 'object_id' => 2, 'url' => 'https://example.com/page/', 'page_title' => '', 'language' => 'it', 'priority' => 10, 'payload' => wp_json_encode( [ [ 'groupId' => 'g', 'markerPayload' => '⟪item_0001⟫Shop' ] ] ) ];
+    $id = (int) $queue->enqueue_push( $row );
+    $queue->claim_rows( [ $id ] ); $queue->complete( $id ); $queue->mark_translated( [ $id ] );
+    $queue->enqueue_rewarm( [ $row ] );
+    $GLOBALS['wp_test_remote_get_response'] = [ 'response' => [ 'code' => 200 ], 'body' => '<html><body><p>Our shop</p></body></html>' ];
+    $indexer->reduced_read( new ReadinessBudget() );
+    $indexer->reduced_push( new ReadinessBudget() );
+    $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+    check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'A page rewarm keeps background routing through extraction and reduced pushing' );
+}
+if ( in_array( $case, [ 'mixed-routing', 'all' ], true ) ) {
+    [ $queue, $indexer ] = lifecycle_fixture();
+    $repair = lifecycle_row( $queue, 321 ); $queue->track_refill( $repair );
+    lifecycle_row( $queue, 322 );
+    $GLOBALS['wp_test_translation_job_responses'] = [ [ 'response' => [ 'code' => 201 ], 'body' => wp_json_encode( [ 'jobId' => '00000000-0000-4000-8000-000000000099' ] ) ] ];
+    $indexer->drain_tick();
+    $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+    check_lifecycle( 2 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ) && ! isset( $creates[1]['body']['purpose'] ), 'One drain separates visitor work from a deferred repair job' );
+    $batches = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => false !== strpos( $r['path'], '/batches' ) ) );
+    check_lifecycle( 1 === count( $batches ) && 'g322' === $batches[0]['body']['items'][0]['groupId'], 'The visitor batch proceeds while repair waits for an echoed purpose' );
+}
+if ( in_array( $case, [ 'crawler-routing', 'all' ], true ) ) {
+    [ $queue, $indexer ] = lifecycle_fixture();
+    Indexer::refill_crawler_page( 2, 'https://example.com/page/', 'it' );
+    $rows = $queue->list_rows();
+    check_lifecycle( 1 === count( $rows ), 'The crawler queues a target-language page row' );
+    $id = $rows[0]['id'];
+    $queue->claim_rows( [ $id ] );
+    $queue->append_extraction( $id, [ [ 'groupId' => 'g', 'markerPayload' => '⟪item_0001⟫Our shop' ] ], true );
+    $indexer->reduced_push( new ReadinessBudget() );
+    $creates = array_values( array_filter( $GLOBALS['wp_test_remote_posts'] ?? [], static fn( array $r ): bool => '/v1/translation/jobs' === $r['path'] ) );
+    check_lifecycle( 1 === count( $creates ) && 'background_refresh' === ( $creates[0]['body']['purpose'] ?? '' ), 'Crawler refill followed by admin extraction and reduced push keeps background purpose' );
 }
 echo "BackgroundRefillLifecycleTest: all assertions passed\n";

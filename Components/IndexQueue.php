@@ -58,6 +58,7 @@ class IndexQueue {
 	private const META_TRANSLATED_AT = '_twp_translated_at';
 	private const META_RETRANSLATING = '_twp_retranslating';
 	public const DEFERRED_REFILLS_OPTION = 'translatewp_deferred_refill_rows';
+	private const META_BACKGROUND_REFRESH = '_twp_background_refresh';
 	private const META_PREVIOUS_READ = '_twp_previous_read_payload';
 	private const META_REFILL_FINISHED = '_twp_refill_finished';
 	// A read row re-queued because its page changed; its next reading is translated.
@@ -301,6 +302,7 @@ class IndexQueue {
 
 			$status = $this->row_status( $existing_id );
 			if ( self::STATUS_DEAD !== $status && self::STATUS_DONE !== $status ) {
+				$this->track_refill( $existing_id );
 				continue;
 			}
 
@@ -308,6 +310,7 @@ class IndexQueue {
 				continue;
 			}
 
+			$this->track_refill( $existing_id );
 			update_post_meta( $existing_id, self::META_STAGE, self::STAGE_EXTRACT );
 			update_post_meta( $existing_id, self::META_STATUS, self::STATUS_PENDING );
 			update_post_meta( $existing_id, self::META_PRIORITY, (int) $row['priority'] );
@@ -390,6 +393,7 @@ class IndexQueue {
 							self::META_FAIL_REASON => '',
 							self::META_RETRANSLATE => $force ? 1 : 0,
 							self::META_RETRANSLATING => 1,
+							self::META_BACKGROUND_REFRESH => 1,
 							self::META_REFILL_FINISHED => 0,
 						],
 					],
@@ -411,8 +415,7 @@ class IndexQueue {
 			$replay_items = $force ? [] : ( 'miss' === $object_type ? json_decode( $miss_payload, true ) : $this->read_items( $object_type, $object_id ) );
 			$replay_payload = $replay_items ? (string) wp_json_encode( $replay_items ) : '';
 			update_post_meta( $existing_id, self::META_RETRANSLATE, $force ? 1 : 0 );
-			update_post_meta( $existing_id, self::META_RETRANSLATING, 1 );
-			delete_post_meta( $existing_id, self::META_REFILL_FINISHED );
+			$this->track_refill( $existing_id );
 			if ( empty( $row['self_heal'] ) ) {
 				delete_post_meta( $existing_id, self::META_COLD_RETRIES );
 				delete_post_meta( $existing_id, self::META_COLD_EXHAUSTED );
@@ -516,6 +519,12 @@ class IndexQueue {
 	public function is_translated( int $id ): bool {
 		return self::STATUS_DONE === $this->row_status( $id )
 			&& (int) get_post_meta( $id, self::META_TRANSLATED_AT, true ) > 0;
+	}
+
+	public function requires_background_refresh( int $id ): bool {
+		return (int) get_post_meta( $id, self::META_BACKGROUND_REFRESH, true ) > 0
+			|| (int) get_post_meta( $id, self::META_RETRANSLATE, true ) > 0
+			|| (int) get_post_meta( $id, self::META_RETRANSLATING, true ) > 0;
 	}
 
 	private function is_refill( int $id ): bool {
@@ -711,6 +720,7 @@ class IndexQueue {
 		update_post_meta( $existing_id, self::META_FAIL_REASON, '' );
 		update_post_meta( $existing_id, self::META_RETRANSLATE, 0 );
 		delete_post_meta( $existing_id, self::META_RETRANSLATING );
+		delete_post_meta( $existing_id, self::META_BACKGROUND_REFRESH );
 		delete_post_meta( $existing_id, self::META_REFILL_FINISHED );
 		delete_post_meta( $existing_id, '_twp_reader_not_before' );
 		update_post_meta( $existing_id, self::META_PAGE_TITLE, (string) ( $row['page_title'] ?? '' ) );
@@ -1372,6 +1382,7 @@ class IndexQueue {
 	}
 
 	public function track_refill( int $id ): void {
+		update_post_meta( $id, self::META_BACKGROUND_REFRESH, 1 );
 		update_post_meta( $id, self::META_RETRANSLATING, 1 );
 		delete_post_meta( $id, self::META_REFILL_FINISHED );
 	}
@@ -1603,6 +1614,9 @@ class IndexQueue {
 			$has_payload  = '' !== trim( $payload );
 			update_post_meta( $post_id, self::META_STAGE, $has_payload ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			if ( $this->requires_background_refresh( (int) $post_id ) ) {
+				$this->track_refill( (int) $post_id );
+			}
 			delete_post_meta( $post_id, self::META_REFILL_FINISHED );
 			update_post_meta( $post_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $post_id, self::META_FAIL_REASON, '' );
@@ -1713,6 +1727,9 @@ class IndexQueue {
 			$payload = self::decode_payload( (string) get_post_field( 'post_content', $post_id ) );
 			update_post_meta( $post_id, self::META_STAGE, 0 < strlen( trim( $payload ) ) ? self::STAGE_PUSH : self::STAGE_EXTRACT );
 			update_post_meta( $post_id, self::META_STATUS, self::STATUS_PENDING );
+			if ( $this->requires_background_refresh( (int) $post_id ) ) {
+				$this->track_refill( (int) $post_id );
+			}
 			update_post_meta( $post_id, self::META_ATTEMPTS, 0 );
 			update_post_meta( $post_id, self::META_FAIL_REASON, '' );
 			delete_post_meta( $post_id, self::META_CLAIMED_AT );

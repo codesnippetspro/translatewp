@@ -1189,7 +1189,7 @@ class Indexer {
 				return;
 			}
 			$this->reader_failed( $html->get_error_code() );
-			if ( preg_match( '/^page_fetch_(?:timeout|failed|408|429|5[0-9]{2})$/', $html->get_error_code() ) ) {
+			if ( preg_match( '/^(?:page_tls_failed|page_fetch_(?:timeout|failed|401|403|408|429|5[0-9]{2}))$/', $html->get_error_code() ) ) {
 				$this->queue->defer_reader( (int) $row['id'], $html->get_error_code() );
 			} else {
 				$this->queue->fail( (int) $row['id'], $html->get_error_code() );
@@ -1366,10 +1366,7 @@ class Indexer {
 			return;
 		}
 
-		$repair = false;
-		foreach ( $language_rows as $row ) {
-			$repair = $repair || ! empty( $row['retranslating'] );
-		}
+		$repair = $this->queue->requires_background_refresh( (int) $language_rows[0]['id'] );
 		$job = $this->create_job( $language, $repair );
 		if ( '' === $job['id'] ) {
 			foreach ( $language_rows as $language_row ) {
@@ -1618,7 +1615,7 @@ class Indexer {
 	private function add_row_to_groups( array &$groups, array $row, array $items ): void {
 		$language    = (string) $row['language'];
 		$retranslate = ! empty( $row['retranslate'] );
-		$repair = ! empty( $row['retranslating'] );
+		$repair = $this->queue->requires_background_refresh( (int) $row['id'] );
 		$key         = $language . '|' . ( $retranslate ? '1' : '0' ) . '|' . ( $repair ? '1' : '0' );
 
 		if ( ! isset( $groups[ $key ] ) ) {

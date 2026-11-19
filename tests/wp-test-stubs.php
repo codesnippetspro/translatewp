@@ -1427,6 +1427,10 @@ function wp_remote_request( string $url, array $args = [] ) {
 		];
 	}
 
+	if ( '/wp-json/translatewp/v1/indexing/drain-now' === $path && isset( $GLOBALS['wp_test_loopback_response'] ) ) {
+		return $GLOBALS['wp_test_loopback_response'];
+	}
+
 	if ( '/wp-json/translatewp/v1/indexing/drain-now' === $path && ! empty( $body['probe'] ) ) {
 		if ( ! empty( $GLOBALS['wp_test_loopback_probe_responses'] ) ) {
 			return array_shift( $GLOBALS['wp_test_loopback_probe_responses'] );

@@ -119,6 +119,7 @@ class CleanupInventory {
 	public const TRANSIENTS = [
 		LoopbackKick::HEALTH_TRANSIENT,
 		LoopbackKick::FAILURE_TRANSIENT,
+		LoopbackKick::LOGGED_FAILURE_TRANSIENT,
 		MutationLock::FAILURE_TRANSIENT,
 		'translatewp_loopback_probe',
 		'translatewp_pairing_verified',
