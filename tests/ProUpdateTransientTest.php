@@ -10,6 +10,24 @@ require_once __DIR__ . '/wp-test-stubs.php';
 if ( ! defined( 'TRANSLATEWP_VERSION' ) ) {
 	define( 'TRANSLATEWP_VERSION', '0.9.0' );
 }
+if ( ! defined( 'TRANSLATEWP_URL' ) ) {
+	define( 'TRANSLATEWP_URL', 'https://translatewp.ai/wp-content/plugins/translate/' );
+}
+$plugin_dir = sys_get_temp_dir() . '/twp-pro-update-' . getmypid();
+if ( ! defined( 'WP_PLUGIN_DIR' ) ) {
+	define( 'WP_PLUGIN_DIR', $plugin_dir );
+}
+
+if ( ! function_exists( 'get_file_data' ) ) {
+	function get_file_data( string $file, array $headers ): array {
+		$contents = (string) file_get_contents( $file );
+		foreach ( $headers as $key => $name ) {
+			$headers[ $key ] = 1 === preg_match( '/^[ \t\/*#@]*' . preg_quote( $name, '/' ) . ':(.*)$/mi', $contents, $match ) ? trim( $match[1] ) : '';
+		}
+
+		return $headers;
+	}
+}
 
 $failures = 0;
 
@@ -161,6 +179,68 @@ assert_true(
 );
 assert_true( false === stripos( (string) $info->download_link, 'github' ), 'plugin_information must never point at GitHub' );
 assert_no_github_requested();
+
+// --- The update row carries the bundled logo and the manifest's requirements ---
+$expected_icons = [
+	'1x' => TRANSLATEWP_URL . 'assets/icon-128x128.png',
+	'2x' => TRANSLATEWP_URL . 'assets/icon-256x256.png',
+];
+foreach ( $expected_icons as $icon ) {
+	$size = getimagesize( dirname( __DIR__ ) . '/' . substr( $icon, strlen( TRANSLATEWP_URL ) ) );
+	assert_true( false !== $size && 'image/png' === $size['mime'], $icon . ' must be a bundled PNG' );
+	assert_true( false !== $size && $size[0] === (int) substr( basename( $icon ), 5, 3 ), $icon . ' must match its size' );
+}
+$with_requirements = pro_payload();
+$with_requirements['latest'] += [ 'tested' => '6.9', 'requires' => '6.3', 'requires_php' => '8.0' ];
+$other      = (object) [ 'slug' => 'other', 'new_version' => '2.0.0', 'icons' => [ '1x' => 'https://translatewp.ai/other.png' ] ];
+$other_copy = clone $other;
+foreach ( [ '1.0.0' => 'response', '1.2.0' => 'no_update' ] as $installed => $section ) {
+	wp_test_reset( $connected );
+	add_filter( 'translatewp_pro_installed_version', static function () use ( $installed ) {
+		return $installed;
+	} );
+	$GLOBALS['wp_test_remote_get_response'] = eligibility_response( $with_requirements );
+	$pro    = new Pro( 'translatewp', TRANSLATEWP_VERSION );
+	$result = $pro->inject_update( (object) [ 'response' => [ 'other/other.php' => $other ] ] );
+	$entry  = $result->{$section}[ $addon_file ] ?? null;
+	assert_true( is_object( $entry ) && $expected_icons === $entry->icons, "the {$section} entry must carry the bundled icons" );
+	assert_true( is_object( $entry ) && '6.9' === ( $entry->tested ?? null ), "the {$section} entry must carry the tested version" );
+	assert_true( is_object( $entry ) && '6.3' === ( $entry->requires ?? null ), "the {$section} entry must carry the required WordPress version" );
+	assert_true( is_object( $entry ) && '8.0' === ( $entry->requires_php ?? null ), "the {$section} entry must carry the required PHP version" );
+	assert_true( $other_copy == $result->response['other/other.php'], 'other plugins must stay untouched' );
+}
+
+$info = $pro->plugin_information( false, 'plugin_information', (object) [ 'slug' => 'translatewp-pro' ] );
+assert_true( is_object( $info ) && $expected_icons === $info->icons, 'plugin_information must carry the bundled icons' );
+assert_true( is_object( $info ) && [ '6.9', '6.3', '8.0' ] === [ $info->tested ?? null, $info->requires ?? null, $info->requires_php ?? null ], 'plugin_information must carry the manifest requirements' );
+
+// --- Without manifest values the installed Pro header is used; unknown values are left out ---
+mkdir( WP_PLUGIN_DIR . '/translatewp-pro', 0777, true );
+file_put_contents( WP_PLUGIN_DIR . '/' . $addon_file, "<?php\n/**\n * Plugin Name: TranslateWP Pro\n * Tested up to: 6.8\n * Requires PHP: 8.1\n */\n" );
+wp_test_reset( $connected );
+add_filter( 'translatewp_pro_installed_version', static function () {
+	return '1.0.0';
+} );
+$GLOBALS['wp_test_remote_get_response'] = eligibility_response( pro_payload() );
+$pro   = new Pro( 'translatewp', TRANSLATEWP_VERSION );
+$entry = $pro->inject_update( (object) [ 'response' => [] ] )->response[ $addon_file ] ?? null;
+assert_true( is_object( $entry ) && '6.8' === ( $entry->tested ?? null ), 'the installed Pro header must fill the tested version' );
+assert_true( is_object( $entry ) && '8.1' === ( $entry->requires_php ?? null ), 'the installed Pro header must fill the required PHP version' );
+assert_true( is_object( $entry ) && ! property_exists( $entry, 'requires' ), 'an unknown required WordPress version must be left out, not sent empty' );
+unlink( WP_PLUGIN_DIR . '/' . $addon_file );
+rmdir( WP_PLUGIN_DIR . '/translatewp-pro' );
+rmdir( WP_PLUGIN_DIR );
+
+wp_test_reset( $connected );
+add_filter( 'translatewp_pro_installed_version', static function () {
+	return '1.0.0';
+} );
+$GLOBALS['wp_test_remote_get_response'] = eligibility_response( pro_payload() );
+$pro   = new Pro( 'translatewp', TRANSLATEWP_VERSION );
+$entry = $pro->inject_update( (object) [ 'response' => [] ] )->response[ $addon_file ] ?? null;
+foreach ( [ 'tested', 'requires', 'requires_php' ] as $key ) {
+	assert_true( is_object( $entry ) && ! property_exists( $entry, $key ), "an unknown {$key} must be left out, not sent empty" );
+}
 
 // --- plugins_api leaves other plugins to WordPress ---
 wp_test_reset( $connected );

@@ -34,6 +34,7 @@ assert_true( [] !== $paths, 'scripts/bundle.mjs must name its BUNDLE_PATHS' );
 $package = json_decode( (string) file_get_contents( $root . '/package.json' ), true );
 $slug    = (string) ( $package['wpSlug'] ?? 'translatewp' );
 $block   = $slug . '/blocks/language-switcher/block.json';
+$icons   = [ $slug . '/assets/icon-128x128.png', $slug . '/assets/icon-256x256.png' ];
 
 $zip_path = tempnam( sys_get_temp_dir(), 'twp-bundle-' ) . '.zip';
 $zip      = new ZipArchive();
@@ -58,14 +59,18 @@ foreach ( $paths as $path ) {
 $zip->close();
 
 $zip->open( $zip_path );
-assert_true( false !== $zip->locateName( $block ), 'The bundled zip must carry ' . $block );
+foreach ( array_merge( [ $block ], $icons ) as $entry ) {
+	assert_true( false !== $zip->locateName( $entry ), 'The bundled zip must carry ' . $entry );
+}
 $zip->close();
 unlink( $zip_path );
 
 $built = $root . '/' . $slug . '.' . (string) ( $package['version'] ?? '' ) . '.zip';
 if ( is_file( $built ) ) {
 	$zip->open( $built );
-	assert_true( false !== $zip->locateName( $block ), basename( $built ) . ' must carry ' . $block );
+	foreach ( array_merge( [ $block ], $icons ) as $entry ) {
+		assert_true( false !== $zip->locateName( $entry ), basename( $built ) . ' must carry ' . $entry );
+	}
 	$zip->close();
 }
 
