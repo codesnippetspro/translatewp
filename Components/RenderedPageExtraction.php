@@ -82,6 +82,25 @@ class RenderedPageExtraction {
 				'contextKind' => 'attribute',
 			];
 		}
+		$meta_contexts = [ 'og:title' => 'seo:title', 'twitter:title' => 'seo:title' ];
+		if ( ProEligibility::unlocks_pro_features() ) {
+			$meta_contexts += [ 'description' => 'seo:meta_description', 'og:description' => 'seo:og_description', 'twitter:description' => 'seo:twitter_description' ];
+		}
+		foreach ( $document->getElementsByTagName( 'meta' ) as $meta ) {
+			$name = strtolower( $meta->getAttribute( 'name' ) );
+			if ( '' === $name ) {
+				$name = strtolower( $meta->getAttribute( 'property' ) );
+			}
+			$value = trim( $meta->getAttribute( 'content' ) );
+			if ( isset( $meta_contexts[ $name ] ) && PlainText::has_letters( $value ) ) {
+				$groups[] = [
+					'groupId' => 'seo:' . $meta_contexts[ $name ],
+					'markerPayload' => '⟪item_0001⟫' . $value,
+					'contextKey' => $meta_contexts[ $name ],
+					'contextKind' => 'attribute',
+				];
+			}
+		}
 		return $groups;
 	}
 

@@ -77,6 +77,24 @@ export function useDropdownList({ open, languageCount, editing, settings }: {
             {
                 for (const property of ['top', 'bottom', 'margin-top', 'margin-bottom']) stack.style.removeProperty(property);
             }
+            if (container.matches('.twp-inline:not([data-preview])'))
+            {
+                stack.style.removeProperty('left');
+                stack.style.removeProperty('right');
+                const screenLeft = viewport?.offsetLeft ?? 0;
+                const screenRight = screenLeft + (viewport?.width ?? document.documentElement.clientWidth);
+                const natural = panel.getBoundingClientRect();
+                if (natural.left < screenLeft || natural.right > screenRight)
+                {
+                    const flipped = getComputedStyle(container).direction === 'rtl' ? triggerBox.left : triggerBox.right - natural.width;
+                    const left = flipped >= screenLeft && flipped + natural.width <= screenRight
+                        ? flipped
+                        : Math.max(screenLeft + SCREEN_MARGIN, Math.min(flipped, screenRight - SCREEN_MARGIN - natural.width));
+                    const offset = stack.getBoundingClientRect().left - container.getBoundingClientRect().left - container.clientLeft;
+                    stack.style.setProperty('left', `${offset + left - natural.left}px`, 'important');
+                    stack.style.setProperty('right', 'auto', 'important');
+                }
+            }
             const panelBox = panel.getBoundingClientRect();
             if (sideTab)
                 up = panelBox.bottom <= triggerBox.bottom + SCROLL_TOLERANCE && panelBox.top < triggerBox.top;

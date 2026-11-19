@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { ConnectionPanel } from '@/shared/components/connection/ConnectionPanel';
 import { ConnectReturnError } from '@/shared/components/connection/ConnectReturnError';
+import { ProInstallAction } from '@/shared/components/pro/ProInstallAction';
+import { pendingProAction } from '@/shared/lib/pro/proState';
 import { getConnectStatusQueryOptions } from '@/shared/query-options/connect';
 
 const STEPS = [
@@ -13,6 +15,25 @@ const STEPS = [
     () => __('Approve and connect this site to your account', 'translate'),
     () => __('Return here and continue setting up translations', 'translate'),
 ];
+
+/**
+ * The install or activation an Orbital account still owes, offered on the
+ * connected line the moment the connection reports it. Accounts without Pro
+ * and sites with Pro active see nothing.
+ */
+export const ConnectProAction = () =>
+{
+    const { data } = useQuery(getConnectStatusQueryOptions());
+    const step = data?.connected === true ? pendingProAction(data) : null;
+
+    if (step === null) {
+        return null;
+    }
+
+    const label = step === 'install' ? __('Install Pro', 'translate') : __('Activate Pro', 'translate');
+
+    return <ProInstallAction step={step} label={label} actionLabel={label} />;
+};
 
 export const ConnectStep = () =>
 {

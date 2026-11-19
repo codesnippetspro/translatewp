@@ -131,3 +131,12 @@ export const saveSwitcherPosition = (input: SaveSwitcherPositionInput) =>
 		headers: { 'X-WP-Nonce': window.TranslateWP.context.nonce },
 		data: input,
 	});
+
+/** Tells the site that its security policy blocks the translation service; the server keeps one record an hour. */
+export const reportServiceBlocked = (origin: string, path: string) =>
+	apiFetch<{ recorded: boolean }>({
+		path: '/translatewp/v1/admin/service-blocked',
+		method: 'POST',
+		headers: { 'X-WP-Nonce': window.TranslateWP.context.nonce },
+		data: { origin, path },
+	});

@@ -119,7 +119,7 @@ export const useSteps = () =>
 
     // The last step of an entitled site without an active addon
     // installs or activates Pro, then finishes. A failed install says why and
-    // leaves "Finish without Pro" to complete setup anyway.
+    // leaves Finish to complete setup without Pro.
     const proAction = isLastStep ? pendingProAction(connectStatus) : null;
 
     const finishWithPro = async () =>

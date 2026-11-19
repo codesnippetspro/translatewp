@@ -9,6 +9,7 @@ declare(strict_types=1);
 // Run three times: without Code Snippets, with Code Snippets (free) and with
 // Code Snippets Pro (--code-snippets-free / --code-snippets-pro).
 
+use TranslateWP\Components\Access;
 use TranslateWP\Components\AdminNotices;
 use TranslateWP\Components\AltTextNotice;
 use TranslateWP\Components\BlackFridayNotice;
@@ -151,6 +152,40 @@ $_GET = [ 'page' => 'translatewp-support' ];
 assert_true( '' !== notice( '2026-11-27T12:00:00Z' ), 'it is shown on every TranslateWP screen' );
 $GLOBALS['wp_test_caps'] = [];
 assert_true( '' === notice( '2026-11-27T12:00:00Z' ), 'a user who cannot manage TranslateWP does not see it' );
+
+// --- a sales offer: only for those who can buy, not for delegated TranslateWP users ---
+function dismiss(): array {
+	$GLOBALS['wp_test_json_sent'] = [];
+	BlackFridayNotice::handle_ajax_dismiss();
+	return $GLOBALS['wp_test_json_sent'][0] ?? [];
+}
+
+seed( false );
+Access::set_role_map( [ 'edit_translations' => [ 'editor' => true ] ] );
+$GLOBALS['wp_test_caps']               = [ 'edit_pages' ];
+$GLOBALS['wp_test_current_user_roles'] = [ 'editor' ];
+assert_true( Access::can( Access::EDIT ), 'the editor holds the translation-editing grant' );
+assert_true( '' === notice( '2026-11-27T12:00:00Z' ), 'an editor with a TranslateWP grant but without manage_options does not see the offer' );
+$GLOBALS['wp_test_options_store']['site'] = [ 'id' => 'site-1', 'token' => 'token-1', 'connection_status' => 'invalidated' ];
+assert_true( '' === notice( '2026-11-20T12:00:00Z' ), 'nor on a site whose connection was invalidated, where no connection notice is shown to them' );
+$denied = dismiss();
+assert_true( 'error' === ( $denied['type'] ?? '' ) && 403 === ( $denied['status'] ?? 0 ), 'an editor with a TranslateWP grant cannot dismiss the offer' );
+assert_true( '' === get_user_meta( 1, BlackFridayNotice::DISMISSED_META, true ), 'the refused dismissal is not stored' );
+$GLOBALS['wp_test_current_user_roles'] = [];
+
+seed( false );
+assert_true( '' !== notice( '2026-11-27T12:00:00Z' ), 'an administrator still sees the offer' );
+$allowed = dismiss();
+assert_true( 'success' === ( $allowed['type'] ?? '' ) && 1 === get_user_meta( 1, BlackFridayNotice::DISMISSED_META, true ), 'an administrator can dismiss the offer' );
+
+seed( false );
+$_GET                            = [ 'page' => 'translatewp-network-settings' ];
+$GLOBALS['wp_test_network_admin'] = true;
+$GLOBALS['wp_test_caps']          = [ 'manage_options' ];
+assert_true( '' === notice( '2026-11-27T12:00:00Z' ), 'on a network admin screen manage_options alone is not enough' );
+$GLOBALS['wp_test_caps'] = [ 'manage_network_options' ];
+assert_true( '' !== notice( '2026-11-27T12:00:00Z' ), 'a network administrator sees the offer on the network screen' );
+$GLOBALS['wp_test_network_admin'] = false;
 
 // --- printed last among the TranslateWP notices, at their priority ---
 wp_test_reset( [] );

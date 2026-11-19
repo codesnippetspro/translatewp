@@ -117,6 +117,45 @@ $html = $response->render( str_replace( '<h1>Contact</h1>', '<img src="a.png" al
 assert_true( false !== strpos( $html, 'alt="Kontakt"' ), 'An entitled Pro page translates its alt text, got ' . $html );
 wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => false );
 
+// --- An SEO plugin's head: the title it prints, its description and Open Graph tags ---
+const SEO_PAGE = '<html lang="de"><head><title>Contact us today | Harbor Dance Studio</title>'
+	. '<meta name="description" content="Call us or write to us." /><meta property="og:title" content="Contact us today | Harbor Dance Studio" />'
+	. '<meta property="og:description" content="Call us or write to us." /><meta name="twitter:title" content="Contact us today | Harbor Dance Studio" />'
+	. '<meta property="og:type" content="website" /></head><body><h1>Contact</h1><p>Call us today.</p></body></html>';
+const SEO_PAIRS = [
+	'Contact'                                 => 'Kontakt',
+	'Call us today.'                          => 'Rufen Sie uns heute an.',
+	'Contact us today | Harbor Dance Studio' => 'Kontaktieren Sie uns noch heute | Harbor Dance Studio',
+	'Call us or write to us.'                 => 'Rufen Sie uns an oder schreiben Sie uns.',
+];
+
+$response = seed_crawler_site( GOOGLEBOT, 'de' );
+store_translation( SEO_PAIRS );
+$html = $response->render( SEO_PAGE );
+assert_true( false !== strpos( $html, '<title>Kontaktieren Sie uns noch heute | Harbor Dance Studio</title>' ), 'A title an SEO plugin printed, unlike the post title, is translated, got ' . $html );
+assert_true( false !== strpos( $html, '<meta property="og:title" content="Kontaktieren Sie uns noch heute | Harbor Dance Studio" />' ), 'The og:title is translated, got ' . $html );
+assert_true( false !== strpos( $html, '<meta name="twitter:title" content="Kontaktieren Sie uns noch heute | Harbor Dance Studio" />' ), 'The twitter:title is translated, got ' . $html );
+assert_true( false !== strpos( $html, '<meta name="description" content="Call us or write to us." />' ), 'A Terrestrial crawler page keeps its meta description as written, got ' . $html );
+
+$response = seed_crawler_site( GOOGLEBOT, 'de' );
+set_transient( 'translatewp_pro_eligibility', [ 'plan' => 'pro', 'entitled' => true ], 3600 );
+wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => true );
+store_translation( SEO_PAIRS );
+$html = $response->render( SEO_PAGE );
+assert_true( false !== strpos( $html, '<meta name="description" content="Rufen Sie uns an oder schreiben Sie uns." />' ), 'An entitled Pro page translates its meta description, got ' . $html );
+assert_true( false !== strpos( $html, '<meta property="og:description" content="Rufen Sie uns an oder schreiben Sie uns." />' ), 'An entitled Pro page translates its og:description, got ' . $html );
+assert_true( false !== strpos( $html, '<meta property="og:type" content="website" />' ), 'Other meta tags are left alone' );
+wp_test_set_filter( 'translatewp_pro_addon_active', static fn() => false );
+
+// --- The page's last read lacks the title the SEO plugin prints now; a visitor reported it since ---
+$response = seed_crawler_site( GOOGLEBOT, 'de' );
+store_translation( SEO_PAIRS );
+$page_id = (int) $GLOBALS['wp_test_queried_object_id'];
+set_transient( 'twp_crawler_map_' . md5( $page_id . '|de|' . TranslationStore::cache_generation_for( 'de' ) ), [ 'Contact' => 'Kontakt', 'Call us today.' => 'Rufen Sie uns heute an.' ], 600 );
+$html = $response->render( SEO_PAGE );
+assert_true( false !== strpos( $html, '<h1>Kontakt</h1>' ), 'The complete page map is served, got ' . $html );
+assert_true( false !== strpos( $html, '<title>Kontaktieren Sie uns noch heute | Harbor Dance Studio</title>' ), 'A title stored after the page was last read is still served translated, got ' . $html );
+
 // --- One text without a translation: the original page, a canonical to the source, a Retry-After ---
 $response = seed_crawler_site( GOOGLEBOT, 'de' );
 store_translation( [ 'Contact' => 'Kontakt' ] );

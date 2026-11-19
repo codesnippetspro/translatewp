@@ -6,6 +6,7 @@ import {
     TranslationCacheClient,
 } from '@/shared/lib/translations/TranslationCacheClient';
 import type { ExtractionOptions } from '@/shared/lib/translations/constants';
+import { isServiceBlocked } from '@/shared/lib/translations/serviceBlock';
 
 const MAX_HYDRATED_LANGUAGES = 4;
 
@@ -81,6 +82,7 @@ export async function runHydration(options: HydrationSchedulerOptions): Promise<
 
     for (const language of languages)
     {
+        if (isServiceBlocked()) return;
         try
         {
             const client = createClient(language);
