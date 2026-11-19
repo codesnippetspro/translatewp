@@ -127,6 +127,24 @@ $GLOBALS['wp_test_after_option_write'][ BackgroundEngine::STATE_OPTION ] = stati
 $result = BackgroundEngine::step();
 check_engine( 'more' === $result['state'] && $result['pending']['visitor'] > 0, 'A visitor arrival during a step is included in its own answer' );
 
+
+$queue = engine_fixture();
+$miss_row = [ 'object_type' => 'miss', 'object_id' => 903, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10 ];
+$first = $queue->enqueue_miss_page( $miss_row, [ [ 'groupId' => 'before-push', 'markerPayload' => '⟪item_0001⟫Before push' ] ] );
+$late = null;
+wp_test_set_filter( 'translatewp_site_request_headers', static function ( array $headers ) use ( $queue, $miss_row, $first, &$late ): array {
+    if ( null === $late ) {
+        check_engine( IndexQueue::STATUS_CLAIMED === get_post_meta( $first, '_twp_status', true ), 'The late group arrives after the push has captured its claimed payload' );
+        $late = $queue->enqueue_miss_page( $miss_row, [ [ 'groupId' => 'during-push', 'markerPayload' => '⟪item_0001⟫During push' ] ] );
+    }
+    return $headers;
+} );
+$result = BackgroundEngine::step();
+check_engine( 'more' === $result['state'] && $result['pending']['visitor'] > 0, 'The active push reports visitor work that arrived during its own request' );
+check_engine( $late !== $first && IndexQueue::STATUS_PENDING === get_post_meta( $late, '_twp_status', true ), 'Completing the captured push leaves the late group pending' );
+BackgroundEngine::step();
+check_engine( IndexQueue::STATUS_DONE === get_post_meta( $late, '_twp_status', true ), 'The next step actually pushes the late group instead of merely counting a hint' );
+
 $queue = engine_fixture();
 delete_option( LexiconChanges::SEEDED_OPTION ); delete_option( Indexer::SPINE_CHECKED_OPTION );
 update_option( 'page_on_front', 1 ); update_option( 'show_on_front', 'page' );

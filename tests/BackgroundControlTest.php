@@ -45,7 +45,7 @@ $queue->collapse_stale_duplicates( true );
 check_control( null === get_post( $page ) && null !== get_post( $duplicate ), 'Only settled true duplicates of the same object and language collapse' );
 
 [ $queue ] = control_fixture();
-$old = control_row( $queue, 123 ); $queue->claim_rows( [ $old ] ); $queue->complete( $old );
+$old = control_row( $queue, 123 ); $queue->claim_rows( [ $old ] ); $queue->complete( $old ); $queue->mark_translated( [ $old ] );
 $copy = $GLOBALS['wp_test_inserted_posts'][0]; unset( $copy['ID'] ); $new = wp_insert_post( $copy );
 $GLOBALS['wp_test_after_post_update'] = static function () use ( $old ): void {
     update_post_meta( $old, '_twp_status', IndexQueue::STATUS_PENDING );
@@ -53,6 +53,25 @@ $GLOBALS['wp_test_after_post_update'] = static function () use ( $old ): void {
 };
 $queue->collapse_stale_duplicates( true );
 check_control( null !== get_post( $old ) && IndexQueue::STATUS_PENDING === get_post_meta( $old, '_twp_status', true ), 'A row reopened between the snapshot and deletion is retained' );
+
+
+[ $queue ] = control_fixture();
+$miss_row = [ 'object_type' => 'miss', 'object_id' => 123, 'url' => 'https://example.com/shop/', 'language' => 'it', 'priority' => 10 ];
+$first_items = [ [ 'groupId' => 'first', 'markerPayload' => '⟪item_0001⟫First visitor group' ] ];
+$late_items = [ [ 'groupId' => 'late', 'markerPayload' => '⟪item_0001⟫Late visitor group' ] ];
+$first = $queue->enqueue_miss_page( $miss_row, $first_items );
+$queue->claim_rows( [ $first ] );
+$late = $queue->enqueue_miss_page( $miss_row, $late_items );
+check_control( $late !== $first && IndexQueue::STATUS_PENDING === get_post_meta( $late, '_twp_status', true ), 'A visitor arrival during an active push gets its own pending row' );
+check_control( $first_items === json_decode( IndexQueue::decode_payload( (string) get_post_field( 'post_content', $first ) ), true ), 'An active push keeps its captured payload unchanged' );
+$queue->complete( $first );
+$queue->claim_rows( [ $late ] ); $queue->complete( $late );
+$queue->collapse_stale_duplicates( true );
+check_control( null !== get_post( $first ) && null !== get_post( $late ), 'Automatic compaction preserves both unconfirmed visitor deliveries' );
+$third = $queue->enqueue_miss_page( $miss_row, [ [ 'groupId' => 'third', 'markerPayload' => '⟪item_0001⟫Third visitor group' ] ] );
+check_control( $third !== $first && $third !== $late, 'A new visitor group cannot overwrite an unconfirmed delivery manifest' );
+$queue->mark_translated( [ $first, $late ] );
+check_control( 1 === $queue->collapse_stale_duplicates( true ), 'Confirmed visitor duplicates can still be compacted' );
 
 
 [ $queue, $indexer, $cron ] = control_fixture();

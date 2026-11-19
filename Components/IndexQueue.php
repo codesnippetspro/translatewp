@@ -737,7 +737,10 @@ class IndexQueue {
 				? (string) get_post_meta( $post_id, self::META_OBJECT_TYPE, true ) . '|' . (string) get_post_meta( $post_id, self::META_OBJECT_ID, true ) . '|' . $language
 				: ( '' !== $canonical ? $canonical : $url ) . "\n" . $language;
 
-			$protected = $this->active_background_row( (int) $post_id ) || ( $settled_only && self::STATUS_DONE !== $this->row_status( (int) $post_id ) );
+			$visitor_delivery = 'miss' === (string) get_post_meta( $post_id, self::META_OBJECT_TYPE, true )
+				&& ! $this->is_translated( (int) $post_id );
+			$protected = $this->active_background_row( (int) $post_id )
+				|| ( $settled_only && ( self::STATUS_DONE !== $this->row_status( (int) $post_id ) || $visitor_delivery ) );
 			$key .= $protected ? "\nactive:" . $post_id : '';
 			$by_key[ $key ][] = (int) $post_id;
 			$snapshots[ $post_id ] = $this->duplicate_snapshot( (int) $post_id );
@@ -906,11 +909,8 @@ class IndexQueue {
 	}
 
 	/**
-	 * Queue every group a visitor missed on one page and language as ONE row.
-	 * A pending or claimed row for that page takes the new groups into its
-	 * payload (merged by group id); a finished or dead row re-enters the push
-	 * stage carrying only the new groups, so nothing already translated is
-	 * sent again; a page without a row gets a new one. Returns the row id.
+	 * Pending visitor groups coalesce; claimed and unconfirmed deliveries keep
+	 * their captured payload so later arrivals cannot overwrite their manifest.
 	 */
 	public function enqueue_miss_page( array $row, array $items ) {
 		return self::mutate_rows(
@@ -2183,7 +2183,9 @@ class IndexQueue {
 		$completed = null;
 		foreach ( $ids as $id ) {
 			$id = (int) $id;
-			if ( $visitor && $this->active_background_row( $id ) ) {
+			if ( $visitor && ( $this->active_background_row( $id )
+				|| self::STATUS_CLAIMED === $this->row_status( $id )
+				|| ( self::STATUS_DONE === $this->row_status( $id ) && ! $this->is_translated( $id ) ) ) ) {
 				continue;
 			}
 			if ( $visitor && $this->requires_background_refresh( $id ) ) {
