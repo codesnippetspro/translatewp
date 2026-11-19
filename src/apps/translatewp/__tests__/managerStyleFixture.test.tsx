@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SwitcherView } from '@/apps/translatewp/SwitcherView';
+import { managerStyles } from '@/apps/translatewp/managerStyles';
 import { editMode } from '@/apps/translatewp/editMode';
 import { dragHint } from '@/apps/translatewp/dragHint';
 
@@ -29,7 +30,7 @@ it('renders manager and visitor surfaces for the style boundary check', async ()
     }
     editMode.set(false);
     const dir = resolve(process.cwd(), 'e2e/.fixtures');mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, 'manager-style-markup.json'), JSON.stringify(output));
+    writeFileSync(resolve(dir, 'manager-style-markup.json'), JSON.stringify({ ...output, managerStyles }));
     expect(output.manager).toContain('twp-admin-item');
     expect(output.visitor).not.toContain('class="twp-admin-item');
 });

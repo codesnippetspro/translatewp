@@ -26,3 +26,28 @@ for (const width of [1350, 390]) {
         await expect(page.locator('#visitor .twp-trigger')).toHaveCSS('outline-color', 'rgb(123, 45, 67)');
     });
 }
+
+for (const width of [1350, 390]) {
+    test(`every visitor computed style is identical with manager CSS present at ${width}px`, async ({ page }) => {
+        const { managerStyles } = fixture;
+        expect(fixture.visitor).toContain(managerStyles);
+        await page.setViewportSize({ width, height: 900 });
+        await page.setContent(`<!doctype html><html><body class="kit"><div id="visitor">${fixture.visitor.replaceAll(managerStyles, '')}</div></body></html>`);
+        await page.addStyleTag({ content: hostile + '#visitor .twp-trigger{outline:3px solid rgb(123,45,67)!important}' });
+        await page.evaluate(async () => {
+            const animations = document.getAnimations();
+            for (const animation of animations) { animation.pause(); animation.currentTime = 0; }
+            await Promise.all(animations.map(animation => animation.ready));
+        });
+        const styles = () => page.locator('#visitor, #visitor *').evaluateAll(nodes => nodes.map(node => {
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return { tag: node.tagName, styles: Object.fromEntries(Array.from(style).map(property => [property, style.getPropertyValue(property)])),
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight };
+        }));
+        const without = await styles();
+        expect(without.length).toBeGreaterThan(10);
+        await page.addStyleTag({ content: managerStyles });
+        expect(await styles()).toEqual(without);
+    });
+}
