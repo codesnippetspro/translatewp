@@ -3,14 +3,10 @@ import { __ } from '@wordpress/i18n';
 import { Dashboard } from '@/apps/admin/components/Dashboard';
 import { LanguagesIndexing } from '@/apps/admin/components/Translations/Indexing';
 import { RetranslateEverything } from '@/apps/admin/components/Settings/RetranslateEverything';
-import { SupportPanel } from '@/apps/admin/components/Transparency';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { usePageHash } from '@/apps/admin/hooks/usePageHash';
 import { PageBody, PageHeader, NavigationPage } from '@/apps/admin/components/PageLayout';
 
-// The Dashboard carries what the wizard sets plus status and the feedback
-// form (Overview), the Indexing page with "Retranslate everything" beside
-// the per-page action, and the Support page with feedback, the support report and tickets.
 export const DASHBOARD_PAGES = [
     { name: 'overview', title: __('Overview', 'translate'), content: <Dashboard />, inset: false },
     {
@@ -28,7 +24,6 @@ export const DASHBOARD_PAGES = [
             </div>
         ),
     },
-    { name: 'support', title: __('Support', 'translate'), content: <SupportPanel /> },
 ] as NavigationPage[];
 
 export const DashboardPage = () =>

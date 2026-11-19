@@ -29,7 +29,6 @@ const LINK_CLASS = `${CONTROL_CLASS} hover:bg-translatewp-selection! `
 const PAGE_ICONS = {
 	overview: LayoutDashboard,
 	indexing: ListChecks,
-	support: LifeBuoy,
 	languages: Languages,
 	translation: Globe,
 	switcher: SlidersHorizontal,
@@ -94,6 +93,9 @@ export const Sidebar = () =>
 		...(administers || can.settings ? [{
 			route: '/settings', title: __('Settings', 'translate'), icon: Settings,
 			pages: settingsPages,
+		}] : []),
+		...(administers ? [{
+			route: '/support', title: __('Support', 'translate'), icon: LifeBuoy, pages: [],
 		}] : []),
 	];
 	const tooltipPlacement = isRTL() ? 'left' : 'right';
