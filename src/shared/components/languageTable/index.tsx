@@ -68,12 +68,13 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                 <TableCell variant="header" className="w-2/5">{__('Language', 'translate')}</TableCell>
                 <TableCell variant="header" align="center">{__('Slug', 'translate')}</TableCell>
                 <TableCell variant="header" align="center">{__('Locale', 'translate')}</TableCell>
+                <TableCell variant="header" align="center">{__('Status', 'translate')}</TableCell>
                 <TableCell variant="header" align="end">{__('Actions', 'translate')}</TableCell>
             </TableHeaderRow>
 
             {languages.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={4} align="center" className="py-4 text-translatewp-muted">
+                    <TableCell colSpan={5} align="center" className="py-4 text-translatewp-muted">
                         <Button variant="primary" className="rounded-sm!" onClick={onAddLanguage}>{__('Add a language', 'translate')}</Button>
                     </TableCell>
                 </TableRow>
@@ -90,14 +91,17 @@ export const LanguageTable = ({ languages, setLanguages, onEditLanguage, onDelet
                         onDrop={handleDrop(index)}
                         onDragEnd={handleDragEnd}
                     >
-                        <TableCell as="div" className="flex items-center gap-2.5 text-translatewp-neutral">
+                        <TableCell as="div" className="flex items-center gap-2.5">
                             <GripVertical className="w-5 h-5 text-translatewp-grip cursor-grab active:cursor-grabbing" />
                             {getCountryFlagFromLocale( language.locale )}
-                            <span className="text-sm text-translatewp-neutral">{getLanguageNameFromLocale( language.locale )}</span>
+                            <span className={language.active ? 'text-translatewp-neutral' : 'text-translatewp-muted line-through'}>{languageName}</span>
                         </TableCell>
 
                         <TableCell align="center">{language.slug}</TableCell>
                         <TableCell align="center">{formatLocale( language.locale )}</TableCell>
+                        <TableCell align="center">
+                            {language.active ? __('Active', 'translate') : __('Inactive', 'translate')}
+                        </TableCell>
                         <TableCell as="div" align="end" className="flex justify-end gap-2">
                             <Button
                                 variant='primary'
