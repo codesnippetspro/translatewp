@@ -11,6 +11,7 @@ use TranslateWP\Components\DashboardTranslations;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\ProEligibility;
+use TranslateWP\Components\ServiceBlockNotice;
 use TranslateWP\Components\SwitcherPlacement;
 use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\SiteLanguageSync;
@@ -178,8 +179,16 @@ class Admin extends BaseApiEndpoints {
 			[ $this, 'settings_write_permissions_check' ]
 		);
 
+		$service_blocked = new PostEndpoint(
+			$this->namespace,
+			'service-blocked',
+			[ $this, 'record_service_block' ],
+			[ $this, 'admin_write_permissions_check' ]
+		);
+
         return [
 			$switcher_position,
+			$service_blocked,
             $get_post_types,
             $get_roles,
             $get_data,
@@ -235,6 +244,13 @@ class Admin extends BaseApiEndpoints {
 			'position' => $position,
 			'revision' => $result['revision'],
 		];
+	}
+
+	public function record_service_block( $request ) {
+		return ServiceBlockNotice::record(
+			esc_url_raw( (string) $request->get_param( 'origin' ) ),
+			sanitize_text_field( (string) $request->get_param( 'path' ) )
+		);
 	}
 
     public function get_post_types( $request ) {

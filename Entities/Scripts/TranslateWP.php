@@ -156,6 +156,7 @@ class TranslateWP extends Script {
 						// The translation language the address names, '' on a plain address.
 						'requested_locale' => LanguageUrl::requested_locale(),
 						'orbital'          => (bool) ( ProEligibility::cached()['entitled'] ?? false ),
+						'can_administer'   => \TranslateWP\Components\Access::can_administer(),
 					],
                     $this->setup_notice(),
                     self::opens_edit_mode() ? [
