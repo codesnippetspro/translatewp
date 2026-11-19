@@ -106,22 +106,30 @@ class IndexQueue {
 		CleanupInventory::delete_posts_of_type( self::POST_TYPE );
 	}
 
+	private function retire_unpublished_row( int $id ): bool {
+		$type = (string) get_post_meta( $id, self::META_OBJECT_TYPE, true );
+		$object_id = (int) get_post_meta( $id, self::META_OBJECT_ID, true );
+		return $object_id > 0 && ! in_array( $type, [ 'miss', 'archive' ], true )
+			&& ( 'publish' !== get_post_status( $object_id ) || PageExclusion::is_excluded( $object_id ) )
+			&& (bool) wp_delete_post( $id, true );
+	}
+
 	public function delete_unpublished_rows(): int {
 		$deleted = 0;
 		foreach ( $this->all_row_ids() as $id ) {
-			$type = (string) get_post_meta( $id, self::META_OBJECT_TYPE, true );
-			$object_id = (int) get_post_meta( $id, self::META_OBJECT_ID, true );
-			if ( $object_id > 0 && ! in_array( $type, [ 'miss', 'archive' ], true ) && 'publish' !== get_post_status( $object_id ) ) {
-				if ( wp_delete_post( $id, true ) ) {
-					$deleted++;
-				}
+			if ( $this->retire_unpublished_row( (int) $id ) ) {
+				++$deleted;
 			}
 		}
 		return $deleted;
 	}
 
-	public function translate_after_reading(): void {
+	public function translate_after_reading( ?array $rows = null ): void {
+		$allowed = null === $rows ? null : array_fill_keys( array_map( static fn( array $row ): string => $row['object_type'] . '|' . $row['object_id'], $rows ), true );
 		foreach ( $this->all_row_ids() as $id ) {
+			if ( null !== $allowed && ! isset( $allowed[ (string) get_post_meta( $id, self::META_OBJECT_TYPE, true ) . '|' . (int) get_post_meta( $id, self::META_OBJECT_ID, true ) ] ) ) {
+				continue;
+			}
 			if ( self::READ_LANGUAGE === (string) get_post_meta( $id, self::META_LANGUAGE, true ) && self::STATUS_PENDING === $this->row_status( $id ) ) {
 				update_post_meta( $id, self::META_TRANSLATE_ON_READ, 1 );
 			}
@@ -769,6 +777,9 @@ class IndexQueue {
 	public function claim_rows( array $ids ): array {
 		$claimed = [];
 		foreach ( array_map( 'intval', $ids ) as $post_id ) {
+			if ( $this->retire_unpublished_row( $post_id ) ) {
+				continue;
+			}
 			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
@@ -844,6 +855,9 @@ class IndexQueue {
 		$claimed = [];
 		foreach ( $candidates as $post_id ) {
 			$post_id = (int) $post_id;
+			if ( $this->retire_unpublished_row( $post_id ) ) {
+				continue;
+			}
 			if ( self::STATUS_PENDING !== $this->row_status( $post_id ) || (int) get_post_meta( $post_id, '_twp_reader_not_before', true ) > $this->now() ) {
 				continue;
 			}
@@ -1411,6 +1425,27 @@ class IndexQueue {
 		delete_post_meta( $id, self::META_CLAIMED_AT );
 
 		return true;
+	}
+
+	public function defer_until( int $id, int $timestamp ): void {
+		update_post_meta( $id, '_twp_reader_not_before', $timestamp );
+		$this->release( $id );
+	}
+
+	public function next_due_at(): ?int {
+		$next = null;
+		foreach ( $this->all_row_ids() as $id ) {
+			$status = $this->row_status( (int) $id );
+			if ( self::STATUS_PENDING !== $status && self::STATUS_CLAIMED !== $status ) {
+				continue;
+			}
+			$due = max( $this->now(), (int) get_post_meta( $id, '_twp_reader_not_before', true ) );
+			if ( self::STATUS_CLAIMED === $status ) {
+				$due = max( $due, (int) get_post_meta( $id, self::META_CLAIMED_AT, true ) + self::STALE_CLAIM_SECONDS );
+			}
+			$next = null === $next ? $due : min( $next, $due );
+		}
+		return $next;
 	}
 
 	public function defer_reader( int $id, string $reason ): void {

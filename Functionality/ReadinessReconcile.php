@@ -3,7 +3,7 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\IndexQueue;
-use TranslateWP\Components\MutationLock;
+use TranslateWP\Components\QueueExecution;
 use TranslateWP\Components\TranslationStore;
 use TranslateWP\Components\ReadinessBudget;
 use TranslateWP\Components\SiteConnection;
@@ -14,6 +14,7 @@ class ReadinessReconcile {
 	public const HOOK = 'translatewp_readiness_reconcile';
 	public const CHECK_TRANSIENT = 'translatewp_readiness_reconcile_check';
 	public const CURSOR_OPTION = 'translatewp_readiness_reconcile_cursor';
+	public const REDUCED_CURSOR_OPTION = 'translatewp_reduced_readiness_cursor';
 	public const MAX_COLD_ATTEMPTS = 3;
 	public const MAX_DEAD_ATTEMPTS = 3;
 
@@ -32,12 +33,13 @@ class ReadinessReconcile {
 
 	public function __construct( $plugin_name = '', $plugin_version = '', ?Indexer $indexer = null, ?callable $lookup = null, ?callable $clock = null, bool $register_hooks = true ) {
 		unset( $plugin_name, $plugin_version );
-		$this->indexer = $indexer ?? new Indexer();
+		$this->indexer = $indexer ?? new Indexer( '', '', null, null, false );
 		$this->lookup  = $lookup;
 		$this->clock   = $clock ?? 'time';
 		if ( $register_hooks ) {
 			add_action( 'init', [ $this, 'maybe_schedule' ] );
 			add_action( self::HOOK, [ $this, 'run' ] );
+			add_action( QueueExecution::READINESS_HOOK, [ $this, 'reduced_run' ] );
 		}
 	}
 
@@ -60,15 +62,19 @@ class ReadinessReconcile {
 	}
 
 	public function run(): void {
-		$ran = MutationLock::run(
-            'index_drain',
+		$ran = QueueExecution::run(
             function (): void {
 				$this->run_unlocked();
-			},
-            0
+			}
         );
 		if ( ! $ran && ! wp_next_scheduled( self::HOOK ) ) {
 			wp_schedule_single_event( time() + self::CATCH_UP_SECONDS, self::HOOK );
+		}
+	}
+
+	public function reduced_run( ReadinessBudget $budget ): void {
+		if ( SiteConnection::is_connected() && $budget->remaining_seconds() > 0 ) {
+			$this->reconcile( 0, $budget );
 		}
 	}
 
@@ -97,9 +103,34 @@ class ReadinessReconcile {
 	}
 
 	public function reconcile( int $cursor = 0, ?ReadinessBudget $budget = null ): array {
+		$result = [
+			'cursor' => $cursor,
+			'language' => '',
+			'hashes' => [],
+			'rowIds' => [],
+			'legacyRowIds' => [],
+			'requeued' => 0,
+			'failed' => 0,
+			'retried' => 0,
+			'translated' => 0,
+		];
+		QueueExecution::run(
+            function () use ( &$result, $cursor, $budget ): void {
+                $result = $this->reconcile_unlocked( $cursor, $budget );
+            }
+        );
+		return $result;
+	}
+
+	private function reconcile_unlocked( int $cursor, ?ReadinessBudget $budget ): array {
 		$budget = $budget ?? new ReadinessBudget();
 		$jobs = $this->indexer->poll_remembered_jobs( $budget );
 		$rows   = $this->indexer->page_rows();
+		if ( QueueExecution::is_reduced() && $rows ) {
+			$offset = max( 0, (int) get_option( self::REDUCED_CURSOR_OPTION, 0 ) ) % count( $rows );
+			update_option( self::REDUCED_CURSOR_OPTION, $offset + 1, false );
+			$rows = [ $rows[ $offset ] ];
+		}
 		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
 		$now    = (int) call_user_func( $this->clock );
 		$ids    = array_unique( array_merge( $result['rowIds'], $result['legacyRowIds'] ) );
@@ -160,7 +191,7 @@ class ReadinessReconcile {
 		];
 		$result['requeued'] = $healed['requeued'];
 		$result['failed']   = $healed['failed'];
-		$result['retried']  = $this->indexer->retry_dead_automatically( self::MAX_DEAD_ATTEMPTS, self::DEAD_BACKOFF_SECONDS, $now );
+		$result['retried']  = QueueExecution::is_reduced() ? 0 : $this->indexer->retry_dead_automatically( self::MAX_DEAD_ATTEMPTS, self::DEAD_BACKOFF_SECONDS, $now );
 		return $result;
 	}
 }

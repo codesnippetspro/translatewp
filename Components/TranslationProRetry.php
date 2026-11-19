@@ -26,17 +26,22 @@ class TranslationProRetry {
 	 * @param string $language        The target language of a batch, when the body does not name it.
 	 * @return array|\WP_Error
 	 */
-	public static function post( string $path, array $body, int $timeout_seconds, string $language = '' ) {
+	public static function post( string $path, array $body, int $timeout_seconds, string $language = '', bool $managed_only = false ) {
+		if ( $managed_only ) {
+			unset( $body['byok'] );
+		}
 		$job_id   = QuotaHandoff::job_id_of_path( $path );
 		$language = '' !== $language ? $language : self::language_of( $body );
 
 		// A request that must carry the own providers (a pinned job, or any job
 		// while the quota is exhausted) never falls back to the TranslateWP
 		// model: without a usable key it is refused as the quota was.
-		if ( ! isset( $body['byok'] ) && QuotaHandoff::wants_own_providers( $job_id ) && [] === QuotaHandoff::providers_for( $language ) ) {
+		if ( ! $managed_only && ! isset( $body['byok'] ) && QuotaHandoff::wants_own_providers( $job_id ) && [] === QuotaHandoff::providers_for( $language ) ) {
 			return self::own_providers_missing( $language );
 		}
-		$body = self::with_own_providers_when_wanted( $body, $job_id, $language );
+		if ( ! $managed_only ) {
+			$body = self::with_own_providers_when_wanted( $body, $job_id, $language );
+		}
 		if ( '/v1/translation/jobs' === $path ) {
 			$body['cacheVersions'] = CacheVersions::job_hint( $language );
 		}
@@ -55,7 +60,7 @@ class TranslationProRetry {
 			return SiteRequests::post( $path, self::without_pro_only_ai_settings( $body ), $timeout_seconds );
 		}
 
-		if ( QuotaHandoff::is_quota_refusal( $response ) && QuotaHandoff::enabled() && ! isset( $body['byok'] ) ) {
+		if ( ! $managed_only && QuotaHandoff::is_quota_refusal( $response ) && QuotaHandoff::enabled() && ! isset( $body['byok'] ) ) {
 			$providers = QuotaHandoff::providers_for( $language );
 			if ( [] === $providers ) {
 				return $response;

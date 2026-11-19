@@ -831,6 +831,14 @@ function get_posts( array $args = [] ) {
 		}
 	}
 
+	if ( 'twp_index_item' === $post_type && isset( $args['meta_key'] ) && is_array( $args['orderby'] ?? null ) ) {
+		$meta_key = (string) $args['meta_key'];
+		usort( $ids, static fn( int $left, int $right ): int => ( (int) get_post_meta( $left, $meta_key, true ) <=> (int) get_post_meta( $right, $meta_key, true ) ) ?: ( $left <=> $right ) );
+	}
+	if ( 'twp_index_item' === $post_type && (int) ( $args['posts_per_page'] ?? -1 ) > 0 ) {
+		$ids = array_slice( $ids, 0, (int) $args['posts_per_page'] );
+	}
+
 	return $ids;
 }
 
@@ -1411,6 +1419,13 @@ function wp_remote_request( string $url, array $args = [] ) {
 		];
 	}
 
+	if ( '/wp-json/translatewp/v1/indexing/drain-now' === $path && ! empty( $body['probe'] ) ) {
+		if ( ! empty( $GLOBALS['wp_test_loopback_probe_responses'] ) ) {
+			return array_shift( $GLOBALS['wp_test_loopback_probe_responses'] );
+		}
+		return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode( [ 'healthy' => true ] ) ];
+	}
+
 	if ( '/v1/translation/jobs' === $path ) {
 		$GLOBALS['wp_test_remote_posts'][] = [
 			'path' => $path,
@@ -1428,6 +1443,7 @@ function wp_remote_request( string $url, array $args = [] ) {
 					'jobId'      => '00000000-0000-4000-8000-000000000099',
 					'sourceLang' => $body['sourceLang'] ?? 'en',
 					'targetLang' => $body['targetLang'] ?? 'fr',
+					...( isset( $body['purpose'] ) ? [ 'purpose' => $body['purpose'] ] : [] ),
 				]
 			),
 		];

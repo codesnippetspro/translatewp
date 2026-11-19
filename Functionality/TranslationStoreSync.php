@@ -4,6 +4,8 @@ namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationStore;
+use TranslateWP\Components\QueueExecution;
+use TranslateWP\Components\ReadinessBudget;
 
 /**
  * Wires the translation store into the indexing pipeline and the Pro seam:
@@ -38,6 +40,7 @@ class TranslationStoreSync {
 		add_filter( 'translatewp_pro_translated_string', [ $this, 'translated_string' ], 10, 4 );
 		add_action( 'translatewp_index_rows_pushed', [ $this, 'record_pushed_rows' ], 10, 3 );
 		add_action( self::BACKFILL_HOOK, [ $this, 'run_backfill' ] );
+		add_action( QueueExecution::STORE_HOOK, [ $this, 'reduced_backfill' ] );
 		add_action( 'admin_init', [ $this, 'maybe_schedule_backfill' ] );
 		add_action( 'save_post', [ $this, 'on_save_post' ], 20, 2 );
 	}
@@ -140,6 +143,16 @@ class TranslationStoreSync {
 	}
 
 	public function run_backfill(): void {
+		QueueExecution::run( [ $this, 'run_backfill_unlocked' ] );
+	}
+
+	public function reduced_backfill( ReadinessBudget $budget ): void {
+		if ( SiteConnection::is_connected() && $budget->remaining_seconds() > 0 ) {
+			TranslationStore::run_backfill_batch( 1 );
+		}
+	}
+
+	public function run_backfill_unlocked(): void {
 		if ( ! SiteConnection::is_connected() ) {
 			return;
 		}

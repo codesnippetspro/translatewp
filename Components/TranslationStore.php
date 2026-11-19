@@ -447,16 +447,37 @@ class TranslationStore {
 	 * @return array{resolved:int,remaining:int}
 	 */
 	public static function run_backfill_batch( int $limit, ?callable $lookup = null ): array {
+		$result = [
+			'resolved' => 0,
+			'remaining' => count( self::read_work() ),
+		];
+		QueueExecution::run(
+            static function () use ( &$result, $limit, $lookup ): void {
+				$result = self::run_backfill_batch_unlocked( $limit, $lookup );
+			}
+        );
+		return $result;
+	}
+
+	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup ): array {
 		$batch    = array_slice( self::read_work(), 0, max( 1, $limit ), true );
 		$resolved = 0;
 		$done     = [];
 		$carry    = [];
 
 		foreach ( $batch as $key => $item ) {
-			$resolved += self::resolve_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'], $lookup );
+			if ( QueueExecution::expired() ) {
+				break;
+			}
+			$resolved += self::resolve_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'], $lookup, QueueExecution::budget() );
 
 			if ( 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
 				$done[ $key ] = $item;
+				continue;
+			}
+
+			if ( QueueExecution::is_reduced() ) {
+				$carry[ $key ] = $item;
 				continue;
 			}
 

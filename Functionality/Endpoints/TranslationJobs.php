@@ -356,19 +356,10 @@ class TranslationJobs extends BaseApiEndpoints {
 
 		if ( $accepted > 0 ) {
 			\TranslateWP\Functionality\Indexer::schedule_drain();
-			// The inline drain serves the visitor's own row right after the
-			// response; the cron kick is the fallback when that path is not
-			// available on the host.
-			$mode = \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids );
-			if ( 'inline' !== $mode ) {
-				if ( function_exists( 'spawn_cron' ) ) {
-					spawn_cron();
-				}
-				// Cron does not start while another scheduled run holds its
-				// lock, and a visitor waiting on the page makes no further
-				// request to start it later: ask the site to drain now too.
-				\TranslateWP\Components\LoopbackKick::fire();
+			if ( function_exists( 'spawn_cron' ) ) {
+				spawn_cron();
 			}
+			\TranslateWP\Components\LoopbackKick::fire();
 		}
 
 		$response = [

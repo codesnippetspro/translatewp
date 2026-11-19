@@ -186,7 +186,7 @@ class KeepWarm {
 		$pending = is_array( $pending ) ? $pending : [ self::ALL_LANGUAGES ];
 		CacheVersions::bump_settings_version();
 		if ( SiteConnection::is_connected() ) {
-			( new Indexer() )->retranslate_everything( in_array( self::ALL_LANGUAGES, $pending, true ) ? [] : $pending );
+			( new Indexer( '', '', null, null, false ) )->retranslate_everything( in_array( self::ALL_LANGUAGES, $pending, true ) ? [] : $pending );
 		}
 	}
 

@@ -27,7 +27,7 @@ class Indexing extends BaseApiEndpoints {
 	private ReadinessReconcile $readiness_reconcile;
 
 	public function __construct( $plugin_name, $plugin_version, ?Indexer $indexer = null, ?ReadinessReconcile $readiness_reconcile = null ) {
-		$this->indexer = $indexer ?? new Indexer();
+		$this->indexer = $indexer ?? new Indexer( '', '', null, null, false );
 		$this->readiness_reconcile = $readiness_reconcile ?? new ReadinessReconcile( $plugin_name, $plugin_version, $this->indexer, null, null, false );
 
 		parent::__construct( $plugin_name, $plugin_version, 'translatewp/v1/indexing' );
@@ -118,7 +118,10 @@ class Indexing extends BaseApiEndpoints {
 	}
 
 	public function drain_now( $request ) {
-		unset( $request );
+		LoopbackKick::acknowledge();
+		if ( filter_var( $request->get_param( 'probe' ), FILTER_VALIDATE_BOOLEAN ) ) {
+			return [ 'healthy' => true ];
+		}
 
 		return $this->indexer->drain_now();
 	}

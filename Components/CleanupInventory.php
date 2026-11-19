@@ -73,6 +73,12 @@ class CleanupInventory {
 		Indexer::SPINE_PENDING_OPTION,
 		Indexer::NEXT_READER_OPTION,
 		Indexer::SPINE_CHECKED_OPTION,
+		Indexer::READER_FAILURE_OPTION,
+		Indexer::REPAIR_RETRY_OPTION,
+		QueueExecution::LAST_REDUCED_OPTION,
+		QueueExecution::PHASE_OPTION,
+		ReadinessReconcile::REDUCED_CURSOR_OPTION,
+		LoopbackKick::FIRST_DISPATCH_OPTION,
 		'translatewp_crawler_refill_lock',
 		\TranslateWP\Functionality\LexiconChanges::SEEDED_OPTION,
 		\TranslateWP\Functionality\LexiconChanges::SNAPSHOTS_OPTION,
@@ -106,7 +112,14 @@ class CleanupInventory {
 		Metrics::POST_TYPE,
 		IndexQueue::POST_TYPE,
 	];
-	public const TRANSIENTS = [ 'translatewp_pairing_verified', TranslationStoreSync::REQUEUE_CHECK_TRANSIENT, ReadinessReconcile::CHECK_TRANSIENT ];
+	public const TRANSIENTS = [
+		LoopbackKick::HEALTH_TRANSIENT,
+		LoopbackKick::FAILURE_TRANSIENT,
+		'translatewp_loopback_probe',
+		'translatewp_pairing_verified',
+		TranslationStoreSync::REQUEUE_CHECK_TRANSIENT,
+		ReadinessReconcile::CHECK_TRANSIENT,
+	];
 
 	public const SCHEDULED_HOOKS = [
 		SiteLanguageSync::RETRY_HOOK,

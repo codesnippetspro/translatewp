@@ -94,12 +94,6 @@ function queue_miss_hash( TranslationJobs $jobs, string $url, string $group_id, 
 $page_url  = 'https://example.com/collection/?lang=es';
 $canonical = TranslationUrl::canonicalize( $page_url );
 
-// ---------------------------------------------------------------------------
-// A front-end request on a site whose WP-Cron never fires drains one batch and
-// back-fills the store, so the server-rendered title stops missing. This is the
-// exact live sequence: a miss is recorded pending, cron never resolves it, and
-// the title stays in the source language until a request kicks the pipeline.
-// ---------------------------------------------------------------------------
 wp_test_reset( connected_options() );
 
 $sync    = new TranslationStoreSync( 'translatewp', TRANSLATEWP_VERSION );
@@ -117,15 +111,15 @@ $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] = time() - 120;
 assert_true( [] === TranslationStore::for_url( $canonical, 'es' ), 'Nothing is stored before any request runs' );
 assert_true( true === $cron->is_behind(), 'An overdue drain with a broken cron must read as behind' );
 
-// One ordinary front-end request.
+$before_kick = count( array_filter( $GLOBALS['wp_test_actions_fired'] ?? [], static fn( $event ) => 'translatewp_loopback_kick' === ( $event['tag'] ?? '' ) ) );
 $cron->maybe_run_on_front_end();
-
-assert_true(
-	'Compra la colección' === ( TranslationStore::for_url( $canonical, 'es' )['Shop the collection'] ?? '' ),
-	'A front-end request must drain and back-fill so the title resolves, got ' . wp_json_encode( TranslationStore::for_url( $canonical, 'es' ) )
-);
-assert_true( 0 === TranslationStore::pending_count( $canonical, 'es' ), 'The back-fill must clear the pending title' );
+assert_true( [] === TranslationStore::for_url( $canonical, 'es' ), 'A visitor must not run a drain or back-fill in its request' );
+$after_kick = count( array_filter( $GLOBALS['wp_test_actions_fired'] ?? [], static fn( $event ) => 'translatewp_loopback_kick' === ( $event['tag'] ?? '' ) ) );
+assert_true( $before_kick + 1 === $after_kick, 'An overdue visitor request asks the signed background worker to resume' );
 assert_true( false !== get_transient( CRON_FALLBACK_KICK_TRANSIENT ), 'The request must arm the once-per-minute throttle' );
+$indexer->drain_now();
+assert_true( 'Compra la colección' === ( TranslationStore::for_url( $canonical, 'es' )['Shop the collection'] ?? '' ), 'The separate background worker drains and back-fills the title' );
+assert_true( 0 === TranslationStore::pending_count( $canonical, 'es' ), 'The worker back-fill clears the pending title' );
 
 // ---------------------------------------------------------------------------
 // At most one batch per minute: a second string missed and made ready is NOT
@@ -144,12 +138,14 @@ assert_true(
 	'A second front-end request within the minute must not drain another batch'
 );
 
-// The minute elapses (the throttle transient expires); the next request drains again.
+// The next visitor may dispatch another worker when the throttle expires.
 delete_transient( CRON_FALLBACK_KICK_TRANSIENT );
 $cron->maybe_run_on_front_end();
+assert_true( ! isset( TranslationStore::for_url( $canonical, 'es' )['Read more'] ), 'Even after the throttle window the visitor must leave work to the worker' );
+$indexer->drain_now();
 assert_true(
 	'Leer más' === ( TranslationStore::for_url( $canonical, 'es' )['Read more'] ?? '' ),
-	'After the throttle window the next request drains and back-fills the second batch, got ' . wp_json_encode( TranslationStore::for_url( $canonical, 'es' ) )
+	'After dispatch the background worker drains and back-fills the second batch, got ' . wp_json_encode( TranslationStore::for_url( $canonical, 'es' ) )
 );
 
 // ---------------------------------------------------------------------------
@@ -174,8 +170,8 @@ ob_start();
 $cron->render_cron_late_notice();
 $notice = (string) ob_get_clean();
 assert_true(
-	false !== strpos( $notice, 'indexed as pages are viewed' ),
-	'The Indexing notice must explain that indexing is happening on page views, got ' . $notice
+	false !== strpos( $notice, 'waiting for a background request' ),
+	'The Indexing notice must explain the background delay and recovery, got ' . $notice
 );
 
 // An admin page load drains and back-fills a batch.
@@ -190,7 +186,7 @@ ob_start();
 $cron->render_cron_late_notice();
 $notice_after = (string) ob_get_clean();
 assert_true(
-	false !== strpos( $notice_after, 'indexed as pages are viewed' ),
+	false !== strpos( $notice_after, 'waiting for a background request' ),
 	'The notice must still explain the late cron after the admin request drains the backlog'
 );
 
@@ -216,6 +212,15 @@ $sync = new TranslationStoreSync( 'translatewp', TRANSLATEWP_VERSION );
 $cron = new CronFallback( 'translatewp', TRANSLATEWP_VERSION );
 $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] = time() + 45;
 assert_true( false === $cron->is_behind(), 'A drain scheduled in the near future is not behind' );
+
+
+wp_test_reset( connected_options() );
+$cron = new CronFallback();
+set_transient( \TranslateWP\Components\LoopbackKick::FAILURE_TRANSIENT, 'certificate', 300 );
+assert_true( ! CronFallback::can_finish_response(), 'The CLI fixture has no real response finish function' );
+$cron->run_after_flush();
+assert_true( false === get_option( \TranslateWP\Components\QueueExecution::LAST_REDUCED_OPTION, false ), 'A server without a finish function never runs inline work' );
+assert_true( false !== strpos( CronFallback::notice_message(), 'Translation work is waiting' ), 'A server without a finish function explains that work is waiting' );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "CronFallbackTest: {$failures} assertion(s) failed\n" );
