@@ -187,6 +187,34 @@ describe('LanguagesSetup add-language flow', () =>
         expect(useAdminSettingsStore.getState().settings['languages.list']).toHaveLength(1);
     });
 
+	it('shows read-only activation status and reflects changes from the Edit drawer', async () =>
+	{
+		useAdminSettingsStore.setState({ isInitialized: false });
+		seedStore([
+			{ locale: 'en-us', slug: 'en', active: true, default: true },
+			{ locale: 'de', slug: 'de', active: false, default: false },
+		]);
+		const container = await renderSetup();
+		const table = container.querySelector('table')!;
+		const [header, english, german] = Array.from(table.rows);
+
+		expect(Array.from(header.cells, cell => cell.textContent)).toEqual([
+			'Language', 'Slug', 'Locale', 'Status', 'Actions',
+		]);
+		const status = 3;
+		expect(english.cells[status].textContent).toBe('Active');
+		expect(german.cells[status].textContent).toBe('Inactive');
+		expect(german.cells[status].querySelector('button, input, [tabindex]')).toBeNull();
+
+		await act(async () => german.querySelector<HTMLButtonElement>('[aria-label="Edit German"]')!.click());
+		const toggle = container.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')!;
+		expect(toggle.checked).toBe(false);
+		await act(async () => toggle.click());
+
+		expect(german.cells[status].textContent).toBe('Active');
+		expect(english.cells[status].textContent).toBe('Active');
+	});
+
     it('gives each row edit and delete action a language-specific accessible name', async () =>
     {
         useAdminSettingsStore.setState({ isInitialized: false });

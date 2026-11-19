@@ -45,7 +45,7 @@ $menus->add_admin_menu();
 
 $registered = $GLOBALS['wp_test_submenu_slugs'];
 
-assert_true( [ 'translatewp', 'translatewp-seo', 'translatewp-lexicon', 'translatewp-settings' ] === $registered, 'Exactly the Dashboard, SEO Tools, Lexicon and Settings pages are registered in that order, got ' . implode( ',', $registered ) );
+assert_true( [ 'translatewp', 'translatewp-seo', 'translatewp-lexicon', 'translatewp-settings', 'translatewp-support' ] === $registered, 'Exactly the Dashboard, SEO Tools, Lexicon, Settings and Support pages are registered in that order, got ' . implode( ',', $registered ) );
 assert_true( [] === $GLOBALS['wp_test_removed_slugs'], 'Every registered page stays visible in the menu' );
 
 if ( $failures > 0 ) {

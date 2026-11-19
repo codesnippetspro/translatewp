@@ -50,16 +50,11 @@ const renderSetup = async (status: Status): Promise<HTMLElement> =>
     return container;
 };
 
-// The selected tab is whichever tab element carries the active colour token.
-const TAB_LABELS = ['Connect', 'Read your site', 'Style and tone', 'Languages', 'Translation'];
-const selectedTab = (container: HTMLElement): string | null =>
+const currentStepLabel = (container: HTMLElement): string | null =>
 {
-    const els = Array.from(container.querySelectorAll('button, span'));
-    const active = els.find(
-        (el) => TAB_LABELS.includes((el.textContent ?? '').trim())
-            && (el.className ?? '').includes('text-translatewp-primary')
-    );
-    return active ? (active.textContent ?? '').trim().toLowerCase() : null;
+	const currentSteps = container.querySelectorAll('.setup-step-names > li[aria-current="step"]');
+	expect(currentSteps).toHaveLength(1);
+	return currentSteps[0]?.textContent?.trim().toLowerCase() ?? null;
 };
 
 describe('Setup on return from the portal', () =>
@@ -89,14 +84,14 @@ describe('Setup on return from the portal', () =>
         connected: false, siteId: null, accountLabel: '', portalSitesUrl: '', portalSiteUrl: '',
     };
 
-    it('advances to the read-site step and keeps the selected tab and rendered step in one state', async () =>
+    it('advances to the read-site step and keeps the current step indicator and rendered step in one state', async () =>
     {
         const container = await renderSetup(connected);
 
         // Read-site is the first step after connecting.
         expect(container.textContent).toContain('Read your site');
         expect(container.textContent).not.toContain('Connect your site');
-        expect(selectedTab(container)).toBe('read your site');
+        expect(currentStepLabel(container)).toBe('read your site');
     });
 
     it('stays on connect while the site is not connected', async () =>
@@ -105,6 +100,6 @@ describe('Setup on return from the portal', () =>
 
         expect(container.textContent).toContain('Connect your site');
         expect(container.textContent).not.toContain('Add languages');
-        expect(selectedTab(container)).toBe('connect');
+        expect(currentStepLabel(container)).toBe('connect');
     });
 });
