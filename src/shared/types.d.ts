@@ -36,6 +36,8 @@ export interface TranslateWPContext {
     // retranslation bumps only the languages it touched, so other languages'
     // visitors keep their warm local hydration cache.
     cache_versions?: Record<string, number>;
+    // The site name as document titles print it.
+    site_name?: string;
 	settings_revision?: number;
     network_settings_url?: string;
     /** False for a user who manages translations by grant and is not an administrator. */
