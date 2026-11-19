@@ -12,6 +12,11 @@ const OG_TITLE_SELECTOR = 'meta[property="og:title"]';
 // translation back as if it were source text.
 export const SOURCE_TITLE_SELECTOR = 'meta[name="translatewp-source-title"]';
 export const SOURCE_OG_TITLE_SELECTOR = 'meta[name="translatewp-source-og-title"]';
+// A document title is the page title joined to the site name (and a page
+// number) by a spaced separator. Each part is translated on its own: the page
+// title then shares the stored translation of the post title, and a name-like
+// "Product – Site" pair is not kept whole as one proper name.
+const TITLE_SEPARATOR = /(\s+[-\u{2013}\u{2014}|·•»«~⋆*<>]\s+)/u;
 
 export type SeoStringTranslator = {
     translateSeoString(
@@ -52,13 +57,19 @@ export class HeadTitleTranslator
         const ogSource = (this.#originalOgTitle ?? '').trim();
 
         // The og:title usually mirrors the page title and reuses its
-        // translation. When it differs, both are asked for at once, so they
-        // share one lookup and one miss report instead of a second round.
+        // translation. Every part of both is asked for at once, so they share
+        // one lookup and one miss report instead of a round per part.
         const ogDiffers = Boolean(og && ogSource && ogSource !== titleSource);
-        const [titleTranslation, ownOgTranslation] = await Promise.all([
-            titleSource ? translator.translateSeoString(titleSource, SEO_TITLE_CONTEXT_KEY, options) : null,
-            ogDiffers ? translator.translateSeoString(ogSource, SEO_TITLE_CONTEXT_KEY, options) : null,
-        ]);
+        const sources = ogDiffers ? [titleSource, ogSource] : [titleSource];
+        const parts = [...new Set(sources.flatMap(source => source.split(TITLE_SEPARATOR).filter((part, index) =>
+            0 === index % 2 && '' !== part.trim()
+        )))];
+        const translations = await Promise.all(parts.map(part =>
+            translator.translateSeoString(part, SEO_TITLE_CONTEXT_KEY, options)
+        ));
+        const translatedParts = new Map(parts.map((part, index) => [part, translations[index]]));
+        const titleTranslation = titleSource ? joinTranslatedParts(titleSource, translatedParts) : null;
+        const ownOgTranslation = ogDiffers ? joinTranslatedParts(ogSource, translatedParts) : null;
 
         if (options.signal?.aborted) return;
 
@@ -102,4 +113,18 @@ export class HeadTitleTranslator
         this.#originalOgTitle = og ? (sourceOgTitle ?? sourceTitle ?? og.getAttribute('content') ?? '') : null;
         this.#captured = true;
     }
+}
+
+function joinTranslatedParts(source: string, translatedParts: Map<string, string | null>): string | null
+{
+    let translated = false;
+    const joined = source.split(TITLE_SEPARATOR).map((part, index) =>
+    {
+        const translation = 0 === index % 2 ? translatedParts.get(part) : null;
+        if (!translation) return part;
+        translated = true;
+        return translation;
+    }).join('');
+
+    return translated ? joined : null;
 }

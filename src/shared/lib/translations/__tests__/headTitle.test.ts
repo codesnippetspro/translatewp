@@ -60,9 +60,9 @@ describe('HeadTitleTranslator', () =>
 
     it('asks for a differing og:title together with the page title, not after it', async () =>
     {
-        const meta = setHead('About us – Acme', 'About us');
+        const meta = setHead('About us – Acme', 'Our team');
         const asked: string[] = [];
-        const answers: Array<(value: string) => void> = [];
+        const answers: Array<(value: string | null) => void> = [];
         const translator: SeoStringTranslator = {
             translateSeoString: source => new Promise<string | null>(resolve =>
             {
@@ -74,14 +74,48 @@ describe('HeadTitleTranslator', () =>
         const done = new HeadTitleTranslator(document).translate(translator);
         await Promise.resolve();
 
-        // Both are waiting at once, so they travel in one lookup and one miss report.
-        expect(asked).toEqual(['About us – Acme', 'About us']);
+        // All parts are waiting at once, so they travel in one lookup and one miss report.
+        expect(asked).toEqual(['About us', 'Acme', 'Our team']);
 
-        answers[1]('Über uns');
-        answers[0]('Über uns – Acme');
+        answers[2]('Unser Team');
+        answers[1](null);
+        answers[0]('Über uns');
         await done;
         expect(document.title).toBe('Über uns – Acme');
-        expect(meta?.getAttribute('content')).toBe('Über uns');
+        expect(meta?.getAttribute('content')).toBe('Unser Team');
+    });
+
+    it('translates the page title apart from the site name it is joined to', async () =>
+    {
+        const og = setHead('Garden Lantern – SwagDemo', 'Garden Lantern');
+        const { translator, calls } = fakeTranslator({ 'Garden Lantern': 'Lanterna da giardino' });
+
+        await new HeadTitleTranslator(document).translate(translator);
+
+        expect(document.title).toBe('Lanterna da giardino – SwagDemo');
+        expect(og?.getAttribute('content')).toBe('Lanterna da giardino');
+        expect(calls.map(call => call.source)).toEqual(['Garden Lantern', 'SwagDemo']);
+    });
+
+    it('keeps every separator of a paged title as written', async () =>
+    {
+        setHead('Shop | Page 2 | SwagDemo');
+        const { translator } = fakeTranslator({ Shop: 'Negozio', 'Page 2': 'Pagina 2' });
+
+        await new HeadTitleTranslator(document).translate(translator);
+
+        expect(document.title).toBe('Negozio | Pagina 2 | SwagDemo');
+    });
+
+    it('does not split a hyphenated word', async () =>
+    {
+        setHead('Wi-Fi setup');
+        const { translator, calls } = fakeTranslator({ 'Wi-Fi setup': 'Configurazione Wi-Fi' });
+
+        await new HeadTitleTranslator(document).translate(translator);
+
+        expect(document.title).toBe('Configurazione Wi-Fi');
+        expect(calls.map(call => call.source)).toEqual(['Wi-Fi setup']);
     });
 
     it('keeps the source title when nothing is translated yet', async () =>
@@ -146,12 +180,12 @@ describe('HeadTitleTranslator with a server-named source title', () =>
         meta.setAttribute('name', 'translatewp-source-title');
         meta.setAttribute('content', 'Par mums - Harbor Dance Studio');
         document.head.appendChild(meta);
-        const { translator, calls } = fakeTranslator({ 'Par mums - Harbor Dance Studio': 'About us - Harbor Dance Studio' });
+        const { translator, calls } = fakeTranslator({ 'Par mums': 'About us' });
 
         const subject = new HeadTitleTranslator();
         await subject.translate(translator);
 
-        expect(calls.map(call => call.source)).toEqual(['Par mums - Harbor Dance Studio']);
+        expect(calls.map(call => call.source)).toEqual(['Par mums', 'Harbor Dance Studio']);
         expect(document.title).toBe('About us - Harbor Dance Studio');
         expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('About us - Harbor Dance Studio');
 
@@ -166,7 +200,7 @@ describe('HeadTitleTranslator on a switch that yields no translation', () =>
     {
         setHead('Page not found - Site');
         const subject = new HeadTitleTranslator();
-        await subject.translate(fakeTranslator({ 'Page not found - Site': 'Pagina non trovata - Site' }).translator);
+        await subject.translate(fakeTranslator({ 'Page not found': 'Pagina non trovata' }).translator);
         expect(document.title).toBe('Pagina non trovata - Site');
 
         await subject.translate(fakeTranslator({}).translator);
