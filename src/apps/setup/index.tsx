@@ -47,7 +47,7 @@ export const Setup = () =>
 
                 <div className={WIZARD_BODY_CLASS}>
                 { connectStatus?.connected && currentStep.id !== 'connect' && (
-                    <div className="mx-8 mt-6 flex items-center gap-2 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3">
+                    <div className="mx-8 mt-6 flex flex-wrap items-center gap-2 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3">
                         <CheckCircle2 size={18} className="text-translatewp-primary shrink-0" aria-hidden="true" />
                         <ConnectionStatusText />
                         {/* The last step offers Pro together with finishing. */}
