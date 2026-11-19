@@ -532,6 +532,10 @@ class Indexer {
 
 		$html = $this->fetch_page( $front_url );
 		if ( is_wp_error( $html ) ) {
+			$error_data = $html->get_error_data();
+			if ( 'page_redirected' === $html->get_error_code() && ! empty( $error_data['target'] ) ) {
+				update_post_meta( (int) $row['id'], '_twp_redirect_target', $error_data['target'] );
+			}
 			$this->reader_failed( $html->get_error_code() );
 			return [];
 		}
@@ -1135,6 +1139,10 @@ class Indexer {
 				$this->queue->release( (int) $row['id'] );
 				return 1;
 			}
+			$error_data = $html->get_error_data();
+			if ( 'page_redirected' === $html->get_error_code() && ! empty( $error_data['target'] ) ) {
+				update_post_meta( (int) $row['id'], '_twp_redirect_target', $error_data['target'] );
+			}
 			$this->reader_failed( $html->get_error_code() );
 			if ( preg_match( '/^(?:page_tls_failed|page_fetch_(?:timeout|failed|401|403|408|429|5[0-9]{2}))$/', $html->get_error_code() ) ) {
 				$this->queue->defer_reader( (int) $row['id'], $html->get_error_code() );
@@ -1198,15 +1206,15 @@ class Indexer {
 		if ( ! TranslationUrl::is_indexable_url( $url ) ) {
 			return new \WP_Error( 'page_redirected', 'page_redirected' );
 		}
+		$original = wp_parse_url( $url );
 		$home = wp_parse_url( home_url( '/' ) );
+		if ( ! is_array( $original ) || empty( $original['host'] ) || 0 !== strcasecmp( $original['host'], $home['host'] )
+			|| ( $original['scheme'] ?? '' ) !== $home['scheme'] || ( $original['port'] ?? null ) !== ( $home['port'] ?? null )
+			|| isset( $original['user'] ) || isset( $original['pass'] ) ) {
+			return new \WP_Error( 'page_redirected', 'page_redirected' );
+		}
 		$started = microtime( true );
 		for ( $redirects = 0; $redirects <= self::PAGE_MAX_REDIRECTS; $redirects++ ) {
-			$target = wp_parse_url( $url );
-			if ( ! is_array( $target ) || ( $target['host'] ?? '' ) !== ( $home['host'] ?? '' )
-				|| ( $target['port'] ?? null ) !== ( $home['port'] ?? null ) || ( $target['scheme'] ?? '' ) !== ( $home['scheme'] ?? '' )
-				|| isset( $target['user'] ) || isset( $target['pass'] ) || ! TranslationUrl::is_indexable_url( $url ) ) {
-				return new \WP_Error( 'page_redirected', 'page_redirected' );
-			}
 			$remaining = self::PAGE_FETCH_TIMEOUT_SECONDS - ( microtime( true ) - $started );
 			if ( $remaining <= 0 ) {
 				return new \WP_Error( 'page_fetch_timeout', 'page_fetch_timeout' );
@@ -1230,9 +1238,17 @@ class Indexer {
 			if ( $status >= 300 && $status < 400 ) {
 				$location = (string) wp_remote_retrieve_header( $response, 'location' );
 				$url = \WP_Http::make_absolute_url( $location, $url );
-				if ( '' !== $location && $redirects < self::PAGE_MAX_REDIRECTS ) {
-					continue;
+				$target = wp_parse_url( $url );
+				if ( '' === $location || $redirects >= self::PAGE_MAX_REDIRECTS || ! is_array( $target )
+					|| ! in_array( strtolower( $target['scheme'] ?? '' ), [ 'http', 'https' ], true )
+					|| isset( $target['user'] ) || isset( $target['pass'] )
+					|| preg_replace( '/^www\./i', '', strtolower( $target['host'] ?? '' ) ) !== preg_replace( '/^www\./i', '', strtolower( $original['host'] ) )
+					|| ( $target['port'] ?? null ) !== ( $original['port'] ?? null )
+					|| untrailingslashit( $target['path'] ?? '/' ) !== untrailingslashit( $original['path'] ?? '/' )
+					|| ( $target['query'] ?? '' ) !== ( $original['query'] ?? '' ) ) {
+					return new \WP_Error( 'page_redirected', 'page_redirected', [ 'target' => $url ] );
 				}
+				continue;
 			}
 			if ( ( $status < 200 || $status >= 300 ) && ! ( 404 === $status && $expect_not_found ) ) {
 				return new \WP_Error( 'page_fetch_' . $status, 'page_fetch_' . $status );

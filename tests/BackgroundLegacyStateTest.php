@@ -140,14 +140,15 @@ if ( ! class_exists( 'WP_Http' ) ) {
 		}
 	}
 }
-foreach ( [ '/category/recipes/', '/cart/', 'https://external.example/private/' ] as $location ) {
+foreach ( [ '/category/recipes/', 'https://WWW.EXAMPLE.COM/studio/category/recipes/', 'http://example.com/studio/category/recipes/', '/', '/cart/', '/another-post/', '/wp-login.php', 'https://external.example/private/' ] as $location ) {
 	$ids = legacy_state();
 	wp_test_set_filter( 'translatewp_engine_service_reads', static fn (): bool => false );
 	foreach ( array_slice( $ids, 1 ) as $id ) { wp_delete_post( $id, true ); }
 	$GLOBALS['wp_test_home_url'] = 'https://example.com/studio';
 	update_post_meta( $ids[0], '_twp_url', 'http://www.old.example/studio/category/recipes' );
-	$away = 0 === strpos( $location, 'https:' );
-	$target = $away ? $location : 'https://example.com/studio' . $location;
+	$absolute = false !== strpos( $location, '://' );
+	$same_page = false !== strpos( $location, '/category/recipes/' );
+	$target = $absolute ? $location : 'https://example.com/studio' . $location;
 	$GLOBALS['wp_test_remote_get_sequence'] = [
 		[ 'response' => [ 'code' => 301 ], 'headers' => [ 'location' => $target ] ],
 		[ 'response' => [ 'code' => 200 ], 'body' => '<p>Our studio</p>', 'headers' => [ 'content-type' => 'text/html' ] ],
@@ -156,8 +157,12 @@ foreach ( [ '/category/recipes/', '/cart/', 'https://external.example/private/' 
 	$indexer->step_read( new \TranslateWP\Components\ReadinessBudget() );
 	$requests = $GLOBALS['wp_test_remote_get_urls'];
 	check_legacy( 'https://example.com/studio/category/recipes' === $requests[0], 'An old www address is read over HTTPS on the current subdirectory home' );
-	check_legacy( $away ? 1 === count( $requests ) : $target === $requests[1], 'The reader follows a canonical slash or a new path only on the same origin' );
-	check_legacy( ( $away ? 'dead' : 'done' ) === get_post_meta( $ids[0], '_twp_status', true ), 'The real read outcome is recorded on the requested source row' );
+	check_legacy( $same_page ? $target === $requests[1] : 1 === count( $requests ), 'The reader follows only redirects to the same canonical page' );
+	check_legacy( ( $same_page ? 'done' : 'dead' ) === get_post_meta( $ids[0], '_twp_status', true ), 'The real read outcome is recorded on the requested source row' );
+	if ( ! $same_page ) {
+		check_legacy( 'page_redirected' === get_post_meta( $ids[0], '_twp_fail_reason', true ) && $target === get_post_meta( $ids[0], '_twp_redirect_target', true ), 'The row records the redirect reason and destination' );
+		check_legacy( '' === get_post( $ids[0] )->post_content && ! get_post_meta( $ids[0], '_twp_translated_at', true ), 'A different destination supplies no text or translation mark' );
+	}
 	unset( $GLOBALS['wp_test_remote_get_sequence'] );
 }
 
