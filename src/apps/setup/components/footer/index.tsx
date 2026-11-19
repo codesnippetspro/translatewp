@@ -12,11 +12,13 @@ interface FooterProps
     isFirstStep: boolean;
     isLastStep: boolean;
     stepSaving?: boolean;
+    finishDisabled?: boolean;
+    finishPending?: boolean;
     nextStep: () => void;
     previousStep: () => void;
 }
 
-export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = false, nextStep, previousStep }: FooterProps) =>
+export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = false, finishDisabled = false, finishPending = false, nextStep, previousStep }: FooterProps) =>
 {
     const stepError = useStepStore(state => state.stepError);
 
@@ -33,7 +35,21 @@ export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = fals
             )}
 
             {isLastStep
-                ? <HomepageLinks />
+                ? (
+                    <>
+                        <HomepageLinks />
+                        <Button
+                            variant='primary'
+                            onClick={() => void nextStep()}
+                            className='rounded-sm!'
+                            disabled={finishDisabled}
+                            isBusy={finishPending}
+                            data-finish-setup
+                        >
+                            {__('Finish', 'translate')}
+                        </Button>
+                    </>
+                )
                 : currentStep.id === 'connect'
                     ? <ConnectSiteButton label={__('Connect your site', 'translate')} />
                     : (

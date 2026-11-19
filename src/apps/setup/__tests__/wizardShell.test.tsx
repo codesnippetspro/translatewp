@@ -71,7 +71,7 @@ describe('wizard shell', () =>
         expect(WIZARD_SHELL_CLASS).not.toMatch(/(^|\s)h-screen(\s|$)/);
     });
 
-    it('keeps Open Dashboard enabled while spine translations are still pending', async () =>
+    it('keeps Finish enabled while spine translations are still pending', async () =>
     {
         mockGetConnectStatus.mockResolvedValue({ connected: true, siteId: 'site-1', accountLabel: '', portalSitesUrl: '' });
         mockGetSetupTranslationProgress.mockResolvedValue({
@@ -104,9 +104,9 @@ describe('wizard shell', () =>
 
         const finish = container.querySelector('[data-finish-setup]') as HTMLButtonElement;
         expect(finish).not.toBeNull();
-        expect(finish.textContent).toBe('Open Dashboard');
+        expect(finish.textContent).toBe('Finish');
         expect(finish.disabled).toBe(false);
-        expect(container.querySelector('[data-finish-callout] [data-finish-setup]')).not.toBeNull();
+        expect(container.querySelector('footer [data-finish-setup]')).toBe(finish);
         expect(container.querySelector('iframe')).toBeNull();
         expect(container.querySelector('[data-homepage-link="fr"]')?.getAttribute('data-link-state')).toBe('translating');
         delete (window as { setupData?: unknown }).setupData;
