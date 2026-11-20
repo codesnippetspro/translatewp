@@ -54,12 +54,10 @@ assert_true( str_contains( $pro, 'is-dismissible' ), 'the Pro-setting notice car
 
 // The late-cron notice stays on TranslateWP screens and with users who manage the plugin.
 $cron = new CronFallback( 'translatewp', '0.0.0' );
-$late = new ReflectionProperty( CronFallback::class, 'announced_late' );
-$late->setAccessible( true );
-$late->setValue( $cron, true );
+update_option( \TranslateWP\Functionality\Indexer::READER_FAILURE_OPTION, 'page_tls_failed', false );
 
 $shown = capture( [ $cron, 'render_cron_late_notice' ] );
-assert_true( str_contains( $shown, 'scheduled tasks are running late' ), 'the late-cron notice shows on a TranslateWP screen, got ' . $shown );
+assert_true( str_contains( $shown, 'HTTPS certificate' ), 'the late-cron notice shows on a TranslateWP screen, got ' . $shown );
 assert_true( str_contains( $shown, 'is-dismissible' ) && str_contains( $shown, 'data-translatewp-dismiss="' . CronFallback::DISMISS_ACTION . '"' ), 'the late-cron notice carries a remembered X' );
 
 $_GET = [ 'page' => 'plugins' ];
@@ -76,7 +74,7 @@ $GLOBALS['wp_test_caps'] = [ 'manage_options' ];
 $cron->handle_dismiss();
 assert_true( '' === capture( [ $cron, 'render_cron_late_notice' ] ), 'an X dismissal of the late-cron notice is remembered' );
 $GLOBALS['wp_test_current_user'] = 2;
-assert_true( str_contains( capture( [ $cron, 'render_cron_late_notice' ] ), 'running late' ), 'another user still sees the late-cron notice' );
+assert_true( str_contains( capture( [ $cron, 'render_cron_late_notice' ] ), 'HTTPS certificate' ), 'another user still sees the late-cron notice' );
 $GLOBALS['wp_test_current_user'] = 1;
 
 // An X dismissal of the other-plugin notice is remembered, and only a manager can make it.

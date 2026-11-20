@@ -349,7 +349,8 @@ wp_test_reset( $connected_options );
 $jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
 $GLOBALS['wp_test_insert_post_fail'] = true;
 $failed = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
-assert_true( 0 === ( $failed['accepted'] ?? -1 ) && 1 === ( $failed['deduped'] ?? 0 ), 'Enqueue failure must dedupe the report, got ' . wp_json_encode( $failed ) );
+assert_wp_error_code( $failed, 'translation_queue_busy' );
+assert_true( 503 === $failed->get_error_data()['status'], 'An enqueue failure must remain retryable, not be reported as deduped' );
 assert_true( [] === ( $GLOBALS['wp_test_inserted_posts'] ?? [] ), 'Enqueue failure must not insert a queue row' );
 
 $expected_hash = TranslationFingerprint::compute_hash(
@@ -564,6 +565,16 @@ foreach ( [ 'report_misses', 'enqueue_misses' ] as $method ) {
 	assert_true( [] === $GLOBALS['wp_test_inserted_posts'], $method . ' must not queue refused work' );
 }
 assert_true( $enqueue_results['report_misses'] === $enqueue_results['enqueue_misses'], 'Both methods must queue identical work and return identical counts' );
+
+wp_test_reset( $connected_options );
+$GLOBALS['wp_test_named_lock_result'] = '0';
+$GLOBALS['wp_test_named_lock_calls'] = [];
+$jobs = new TranslationJobs( 'translatewp', '0.0.0-test' );
+$result = $jobs->report_misses( make_request( 'POST', [ 'language' => 'es', 'items' => [ $valid_item ] ] ) );
+assert_true( is_array( $result ) && 1 === ( $result['accepted'] ?? 0 ), 'A contended queue appends the accepted miss without dropping it as deduped' );
+assert_true( 1 === count( $GLOBALS['wp_test_inserted_posts'] ), 'The append-only fallback persists the visitor payload while the row lock is held' );
+assert_true( in_array( 1, array_column( $GLOBALS['wp_test_named_lock_calls'], 1 ), true ), 'Visitor queue insertion waits up to one second for an active row mutation' );
+unset( $GLOBALS['wp_test_named_lock_result'] );
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "MissProxyTest: {$failures} assertion(s) failed\n" );

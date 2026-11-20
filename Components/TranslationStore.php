@@ -38,6 +38,8 @@ class TranslationStore {
 	private const MAX_HASH_LENGTH     = 256;
 	private const MAX_URL_ENTRIES     = 200;
 	private const MAX_WORK_ENTRIES    = 500;
+	private const CACHE_WRITE_GRACE = 300;
+	private const TRANSIENT_RETRY_DELAYS = [ 60, 120, 600, 1200, 2400 ];
 	private const LOOKUP_BATCH_SIZE   = 100;
 
 	/** Back-fill passes a row may miss the cache before its pending hashes are dropped. */
@@ -60,7 +62,7 @@ class TranslationStore {
 	 * Record the source segments of one indexed URL and locale as pending
 	 * translation. Segments are [ hash, markerPayload ] pairs.
 	 */
-	public static function record_pending( string $url, int $post_id, string $locale, string $source_lang, array $segments ): bool {
+	public static function record_pending( string $url, int $post_id, string $locale, string $source_lang, array $segments, bool $replacement = false ): bool {
 		$url    = trim( $url );
 		$locale = trim( $locale );
 		if ( '' === $url || '' === $locale || ! $segments ) {
@@ -70,11 +72,18 @@ class TranslationStore {
 		$target = self::resolve_target( $url, $post_id );
 
 		self::locked(
-			static function () use ( $target, $url, $locale, $source_lang, $segments ): void {
+			static function () use ( $target, $url, $locale, $source_lang, $segments, $replacement ): void {
 				$entry = self::read_entry( $target, $locale );
 
 				$entry['source_lang'] = '' !== $source_lang ? $source_lang : (string) $entry['source_lang'];
 				$entry['url']         = $url;
+				$entry['replacement'] = $replacement || $entry['replacement'];
+				foreach ( $segments as $segment ) {
+					$entry['settings_version'] = max( $entry['settings_version'], (int) ( $segment['settingsVersion'] ?? CacheVersions::settings_version() ) );
+					$entry['lexicon_version'] = max( $entry['lexicon_version'], (int) ( $segment['lexiconVersion'] ?? CacheVersions::lexicon_version_for( $locale ) ) );
+					$entry['lexicon_changed_at'] = max( $entry['lexicon_changed_at'], (int) ( $segment['lexiconChangedAt'] ?? CacheVersions::lexicon_changed_at( $locale ) ) );
+					$entry['settings_changed_at'] = max( $entry['settings_changed_at'], (int) ( $segment['settingsChangedAt'] ?? Options::get( 'cache.localizer_changed_at', 0 ) ) );
+				}
 
 				foreach ( $segments as $segment ) {
 					$hash    = isset( $segment['hash'] ) ? (string) $segment['hash'] : '';
@@ -97,6 +106,7 @@ class TranslationStore {
 					$entry['pending'][ $hash ] = $payload;
 				}
 
+				$entry['backfill_exhausted'] = false;
 				$entry['stored_at'] = self::now();
 				self::write_entry( $target, $locale, $entry );
 				self::enqueue_work( $target, $locale );
@@ -113,7 +123,7 @@ class TranslationStore {
 	 * is fn( string $locale, array $hashes ): array<string,?string> and defaults
 	 * to the API cache.
 	 */
-	public static function resolve_pending( string $url, int $post_id, string $locale, ?callable $lookup = null ): int {
+	public static function resolve_pending( string $url, int $post_id, string $locale, ?callable $lookup = null, ?ReadinessBudget $budget = null, ?array &$inspection = null ): int {
 		$locale = trim( $locale );
 		if ( '' === $locale ) {
 			return 0;
@@ -130,17 +140,32 @@ class TranslationStore {
 			return 0;
 		}
 
-		$lookup     = $lookup ?? [ self::class, 'remote_lookup' ];
+		$revision = [
+			'settingsVersion' => $entry['settings_version'],
+			'lexiconVersion' => $entry['lexicon_version'],
+			'lexiconChangedAt' => $entry['lexicon_changed_at'],
+			'settingsChangedAt' => $entry['settings_changed_at'],
+		];
+		$lookup = $lookup ?? static fn( string $language, array $hashes ): array => self::lookup_revision( $language, $hashes, $revision, $budget ? $budget->remaining_seconds() : SiteRequests::DEFAULT_TIMEOUT_SECONDS );
 		$hashes     = array_keys( $entry['pending'] );
 		$translated = [];
 
 		foreach ( array_chunk( $hashes, self::LOOKUP_BATCH_SIZE ) as $chunk ) {
+			if ( null !== $budget && $budget->remaining_seconds() <= 0 ) {
+				break;
+			}
+			if ( null !== $inspection ) {
+				$inspection['attempted'] = true;
+			}
 			$items = call_user_func( $lookup, $locale, $chunk );
 			if ( ! is_array( $items ) || ! $items ) {
 				continue;
 			}
 
 			foreach ( $chunk as $hash ) {
+				if ( null !== $inspection && array_key_exists( $hash, $items ) && null === $items[ $hash ] ) {
+					$inspection['absent'][] = $hash;
+				}
 				$translated_payload = $items[ $hash ] ?? null;
 				if ( is_string( $translated_payload ) && '' !== trim( $translated_payload ) ) {
 					$translated[ $hash ] = $translated_payload;
@@ -156,9 +181,12 @@ class TranslationStore {
 		// recorded by another request in the meantime are kept.
 		$complete = false;
 		$resolved = (int) self::locked(
-			static function () use ( $target, $locale, $translated, &$complete ): int {
+			static function () use ( $target, $locale, $translated, $revision, &$complete ): int {
 				$entry    = self::read_entry( $target, $locale );
 				$resolved = 0;
+				if ( $entry['settings_version'] !== $revision['settingsVersion'] || $entry['lexicon_version'] !== $revision['lexiconVersion'] || $entry['lexicon_changed_at'] !== $revision['lexiconChangedAt'] || $entry['settings_changed_at'] !== $revision['settingsChangedAt'] || $entry['hold_until'] > self::now() ) {
+					return 0;
+				}
 
 				foreach ( $translated as $hash => $translated_payload ) {
 					if ( ! isset( $entry['pending'][ $hash ] ) ) {
@@ -172,6 +200,9 @@ class TranslationStore {
 				}
 
 				if ( $resolved > 0 ) {
+					if ( ! $entry['pending'] ) {
+						$entry['replacement'] = false;
+					}
 					$entry['stored_at'] = self::now();
 					self::write_entry( $target, $locale, $entry );
 					$complete = ! $entry['pending'];
@@ -396,7 +427,7 @@ class TranslationStore {
 
 		if ( '' !== $url ) {
 			$urls = self::read_url_option();
-			$key  = self::url_key( $url );
+			$key  = self::stored_url_key( $urls, $url );
 			if ( isset( $urls[ $key ]['locales'][ $locale ] ) ) {
 				$entry  = self::normalize_entry( $urls[ $key ]['locales'][ $locale ] );
 				$hashes = array_merge( $hashes, array_keys( $entry['pending'] ) );
@@ -416,52 +447,136 @@ class TranslationStore {
 
 	/**
 	 * Drain up to $limit recorded (URL, locale) work items, resolving each. A
-	 * work item leaves the queue only once every hash it holds is resolved; one
-	 * that still has misses stays for a later pass, so a translation that is
-	 * slow to reach the API cache (a newly added locale, a busy provider) is
-	 * never permanently abandoned. The queue stays bounded by MAX_WORK_ENTRIES.
+	 * work item leaves on resolution, confirmed absence or exhausted retries.
 	 * The lookup is fn( string $locale, array $hashes ): array<string,?string>.
 	 *
 	 * @return array{resolved:int,remaining:int}
 	 */
-	public static function run_backfill_batch( int $limit, ?callable $lookup = null ): array {
-		$batch    = array_slice( self::read_work(), 0, max( 1, $limit ), true );
+	public static function run_backfill_batch( int $limit, ?callable $lookup = null, ?array $page_keys = null, bool $pace = false ): array {
+		$result = [
+			'resolved' => 0,
+			'remaining' => count( self::read_work() ),
+		];
+		QueueExecution::run(
+            static function () use ( &$result, $limit, $lookup, $page_keys, $pace ): void {
+				$result = self::run_backfill_batch_unlocked( $limit, $lookup, $page_keys, $pace );
+			}
+        );
+		return $result;
+	}
+
+	private static function run_backfill_batch_unlocked( int $limit, ?callable $lookup, ?array $page_keys, bool $pace ): array {
+		$work = self::read_work();
+		if ( null !== $page_keys ) {
+			$work = array_filter( $work, static fn ( array $item ): bool => in_array( TranslationUrl::canonicalize( $item['url'] ) . '|' . $item['locale'], $page_keys, true ) );
+		}
+		if ( $pace ) {
+			$work = array_filter( $work, static fn ( array $item ): bool => (int) ( $item['not_before'] ?? 0 ) <= time() );
+		}
+		$batch = array_slice( $work, 0, max( 1, $limit ), true );
 		$resolved = 0;
 		$done     = [];
 		$carry    = [];
 
 		foreach ( $batch as $key => $item ) {
-			$resolved += self::resolve_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'], $lookup );
+			if ( QueueExecution::expired() ) {
+				break;
+			}
+			$inspection = [
+				'attempted' => false,
+				'absent' => [],
+			];
+			$resolved += self::resolve_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'], $lookup, QueueExecution::budget(), $inspection );
 
 			if ( 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
 				$done[ $key ] = $item;
 				continue;
 			}
 
-			// A row gives up after MAX_BACKFILL_ATTEMPTS misses: its pending hashes are dropped.
+			if ( QueueExecution::expired() && ! $inspection['attempted'] ) {
+				$carry[ $key ] = $item;
+				continue;
+			}
+
+			$previous_absent = $item['absent'] ?? [];
+			unset( $item['absent'] );
+			if ( $inspection['absent'] && $pace && ! QueueExecution::expired() ) {
+				$target = self::resolve_target( $item['url'], $item['post_id'] );
+				$entry = self::read_entry( $target, $item['locale'] );
+				if ( $entry['stored_at'] <= self::now() - self::CACHE_WRITE_GRACE ) {
+					$confirmed = self::missing_at_every_version( $item['locale'], $inspection['absent'] );
+					$twice = array_intersect( $confirmed, $previous_absent );
+					$item['absent'] = $confirmed;
+					if ( $twice ) {
+						$item['superseded'] = $twice;
+						$done[ $key ] = $item;
+						continue;
+					}
+					if ( $confirmed ) {
+						$item['not_before'] = time() + 1;
+						$carry[ $key ] = $item;
+						continue;
+					}
+				}
+			}
+
 			$item['attempts'] = (int) ( $item['attempts'] ?? 0 ) + 1;
-			if ( $item['attempts'] >= self::MAX_BACKFILL_ATTEMPTS ) {
-				self::drop_pending( (string) $item['url'], (int) $item['post_id'], (string) $item['locale'] );
+			$attempt_limit = $pace ? count( self::TRANSIENT_RETRY_DELAYS ) + 1 : self::MAX_BACKFILL_ATTEMPTS;
+			if ( $item['attempts'] >= $attempt_limit ) {
+				$item['exhausted'] = true;
 				$done[ $key ] = $item;
 				continue;
 			}
 
+			if ( $pace ) {
+				$item['not_before'] = time() + self::TRANSIENT_RETRY_DELAYS[ $item['attempts'] - 1 ];
+			}
 			$carry[ $key ] = $item;
 		}
 
 		// Work recorded by other requests during this pass is kept: the queue is
 		// re-read and only this pass's rows are removed or moved behind the rest.
+		$superseded = [];
 		$remaining = (int) self::locked(
-			static function () use ( $done, $carry ): int {
+			static function () use ( $done, $carry, $batch, &$superseded ): int {
 				$work = self::read_work();
 
 				foreach ( $done as $key => $item ) {
-					if ( 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
+					if ( ( $work[ $key ] ?? null ) === $batch[ $key ] || 0 === self::pending_count( (string) $item['url'], (string) $item['locale'], (int) $item['post_id'] ) ) {
+						if ( ! empty( $item['superseded'] ) && ( $work[ $key ] ?? null ) === $batch[ $key ] ) {
+							$target = self::resolve_target( $item['url'], $item['post_id'] );
+							$entry = self::read_entry( $target, $item['locale'] );
+							$entry['pending'] = array_diff_key( $entry['pending'], array_fill_keys( $item['superseded'], true ) );
+							if ( ! $entry['pending'] ) {
+								$entry['replacement'] = false;
+								$entry['hold_until'] = 0;
+							}
+							self::write_entry( $target, $item['locale'], $entry );
+							$superseded[] = $item;
+							if ( $entry['pending'] ) {
+								unset( $item['superseded'], $item['absent'] );
+								$carry[ $key ] = $item;
+								continue;
+							}
+						} elseif ( ! empty( $item['exhausted'] ) && ( $work[ $key ] ?? null ) === $batch[ $key ] ) {
+							$target = self::resolve_target( $item['url'], $item['post_id'] );
+							$entry = self::read_entry( $target, $item['locale'] );
+							$entry['backfill_exhausted'] = true;
+							if ( ! $entry['replacement'] ) {
+								$entry['pending'] = [];
+							}
+							self::write_entry( $target, $item['locale'], $entry );
+							ActionLog::record( sprintf( 'Stored translation unavailable after %d checks (%s).', $item['attempts'], $key ), 'warning', 'store_settlement' );
+						}
 						unset( $work[ $key ] );
 					}
 				}
 
 				foreach ( array_keys( $carry ) as $key ) {
+					if ( ( $work[ $key ] ?? null ) !== $batch[ $key ] ) {
+						unset( $carry[ $key ] );
+						continue;
+					}
 					unset( $work[ $key ] );
 				}
 
@@ -472,10 +587,63 @@ class TranslationStore {
 			}
 		);
 
+		foreach ( $superseded as $item ) {
+			self::recover_superseded_entry( $item );
+		}
+
 		return [
 			'resolved'  => $resolved,
-			'remaining' => $remaining,
+			'remaining' => $superseded ? count( self::read_work() ) : $remaining,
 		];
+	}
+
+	private static function recover_superseded_entry( array $item ): void {
+		$queue = new IndexQueue();
+		$row = $queue->indexed_translation_for_store( $item['url'], $item['post_id'], $item['locale'] );
+		if ( $row && IndexQueue::STATUS_DONE === $row['status'] ) {
+			$segments = [];
+			$source = $row['translated'] ? $queue->read_items( $row['object_type'], $row['object_id'] ) : [];
+			if ( $source ) {
+				$reader = new \TranslateWP\Functionality\Indexer( '', '', null, null, false );
+				foreach ( $reader->page_cache_items( $item['locale'], $source, $row['page_title'] ) as $piece ) {
+					$segments[] = $piece['cache'] + [ 'markerPayload' => $piece['markerPayload'] ];
+				}
+			}
+			if ( $segments ) {
+				self::record_pending( $row['url'], $item['post_id'], $item['locale'], TranslationProxySettings::default_locale(), $segments );
+				self::resolve_pending( $row['url'], $item['post_id'], $item['locale'], null, QueueExecution::budget() );
+				if ( self::pending_count( $row['url'], $item['locale'], $item['post_id'] ) ) {
+					$queue->enqueue_retranslate( [ $row ], false );
+				}
+			} elseif ( ! $row['translated'] || ! self::for_url( $row['url'], $item['locale'], $item['post_id'] ) ) {
+				$queue->enqueue_retranslate( [ $row ], false );
+			}
+		}
+		$reason = $row ? 'Obsolete segments superseded by the current indexed page.' : 'Source no longer indexed.';
+		ActionLog::record( sprintf( 'Stored translation (%s, %s): %s', $item['post_id'] ? 'page ' . $item['post_id'] : 'URL', $item['locale'], $reason ), 'info', 'store_settlement' );
+	}
+
+	private static function missing_at_every_version( string $locale, array $hashes ): array {
+		$unspecified = [
+			'settingsVersion' => 0,
+			'lexiconVersion' => 0,
+			'settingsChangedAt' => 0,
+			'lexiconChangedAt' => 0,
+		];
+		$missing = [];
+		foreach ( array_chunk( $hashes, self::LOOKUP_BATCH_SIZE ) as $chunk ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
+			$budget = QueueExecution::budget();
+			$answer = self::remote_lookup_result( $locale, $chunk, $budget ? $budget->remaining_seconds() : SiteRequests::DEFAULT_TIMEOUT_SECONDS, $unspecified );
+			foreach ( $chunk as $hash ) {
+				if ( is_array( $answer ) && array_key_exists( $hash, $answer ) && null === $answer[ $hash ] ) {
+					$missing[] = $hash;
+				}
+			}
+		}
+		return $missing;
 	}
 
 	/**
@@ -510,7 +678,7 @@ class TranslationStore {
 					$all = get_post_meta( $post_id, self::POST_META_KEY, true );
 					foreach ( is_array( $all ) ? $all : [] as $locale => $raw_entry ) {
 						$entry = self::normalize_entry( $raw_entry );
-						if ( $entry['pending'] && self::enqueue_missing_work( 'post:' . $post_id, $post_id, $entry['url'], (string) $locale ) ) {
+						if ( $entry['pending'] && ! $entry['backfill_exhausted'] && self::enqueue_missing_work( 'post:' . $post_id, $post_id, $entry['url'], (string) $locale ) ) {
 							$requeued++;
 						}
 					}
@@ -520,7 +688,7 @@ class TranslationStore {
 					$locales = is_array( $url_entry['locales'] ?? null ) ? $url_entry['locales'] : [];
 					foreach ( $locales as $locale => $raw_entry ) {
 						$entry = self::normalize_entry( $raw_entry );
-						if ( $entry['pending'] && self::enqueue_missing_work( 'url:' . $key, 0, (string) ( $url_entry['url'] ?? '' ), (string) $locale ) ) {
+						if ( $entry['pending'] && ! $entry['backfill_exhausted'] && self::enqueue_missing_work( 'url:' . $key, 0, (string) ( $url_entry['url'] ?? '' ), (string) $locale ) ) {
 							$requeued++;
 						}
 					}
@@ -683,6 +851,11 @@ class TranslationStore {
 		return self::cache_generation();
 	}
 
+	public static function next_work_at(): ?int {
+		$work = self::read_work();
+		return $work ? min( array_map( static fn ( array $item ): int => max( time(), (int) ( $item['not_before'] ?? 0 ) ), $work ) ) : null;
+	}
+
 	public static function has_pending_work(): bool {
 		return (bool) self::read_work();
 	}
@@ -704,6 +877,11 @@ class TranslationStore {
 	 *
 	 * @return array<string,?string>
 	 */
+	private static function lookup_revision( string $locale, array $hashes, array $revision, int|float $timeout = SiteRequests::DEFAULT_TIMEOUT_SECONDS ): array {
+		$result = self::remote_lookup_result( $locale, $hashes, $timeout, $revision );
+		return is_wp_error( $result ) ? [] : $result;
+	}
+
 	public static function remote_lookup( string $locale, array $hashes ): array {
 		$items = self::remote_lookup_result( $locale, $hashes );
 
@@ -717,7 +895,7 @@ class TranslationStore {
 	 *
 	 * @return array<string,?string>|\WP_Error
 	 */
-	public static function remote_lookup_result( string $locale, array $hashes, int|float $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS ) {
+	public static function remote_lookup_result( string $locale, array $hashes, int|float $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS, ?array $revision = null ) {
 		$site_id = Sites::registered_id();
 		if ( '' === $site_id || ! $hashes ) {
 			return [];
@@ -730,6 +908,10 @@ class TranslationStore {
 				'language'  => $locale,
 				'hashes'    => array_values( $hashes ),
 				'hydration' => true,
+				'settingsVersion' => (int) ( $revision['settingsVersion'] ?? CacheVersions::settings_version() ),
+				'lexiconVersion' => (int) ( $revision['lexiconVersion'] ?? CacheVersions::lexicon_version_for( $locale ) ),
+				'lexiconChangedAt' => (int) ( $revision['lexiconChangedAt'] ?? CacheVersions::lexicon_changed_at( $locale ) ),
+				'settingsChangedAt' => (int) ( $revision['settingsChangedAt'] ?? Options::get( 'cache.localizer_changed_at', 0 ) ),
 			],
 			$timeout_seconds
 		);
@@ -852,6 +1034,21 @@ class TranslationStore {
 		return md5( TranslationUrl::canonicalize( $url ) );
 	}
 
+	private static function stored_url_key( array $urls, string $url ): string {
+		$key = self::url_key( $url );
+		if ( isset( $urls[ $key ] ) || is_multisite() || 0 !== strcasecmp( (string) wp_parse_url( $url, PHP_URL_HOST ), (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) ) {
+			return $key;
+		}
+		$canonical = TranslationUrl::canonicalize( $url );
+		foreach ( $urls as $old_key => $entry ) {
+			$old = (string) ( $entry['url'] ?? '' );
+			if ( $old && TranslationUrl::canonicalize( TranslationUrl::rebase_to_home( $old ) ) === $canonical ) {
+				return (string) $old_key;
+			}
+		}
+		return $key;
+	}
+
 	private static function empty_entry(): array {
 		return [
 			'v'           => self::SCHEMA_VERSION,
@@ -859,6 +1056,12 @@ class TranslationStore {
 			'url'         => '',
 			'stored_at'   => 0,
 			'hold_until'  => 0,
+			'settings_version' => 0,
+			'lexicon_version' => 0,
+			'replacement' => false,
+			'backfill_exhausted' => false,
+			'lexicon_changed_at' => 0,
+			'settings_changed_at' => 0,
 			'map'         => [],
 			'pending'     => [],
 		];
@@ -875,6 +1078,12 @@ class TranslationStore {
 			'url'         => (string) ( $entry['url'] ?? '' ),
 			'stored_at'   => (int) ( $entry['stored_at'] ?? 0 ),
 			'hold_until'  => (int) ( $entry['hold_until'] ?? 0 ),
+			'settings_version' => (int) ( $entry['settings_version'] ?? 0 ),
+			'lexicon_version' => (int) ( $entry['lexicon_version'] ?? 0 ),
+			'replacement' => ! empty( $entry['replacement'] ),
+			'backfill_exhausted' => ! empty( $entry['backfill_exhausted'] ),
+			'lexicon_changed_at' => (int) ( $entry['lexicon_changed_at'] ?? 0 ),
+			'settings_changed_at' => (int) ( $entry['settings_changed_at'] ?? 0 ),
 			'map'         => is_array( $entry['map'] ?? null ) ? $entry['map'] : [],
 			'pending'     => is_array( $entry['pending'] ?? null ) ? $entry['pending'] : [],
 		];
@@ -890,7 +1099,7 @@ class TranslationStore {
 		}
 
 		$urls = self::read_url_option();
-		$key  = self::url_key( $target['url'] );
+		$key  = self::stored_url_key( $urls, $target['url'] );
 
 		return self::normalize_entry( $urls[ $key ]['locales'][ $locale ] ?? null );
 	}
@@ -907,7 +1116,7 @@ class TranslationStore {
 		}
 
 		$urls = self::read_url_option();
-		$key  = self::url_key( $target['url'] );
+		$key  = self::stored_url_key( $urls, $target['url'] );
 		if ( ! isset( $urls[ $key ] ) || ! is_array( $urls[ $key ] ) ) {
 			$urls[ $key ] = [
 				'url'     => $target['url'],
@@ -952,6 +1161,7 @@ class TranslationStore {
 				$key  = $target['cache_key'] . '|' . $locale;
 
 				$work[ $key ] = [
+					'revision' => wp_generate_uuid4(),
 					'post_id' => (int) $target['post_id'],
 					'url'     => (string) $target['url'],
 					'locale'  => $locale,

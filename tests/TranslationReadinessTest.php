@@ -37,6 +37,9 @@ TranslationReadiness::refresh( [ $row ], 0, static fn() => [ str_repeat( 'a', 64
 check( ! TranslationReadiness::is_ready( $row ), 'A missing expected fingerprint is not ready' );
 TranslationReadiness::refresh( [ $row ], 0, static fn() => [ str_repeat( 'a', 64 ) => '⟪item_0001⟫Ciao⟪item_0002⟫Mondo', str_repeat( 'b', 64 ) => '⟪item_0001⟫Casa' ] );
 check( TranslationReadiness::is_ready( $row ), 'All complete cached fingerprints make the page ready' );
+$unavailable = TranslationReadiness::refresh( [ $row ], 0, static fn () => new WP_Error( 'temporarily_unavailable', 'Lookup failed', [ 'status' => 503 ] ) );
+check( $unavailable['lookupUnavailable'] && [] === $unavailable['rowIds'], 'A failed lookup provides no negative evidence for a cold repair' );
+check( TranslationReadiness::is_ready( $row ), 'A service error preserves the previously confirmed hashes' );
 TranslationReadiness::refresh( [ $row ], 0, static fn() => [] );
 check( ! TranslationReadiness::is_ready( $row ), 'An unavailable cache invalidates readiness' );
 check( ! TranslationReadiness::is_ready( array_merge( $row, [ 'id' => 999 ] ) ), 'A legacy row without evidence is not ready' );

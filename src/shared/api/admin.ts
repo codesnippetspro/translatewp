@@ -152,6 +152,7 @@ export const applyLocalizerNow = async (): Promise<ApplyStaleResult> =>
 
 /** Finished pages per language that wait for a retranslation, per group. */
 export type StaleTranslations = {
+    refill?: { pending: number; failed: number };
     lexicon: Record<string, number>;
     localizer: Record<string, number>;
 };
@@ -326,4 +327,24 @@ export const getLexiconCandidates = async (status?: CandidateStatus): Promise<{ 
 export const actOnLexiconCandidate = async (id: string, action: CandidateAction, language?: string): Promise<{ candidate: LexiconCandidate }> =>
 {
     return await apiFetch({ path: '/translatewp/v1/admin/lexicon-candidates/action', method: 'POST', data: { id, action, ...(language ? { language } : {}) } });
+};
+
+export type BackgroundStep = {
+    state: 'more' | 'done' | 'busy' | 'paused';
+    pending: { read: number; push: number; refill: number; visitor: number };
+    error?: { code: string; message: string };
+    v: 1;
+};
+
+export const runBackgroundStep = async (signal?: AbortSignal): Promise<BackgroundStep> =>
+{
+    const result = await apiFetch({ path: '/translatewp/v1/background/admin-step', method: 'POST', data: {}, signal }) as Partial<BackgroundStep> | null;
+    const states: BackgroundStep['state'][] = ['more', 'done', 'busy', 'paused'];
+    const pending = result?.pending ?? (result?.state === 'paused' ? { read: 0, push: 0, refill: 0, visitor: 0 } : undefined);
+    if (result?.v !== 1 || !states.includes(result.state!) || !pending
+        || ![pending.read, pending.push, pending.refill, pending.visitor].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0))
+    {
+        throw new Error('Invalid background step response');
+    }
+    return { ...result, state: result.state!, pending, v: 1 };
 };

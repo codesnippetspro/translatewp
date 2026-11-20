@@ -128,7 +128,7 @@ foreach ( $queue->claim_rows( [ (int) $row_de, (int) $row_it ] ) as $claimed ) {
 $counts = $queue->stale_counts();
 assert_true( [] === $counts['lexicon'] && [] === $counts['localizer'], 'Fresh rows must not read as waiting, got ' . wp_json_encode( $counts ) );
 
-$keepwarm->mark_lexicon_stale();
+CacheVersions::bump_lexicon_version();
 $counts = $queue->stale_counts();
 assert_true( [ 'de' => 1, 'it' => 1 ] === $counts['lexicon'], 'A lexicon bump must report every finished page per language, got ' . wp_json_encode( $counts ) );
 assert_true( [] === $counts['localizer'], 'A lexicon bump must leave the localizer group alone' );

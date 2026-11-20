@@ -52,8 +52,27 @@ class Migrations {
 			}
 		}
 
+		self::install_engine();
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 		ActionLog::record( '' === $stored ? 'Plugin installed at ' . TRANSLATEWP_VERSION : 'Plugin updated from ' . $stored . ' to ' . TRANSLATEWP_VERSION );
+	}
+
+	/**
+	 * A plugin update fires no activation hook, and a stored version above the
+	 * code version (a development build) skips the version path, so the engine
+	 * install is also keyed to its own marker. Readiness and store backfill
+	 * events left by an earlier version have no handler and are cleared.
+	 */
+	public static function install_engine_if_needed(): void {
+		if ( SiteConnection::has_credentials() && ! get_option( BackgroundEngine::STARTED_OPTION, false ) ) {
+			self::install_engine();
+		}
+	}
+
+	private static function install_engine(): void {
+		wp_clear_scheduled_hook( \TranslateWP\Functionality\ReadinessReconcile::HOOK );
+		wp_clear_scheduled_hook( \TranslateWP\Functionality\TranslationStoreSync::BACKFILL_HOOK );
+		BackgroundEngine::install();
 	}
 
 	private static function seed_job_cleanup_once(): void {
@@ -109,6 +128,7 @@ class Migrations {
 			update_option( self::LEXICON_PRIVATE_CACHE_PURGED_OPTION, time(), true );
 			update_option( self::JOB_CLEANUP_OPTION, [], false );
 		}
+		self::install_engine();
 		update_option( self::VERSION_OPTION, TRANSLATEWP_VERSION );
 	}
 

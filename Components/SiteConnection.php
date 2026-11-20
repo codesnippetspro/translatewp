@@ -1208,7 +1208,11 @@ class SiteConnection {
 	}
 
 	public static function complete_connection( string $site_id, string $token, string $account_label = '' ): void {
+		delete_option( BackgroundSignature::KEY_OPTION );
+		delete_option( BackgroundSignature::NONCES_OPTION );
+		delete_option( BackgroundSignature::REFRESH_OPTION );
 		self::persist_credentials( $site_id, $token, $account_label );
+		BackgroundEngine::install();
 		SiteLanguageSync::sync_active_languages();
 	}
 
@@ -1242,6 +1246,9 @@ class SiteConnection {
 	}
 
 	private static function clear_credentials(): void {
+		delete_option( BackgroundSignature::KEY_OPTION );
+		delete_option( BackgroundSignature::NONCES_OPTION );
+		delete_option( BackgroundSignature::REFRESH_OPTION );
 		update_option(
 			'translatewp_' . self::SITE_OPTION,
 			[

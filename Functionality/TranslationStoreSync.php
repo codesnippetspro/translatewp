@@ -4,6 +4,7 @@ namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationStore;
+use TranslateWP\Components\QueueExecution;
 
 /**
  * Wires the translation store into the indexing pipeline and the Pro seam:
@@ -37,7 +38,6 @@ class TranslationStoreSync {
 
 		add_filter( 'translatewp_pro_translated_string', [ $this, 'translated_string' ], 10, 4 );
 		add_action( 'translatewp_index_rows_pushed', [ $this, 'record_pushed_rows' ], 10, 3 );
-		add_action( self::BACKFILL_HOOK, [ $this, 'run_backfill' ] );
 		add_action( 'admin_init', [ $this, 'maybe_schedule_backfill' ] );
 		add_action( 'save_post', [ $this, 'on_save_post' ], 20, 2 );
 	}
@@ -118,13 +118,17 @@ class TranslationStoreSync {
 				$segments[] = [
 					'hash'          => $hash,
 					'markerPayload' => $payload,
+					'settingsVersion' => (int) ( $item['cache']['settingsVersion'] ?? 0 ),
+					'lexiconVersion' => (int) ( $item['cache']['lexiconVersion'] ?? 0 ),
+					'lexiconChangedAt' => (int) ( $item['cache']['lexiconChangedAt'] ?? 0 ),
+					'settingsChangedAt' => (int) ( $item['cache']['settingsChangedAt'] ?? 0 ),
 				];
 			}
 
-			if ( $segments && TranslationStore::record_pending( $url, $object_id, $language, $source_lang, $segments ) ) {
+			if ( $segments && TranslationStore::record_pending( $url, $object_id, $language, $source_lang, $segments, ( ! empty( $row['retranslate'] ) || ! empty( $row['retranslating'] ) ) ) ) {
 				$recorded = true;
 
-				if ( ! empty( $row['retranslate'] ) ) {
+				if ( ( ! empty( $row['retranslate'] ) || ! empty( $row['retranslating'] ) ) ) {
 					TranslationStore::hold_overwrite( $url, $object_id, $language, self::OVERWRITE_HOLD_SECONDS );
 				}
 			}
@@ -136,20 +140,11 @@ class TranslationStoreSync {
 	}
 
 	public function run_backfill(): void {
-		if ( ! SiteConnection::is_connected() ) {
-			return;
-		}
-
-		// How much of the back-fill one run takes, and how soon the next run
-		// follows while work is left. The defaults trickle, which is fine for a
-		// settled site and slow for a first pass.
-		$batch      = max( 1, (int) apply_filters( 'translatewp_store_backfill_batch_size', self::BACKFILL_BATCH_SIZE ) );
-		$reschedule = max( 0, (int) apply_filters( 'translatewp_store_backfill_reschedule', self::BACKFILL_RESCHEDULE_SECONDS ) );
-
-		$result = TranslationStore::run_backfill_batch( $batch );
-		if ( $result['remaining'] > 0 ) {
-			self::schedule_backfill( $reschedule );
-		}
+		QueueExecution::run(
+            static function (): void {
+				TranslationStore::run_backfill_batch( self::BACKFILL_BATCH_SIZE );
+			}
+        );
 	}
 
 	public function maybe_schedule_backfill(): void {
@@ -171,9 +166,8 @@ class TranslationStoreSync {
 	}
 
 	public static function schedule_backfill( int $delay_seconds ): void {
-		if ( ! wp_next_scheduled( self::BACKFILL_HOOK ) ) {
-			wp_schedule_single_event( time() + max( 0, $delay_seconds ), self::BACKFILL_HOOK );
-		}
+		\TranslateWP\Components\BackgroundEngine::schedule( $delay_seconds );
+		\TranslateWP\Components\BackgroundEngine::schedule_wake();
 	}
 
 	private function current_url(): string {

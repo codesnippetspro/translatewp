@@ -686,7 +686,7 @@ describe('TranslationSession', () =>
         session.dispose();
     });
 
-    it('asks the translator again when the translation changed the numbers', async () =>
+    it('leaves a changing clock as written when its translated digits cannot be reused', async () =>
     {
         (Translator.prototype.translateBatch as jest.Mock).mockImplementation(async function (entries, options = {})
         {
@@ -718,12 +718,12 @@ describe('TranslationSession', () =>
             .flatMap(call => call[0] as Array<{ value: string }>)
             .filter(entry => entry.value.endsWith(' PM'))
             .map(entry => entry.value);
-        expect(timeValuesSent).toEqual(['3:05 PM', '3:06 PM']);
-        expect(time.textContent).toBe('de:3:06 PM');
+        expect(timeValuesSent).toEqual(['3:05 PM']);
+        expect(time.textContent).toBe('3:06 PM');
         session.dispose();
     });
 
-    it('stops sending a clock whose translation keeps changing the numbers', async () =>
+    it('stops sending a clock after its first digit-only change', async () =>
     {
         (Translator.prototype.translateBatch as jest.Mock).mockImplementation(async function (entries, options = {})
         {
@@ -756,7 +756,7 @@ describe('TranslationSession', () =>
         const timeValuesSent = translateBatch.mock.calls
             .flatMap(call => call[0] as Array<{ value: string }>)
             .filter(entry => entry.value.endsWith(' PM'));
-        expect(timeValuesSent.length).toBe(VolatilityTracker.DEFAULT_THRESHOLD - 1);
+        expect(timeValuesSent.length).toBe(1);
         expect(time.textContent).toBe('3:19 PM');
         session.dispose();
     });
@@ -861,7 +861,7 @@ describe('TranslationSession', () =>
         session.dispose();
     });
 
-    it('lets a text go its own way once its in-flight translation landed without keeping the digits', async () =>
+    it('does not send new clock ticks after an in-flight translation changes the digits', async () =>
     {
         const batches: Array<{ values: string[]; resolve: () => void }> = [];
         (Translator.prototype.translateBatch as jest.Mock).mockImplementation(function (entries, options = {})
@@ -904,7 +904,7 @@ describe('TranslationSession', () =>
         time.textContent = '3:06 PM';
         await flushMutations();
 
-        expect(sentBatches()).toEqual([['Original content', '3:05 PM'], ['3:06 PM']]);
+        expect(sentBatches()).toEqual([['Original content', '3:05 PM']]);
         session.dispose();
     });
 
@@ -932,7 +932,7 @@ describe('TranslationSession', () =>
         session.dispose();
     });
 
-    it('does not keep a clock a failed batch left untranslated as its own translation', async () =>
+    it('leaves ticking text as written after its initial translation fails', async () =>
     {
         let batches = 0;
         (Translator.prototype.translateBatch as jest.Mock).mockImplementation(async function (entries, options = {})
@@ -964,7 +964,7 @@ describe('TranslationSession', () =>
         clock.textContent = 'Time 20:46:04';
         await flushMutations();
 
-        expect(clock.textContent).toBe('it:Time 20:46:04');
+        expect(clock.textContent).toBe('Time 20:46:04');
         session.dispose();
     });
 

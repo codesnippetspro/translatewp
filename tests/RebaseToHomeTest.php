@@ -29,6 +29,12 @@ $GLOBALS['wp_test_home_url'] = 'http://localhost:8890';
 assert_true( 'http://localhost:8890/category/recipes' === TranslationUrl::rebase_to_home( 'https://localhost:8890/category/recipes' ), 'A canonical https URL on a site served over http is fetched over http' );
 assert_true( 'http://localhost:8890/about/' === TranslationUrl::rebase_to_home( 'http://localhost:8890/about/' ), 'A URL already on the home scheme and host is unchanged' );
 
+$GLOBALS['wp_test_multisite'] = true;
+assert_true( 'https://mapped.example/about/' === TranslationUrl::rebase_to_home( 'https://mapped.example/about/' ), 'Multisite preserves the mapped address' );
+$GLOBALS['wp_test_multisite'] = false;
+update_option( 'siteurl', 'https://backend.example' );
+assert_true( 'https://backend.example/about/' === TranslationUrl::rebase_to_home( 'https://backend.example/about/' ), 'The separate configured WordPress host stays intact' );
+
 if ( $failures > 0 ) {
 	fwrite( STDERR, "RebaseToHomeTest: {$failures} assertion(s) failed\n" );
 	exit( 1 );

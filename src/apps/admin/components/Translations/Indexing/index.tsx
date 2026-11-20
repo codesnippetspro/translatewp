@@ -24,6 +24,7 @@ import { elapsedLabel, indexFailureMessage, indexProgressMessage } from '@/apps/
 import { ScheduledTasksLateNotice } from '@/apps/admin/components/Translations/Indexing/ScheduledTasksLateNotice';
 import { ScanProgressBar } from '@/shared/components/ScanProgressBar';
 import { RetranslatePages } from '@/apps/admin/components/Translations/Indexing/RetranslatePages';
+import { useBackgroundStep } from '@/shared/hooks/useBackgroundStep';
 import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
 import { ConfirmDialog } from '@/shared/components/confirmDialog';
 import { useConfirmDialog } from '@/shared/components/confirmDialog/useConfirmDialog';
@@ -32,11 +33,43 @@ import { Table, TableCell, TableHeaderRow, TableRow } from '@/shared/components/
 const STATUS_POLL_MS = 5000;
 const WAITING_READ_RETRY_MS = 30000;
 
+function readerErrorMessage(reason: string): string
+{
+    switch (reason) {
+        case 'page_fetch_timeout':
+            return __('The site took too long to respond. Background reading will retry automatically.', 'translate');
+        case 'page_fetch_failed':
+        case 'page_fetch_408':
+        case 'page_fetch_429':
+        case 'page_fetch_500':
+        case 'page_fetch_502':
+        case 'page_fetch_503':
+        case 'page_fetch_504':
+            return __('The site could not be reached temporarily. Background reading will retry automatically.', 'translate');
+        case 'page_tls_failed':
+            return __('WordPress could not verify the site’s HTTPS certificate. Fix the certificate or the site’s local DNS, then try reading again.', 'translate');
+        case 'page_parser_unavailable':
+            return __('Background reading needs the PHP DOM extension. Enable it on the server, or keep this screen open while reading finishes.', 'translate');
+        case 'page_fetch_401':
+        case 'page_fetch_403':
+            return __('The site blocked WordPress when it tried to read a page. Allow requests from the server, then try reading again.', 'translate');
+        default:
+            return __('The site could not read its own pages. Check that WordPress can reach the site address and that requests from the server are allowed, then try reading again.', 'translate');
+    }
+}
+
 export const LanguagesIndexing = () =>
 {
     const liveStatus = useTranslationReadiness();
     const { requestConfirmation, confirmDialogProps } = useConfirmDialog();
     const [status, setStatus] = useState<IndexStatus | null>(null);
+    const background = useBackgroundStep(status?.background?.state === 'paused', () => requestConfirmation({
+        title: __('Leave the Indexing page?', 'translate'),
+        message: __('Translation is still running. Please keep this page open until it finishes.', 'translate'),
+        confirmLabel: __('Leave page', 'translate'),
+        cancelLabel: __('Keep open', 'translate'),
+    }));
+    const backgroundPaused = (background.step?.state ?? status?.background?.state) === 'paused';
     useEffect(() => { if (liveStatus) setStatus(liveStatus); }, [liveStatus]);
     const [statusFailed, setStatusFailed] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -55,6 +88,7 @@ export const LanguagesIndexing = () =>
     const extractingRef = useRef(false);
     const waitingReadStartedAtRef = useRef(0);
     const waitingReadStoppedRef = useRef(false);
+    useEffect(() => { if (backgroundPaused) extractingRef.current = false; }, [backgroundPaused]);
     const pinSelectRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() =>
@@ -268,14 +302,14 @@ export const LanguagesIndexing = () =>
         + Object.values(status?.languages ?? {}).reduce((sum, count) => sum + (count.pending_extract ?? 0), 0);
     useEffect(() =>
     {
-        if (isRunning || extractingRef.current || waitingReads < 1 || waitingReadStoppedRef.current
+        if (backgroundPaused || isRunning || extractingRef.current || waitingReads < 1 || waitingReadStoppedRef.current
             || Date.now() - waitingReadStartedAtRef.current < WAITING_READ_RETRY_MS)
         {
             return;
         }
 
         void handleReadWaitingPages();
-    }, [waitingReads, isRunning]);
+    }, [waitingReads, isRunning, backgroundPaused]);
 
     const handleStopIndexing = () =>
     {
@@ -321,13 +355,33 @@ export const LanguagesIndexing = () =>
 
     return (
         <div className="flex w-full min-w-0 flex-col gap-6">
+            {backgroundPaused && <p role="status">{__('Background translation is paused.', 'translate')}</p>}
+            {background.pending && <p role="status">{sprintf(
+                /* translators: 1: pages waiting to be read, 2: translations waiting, 3: refreshes waiting. */
+                __("Please don't close this page. Waiting: %1$d to read, %2$d to translate, %3$d to refresh.", 'translate'),
+                background.step!.pending.read, background.step!.pending.push, background.step!.pending.refill,
+            )}</p>}
+            {background.failed && <p role="alert">{__('Background work could not be checked. This page will try again automatically.', 'translate')}</p>}
             <section className="flex flex-col gap-2" aria-labelledby="twp-reading-translating">
                 <h3 id="twp-reading-translating" className="font-semibold text-lg text-translatewp-neutral m-0">
                     {__('Reading and translating', 'translate')}
                 </h3>
                 <p className="text-sm text-translatewp-muted m-0">
-                    {__('Reading collects the text of your site spine, the front page and menu pages, in this tab and costs nothing. Translation runs on the service for the languages you chose, visible pages first. Other pages translate the first time someone views them.', 'translate')}
+                    {__('Reading collects the text of your site spine, the front page and menu pages, in the background and costs nothing. Translation runs on the service for the languages you chose, visible pages first. Other pages translate the first time someone views them.', 'translate')}
                 </p>
+                {Boolean(status?.storeMessages?.length) && (
+                    <details>
+                        <summary>{__('Stored translation updates', 'translate')}</summary>
+                        <ul>
+                            {status?.storeMessages?.map((message, i) => <li key={i}>{message}</li>)}
+                        </ul>
+                    </details>
+                )}
+                {status?.readerError && (
+                    <p className="text-sm text-translatewp-error m-0" role="alert">
+                        {readerErrorMessage(status.readerError)}
+                    </p>
+                )}
                 {status?.read && (
                     <p className="text-sm text-translatewp-muted m-0" role="status">
                         {sprintf(
@@ -352,7 +406,7 @@ export const LanguagesIndexing = () =>
                     <Button
                         variant="primary"
                         onClick={isRunning ? handleStopIndexing : () => void handleIndexSite()}
-                        disabled={!isRunning && (status === null || statusFailed)}
+                        disabled={backgroundPaused || (!isRunning && (status === null || statusFailed))}
                     >
                         {isRunning
                             ? __('Stop', 'translate')

@@ -263,8 +263,8 @@ class ProEligibility {
 		return array_merge( self::default_state(), self::last_known_record() );
 	}
 
-	public static function refresh(): array {
-		$fresh = self::fetch_fresh();
+	public static function refresh( int $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS ): array {
+		$fresh = self::fetch_fresh( $timeout_seconds );
 		if ( null === $fresh ) {
 			return self::cached();
 		}
@@ -359,16 +359,21 @@ class ProEligibility {
 		return self::refresh();
 	}
 
-	public static function fetch_fresh(): ?array {
+	public static function fetch_fresh( int $timeout_seconds = SiteRequests::DEFAULT_TIMEOUT_SECONDS ): ?array {
 		$response = SiteRequests::get(
 			self::ELIGIBILITY_PATH,
-			[ 'installed' => self::reported_version() ]
+			[ 'installed' => self::reported_version() ],
+			$timeout_seconds
 		);
 
 		if ( is_wp_error( $response ) ) {
 			return self::state_from_error( $response );
 		}
 
+		if ( is_array( $response ) ) {
+			BackgroundSwitch::observe( $response );
+			BackgroundSignature::observe( $response );
+		}
 		return self::parse( is_array( $response ) ? $response : [] );
 	}
 

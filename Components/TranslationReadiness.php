@@ -4,7 +4,9 @@ namespace TranslateWP\Components;
 
 class TranslationReadiness {
 
-	private const META = '_twp_delivery_manifest';
+	public const META = '_twp_delivery_manifest';
+	public const COMPLETED_SCOPES_OPTION = 'translatewp_completed_readiness_scopes';
+	private const MAX_COMPLETED_SCOPES = 128;
 	// Long enough for one full check cycle of a larger site under the service's
 	// look-up rate limit; settings and cache generation changes still withdraw
 	// readiness at once through the record scope.
@@ -14,7 +16,39 @@ class TranslationReadiness {
 	private const BACKOFF_DEFAULT_SECONDS = 30;
 	private const BATCH_SIZE = 100;
 
+	public static function complete_refill( string $language ): bool {
+		return MutationLock::run(
+            'cache_versions',
+            static function () use ( $language ): void {
+				$scope = self::scope( $language );
+				$proofs = self::proofs( $language );
+				$swept = self::swept( $language );
+				$aliases = (array) get_option( self::COMPLETED_SCOPES_OPTION, [] );
+				$previous = $aliases[ $language ] ?? [];
+				$accepted = ( $previous['current'] ?? '' ) === $scope ? (array) ( $previous['accepted'] ?? [] ) : [];
+				$accepted[] = $scope;
+				TranslationStore::bump_cache_generation( [ $language ] );
+				$next_scope = self::scope( $language );
+				$aliases[ $language ] = [
+					'current' => $next_scope,
+					'accepted' => array_slice( array_values( array_unique( $accepted ) ), -self::MAX_COMPLETED_SCOPES ),
+				];
+				update_option( self::COMPLETED_SCOPES_OPTION, $aliases, false );
+				set_transient( 'twp_ready_' . $next_scope, $proofs, self::PROOF_GRACE_SECONDS );
+				set_transient( 'twp_swept_' . $next_scope, $swept, self::PROOF_GRACE_SECONDS );
+			}
+        );
+	}
+
 	public static function record( int $id, string $language, array $items, bool $full_page = true ): void {
+		update_post_meta( $id, self::META, self::manifest_for( compact( 'id', 'language', 'items', 'full_page' ) ) );
+	}
+
+	public static function manifest_for( array $input ): array {
+		$id = (int) $input['id'];
+		$language = (string) $input['language'];
+		$items = (array) $input['items'];
+		$full_page = (bool) $input['full_page'];
 		$groups = [];
 		$valid = true;
 		$title = false;
@@ -30,7 +64,7 @@ class TranslationReadiness {
 		}
 		if ( ! $full_page ) {
 			$url = TranslationUrl::canonicalize( (string) get_post_meta( $id, '_twp_url', true ) );
-			foreach ( ( new IndexQueue() )->list_rows() as $row ) {
+			foreach ( ( new IndexQueue() )->rows_for_url( (string) get_post_meta( $id, '_twp_url', true ), $language ) as $row ) {
 				if ( $row['language'] === $language && '' !== $url && TranslationUrl::canonicalize( $row['url'] ) === $url ) {
 					$previous = self::groups( (int) $row['id'], $language );
 					if ( $previous ) {
@@ -41,15 +75,11 @@ class TranslationReadiness {
 				}
 			}
 		}
-		update_post_meta(
-            $id,
-            self::META,
-			[
-				'scope' => self::scope( $language ),
-				'groups' => $valid && $full_page ? $groups : [],
-				'title' => $title,
-			]
-        );
+		return [
+			'scope' => self::scope( $language ),
+			'groups' => $valid && $full_page ? $groups : [],
+			'title' => $title,
+		];
 	}
 
 	public static function is_ready( array $row ): bool {
@@ -82,7 +112,7 @@ class TranslationReadiness {
 		if ( ! is_array( $manifest ) || ! is_array( $manifest['groups'] ?? null ) ) {
 			return 'none';
 		}
-		return self::scope( $language ) === ( $manifest['scope'] ?? '' ) ? 'current' : 'stale';
+		return self::matching_scope( $manifest, $language ) ? 'current' : 'stale';
 	}
 
 	public static function sweep_incomplete( array $row ): bool {
@@ -102,7 +132,7 @@ class TranslationReadiness {
 		return false;
 	}
 
-	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null, ?ReadinessBudget $work_budget = null ): array {
+	public static function refresh( array $rows, int $cursor = 0, ?callable $lookup = null, ?ReadinessBudget $work_budget = null, bool $all_batches = false ): array {
 		$by_language = [];
 		$hash_rows = [];
 		$legacy_rows = [];
@@ -163,6 +193,7 @@ class TranslationReadiness {
 		// Nothing is judged while look-ups are paused, so no row is reported
 		// for self-heal either.
 		$paused = [
+			'lookupUnavailable' => true,
 			'cursor' => $index,
 			'language' => '',
 			'hashes' => [],
@@ -176,11 +207,12 @@ class TranslationReadiness {
 		// site with thousands of segments needs dozens of passes before its
 		// pages can be reported ready, which is what makes the last stretch of
 		// a first pass take longer than the rest of it.
-		$per_pass = max( 1, (int) apply_filters( 'translatewp_readiness_batches_per_pass', 1 ) );
+		$per_pass = $all_batches ? count( $batches ) : max( 1, (int) apply_filters( 'translatewp_readiness_batches_per_pass', 1 ) );
 		// A pass also stops once it has spent its time budget, so a scheduled
 		// run never outlasts its slot whatever the site's size.
 		$budget  = (float) apply_filters( 'translatewp_readiness_pass_seconds', 0.0 );
 		$started = microtime( true );
+		$answers = [];
 		$missing_all = [];
 		$row_ids_all = [];
 		$last_language = '';
@@ -192,26 +224,20 @@ class TranslationReadiness {
 			$batch = $batches[ $index ];
 			$language = $batch['language'];
 			$timeout = null === $work_budget ? SiteRequests::DEFAULT_TIMEOUT_SECONDS : $work_budget->remaining_seconds();
-			if ( $timeout <= 0 ) {
-				return $paused;
+			if ( $timeout <= 0 || QueueExecution::expired() ) {
+				$index = ( $index + count( $batches ) - 1 ) % count( $batches );
+				break;
 			}
 			$items = null === $lookup
 			? TranslationStore::remote_lookup_result( $language, array_keys( $batch['groups'] ), $timeout )
 			: $lookup( $language, array_keys( $batch['groups'] ) );
 			if ( is_wp_error( $items ) ) {
-				if ( null !== $work_budget && $work_budget->remaining_seconds() <= 0 ) {
-					return $paused;
-				}
 				$data = (array) $items->get_error_data();
-				if ( 429 === (int) ( $data['status'] ?? 0 ) ) {
-					// A refused look-up says nothing about the cache: keep what is
-					// proven and wait out the service's retry window.
-					$retry_after = (int) ( $data['payload']['retryAfterSeconds'] ?? self::BACKOFF_DEFAULT_SECONDS );
-					set_transient( self::BACKOFF, 1, max( 1, min( self::PROOF_TTL, $retry_after ) ) );
-					return $paused;
-				}
-				$items = [];
+				$wait = (int) ( $data['payload']['retryAfterSeconds'] ?? self::BACKOFF_DEFAULT_SECONDS );
+				set_transient( self::BACKOFF, 1, max( 1, min( self::PROOF_TTL, $wait ) ) );
+				return $paused;
 			}
+			$answers[ $language ] = (array) ( $answers[ $language ] ?? [] ) + (array) $items;
 			$missing = [];
 			$row_ids = [];
 			$proofs = self::proofs( $language );
@@ -253,6 +279,7 @@ class TranslationReadiness {
 			'hashes' => $missing_all,
 			'rowIds' => array_values( array_unique( $row_ids_all ) ),
 			'legacyRowIds' => 0 === $index ? array_values( array_unique( $legacy_rows ) ) : [],
+			'answers' => $answers,
 		];
 	}
 
@@ -275,14 +302,25 @@ class TranslationReadiness {
 	private static function groups( int $id, string $language ): array {
 		$manifest = get_post_meta( $id, self::META, true );
 		$title_required = '' !== trim( (string) get_post_meta( $id, '_twp_page_title', true ) );
-		return is_array( $manifest ) && self::scope( $language ) === ( $manifest['scope'] ?? '' ) && is_array( $manifest['groups'] ?? null )
+		return is_array( $manifest ) && self::matching_scope( $manifest, $language ) && is_array( $manifest['groups'] ?? null )
 			&& ( ! $title_required || true === ( $manifest['title'] ?? false ) )
 			? $manifest['groups'] : [];
 	}
 
 	private static function has_title( int $id, string $language ): bool {
 		$manifest = get_post_meta( $id, self::META, true );
-		return is_array( $manifest ) && self::scope( $language ) === ( $manifest['scope'] ?? '' ) && true === ( $manifest['title'] ?? false );
+		return is_array( $manifest ) && self::matching_scope( $manifest, $language ) && true === ( $manifest['title'] ?? false );
+	}
+
+	private static function matching_scope( array $manifest, string $language ): bool {
+		$current = self::scope( $language );
+		if ( ( $manifest['scope'] ?? '' ) === $current ) {
+			return true;
+		}
+		$aliases = (array) get_option( self::COMPLETED_SCOPES_OPTION, [] );
+		$completed = $aliases[ $language ] ?? [];
+		return ( $completed['current'] ?? '' ) === $current
+			&& in_array( $manifest['scope'] ?? '', $completed['accepted'] ?? [], true );
 	}
 
 	private static function scope( string $language ): string {
@@ -295,6 +333,9 @@ class TranslationReadiness {
 					$language,
 					TranslationFingerprint::model_profile( TranslationProxySettings::ai_settings( $language ) ),
 					TranslationStore::cache_generation_for( $language ),
+					CacheVersions::settings_version(),
+					CacheVersions::lexicon_version_for( $language ),
+					CacheVersions::localizer_version(),
 				]
             )
         );

@@ -17,6 +17,7 @@ import {
 } from '@/shared/lib/translations/TranslationEngine';
 import type { Translator } from '@/shared/lib/translations/Translator';
 import { NumericTemplateMemory } from '@/shared/lib/translations/NumericTemplateMemory';
+import { isChangingNumberText, rememberChangingNumberText } from '@/shared/lib/translations/changingNumberText';
 import { normalizeNumbers } from '@/shared/lib/translations/numericText';
 import { VolatilityTracker } from '@/shared/lib/translations/VolatilityTracker';
 
@@ -79,6 +80,8 @@ export class TranslationSession
     #sourceEngine: TranslationEngine;
     #sourceLang: string;
     #sourceRecords = new Map<Node, Map<string, SourceRecord>>();
+    #numberSources = new WeakMap<Element, Map<string, string>>();
+    #changingNumberPatterns = new Set<string>();
     #volatility = new VolatilityTracker();
 
     constructor({
@@ -311,6 +314,12 @@ export class TranslationSession
         for (const entry of entries)
         {
             const key = this.#entryKey(entry.attributeName);
+            const parent = entry.node instanceof Element ? entry.node : entry.node.parentElement;
+            if (parent && normalizeNumbers(entry.value) !== entry.value) {
+                const values = this.#numberSources.get(parent) ?? new Map<string, string>();
+                values.set(normalizeNumbers(entry.value), entry.value);
+                this.#numberSources.set(parent, values);
+            }
             const nodeRecords = this.#sourceRecords.get(entry.node) ?? new Map<string, SourceRecord>();
             if (!overwrite && nodeRecords.has(key)) continue;
 
@@ -431,6 +440,16 @@ export class TranslationSession
                 continue;
             }
             if (this.#numericTemplates.isPending(this.#activeTarget, entry.value)) continue;
+            const parent = entry.node instanceof Element ? entry.node : entry.node.parentElement;
+            const pattern = normalizeNumbers(entry.value);
+            const original = this.#sourceRecords.get(entry.node)?.get(this.#entryKey(entry.attributeName))?.value
+                ?? (parent ? this.#numberSources.get(parent)?.get(pattern) : undefined);
+            if (this.#changingNumberPatterns.has(pattern) || isChangingNumberText(entry.value)
+                || (original !== undefined && rememberChangingNumberText(original, entry.value))) {
+                this.#changingNumberPatterns.add(pattern);
+                this.#captureOriginals([entry], true);
+                continue;
+            }
 
             const keyNode = entry.node instanceof Element ? entry.node : entry.node.parentElement;
             if (!keyNode) continue;
@@ -500,6 +519,12 @@ export class TranslationSession
         {
             const removedEntry = removedEntries[index];
             const addedEntry = addedEntries[index];
+            if (removedEntry.type === addedEntry.type && removedEntry.attributeName === addedEntry.attributeName
+                && rememberChangingNumberText(removedEntry.value, addedEntry.value)) {
+                this.#changingNumberPatterns.add(normalizeNumbers(addedEntry.value));
+                this.#captureOriginals([addedEntry], true);
+                return;
+            }
             if (
                 removedEntry.type !== addedEntry.type
                 || removedEntry.attributeName !== addedEntry.attributeName

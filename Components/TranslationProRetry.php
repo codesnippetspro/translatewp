@@ -24,9 +24,10 @@ class TranslationProRetry {
 	 * @param array  $body            The request body.
 	 * @param int    $timeout_seconds The request timeout.
 	 * @param string $language        The target language of a batch, when the body does not name it.
+	 * @param bool   $managed_only    Unused: background work keeps the site's own providers like any job.
 	 * @return array|\WP_Error
 	 */
-	public static function post( string $path, array $body, int $timeout_seconds, string $language = '' ) {
+	public static function post( string $path, array $body, int $timeout_seconds, string $language = '', bool $managed_only = false ) {
 		$job_id   = QuotaHandoff::job_id_of_path( $path );
 		$language = '' !== $language ? $language : self::language_of( $body );
 
@@ -37,8 +38,18 @@ class TranslationProRetry {
 			return self::own_providers_missing( $language );
 		}
 		$body = self::with_own_providers_when_wanted( $body, $job_id, $language );
+		if ( '/v1/translation/jobs' === $path ) {
+			$body['cacheVersions'] = CacheVersions::job_hint( $language );
+		}
 
 		$response = SiteRequests::post( $path, $body, $timeout_seconds );
+		if ( '/v1/translation/jobs' === $path && is_wp_error( $response ) ) {
+			$data = $response->get_error_data();
+			if ( is_array( $data ) && 409 === (int) ( $data['status'] ?? 0 ) && 'cache_revision_conflict' === ( $data['payload']['code'] ?? '' ) && is_array( $data['payload']['floor'] ?? null ) && CacheVersions::adopt_floor( $data['payload']['floor'], $language ) ) {
+				$body['cacheVersions'] = CacheVersions::job_hint( $language );
+				$response = SiteRequests::post( $path, $body, $timeout_seconds );
+			}
+		}
 		if ( self::is_pro_required( $response ) ) {
 			self::record_notice();
 

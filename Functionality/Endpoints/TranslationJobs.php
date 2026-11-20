@@ -2,6 +2,9 @@
 
 namespace TranslateWP\Functionality\Endpoints;
 
+use TranslateWP\Components\CacheVersions;
+use TranslateWP\Components\ProviderHold;
+
 use PluboRoutes\Endpoint\GetEndpoint;
 use PluboRoutes\Endpoint\PostEndpoint;
 use TranslateWP\Components\TranslationSubscription;
@@ -269,10 +272,7 @@ class TranslationJobs extends BaseApiEndpoints {
 				],
 				null === $neighbours ? [] : [ 'neighbours' => $neighbours ],
 				[
-					'cache' => [
-						'siteId' => $site_id,
-						'hash'   => $hash,
-					],
+					'cache' => CacheVersions::cache_reference( $site_id, $hash, $language ),
 				]
 			);
 			$hashes[] = $hash;
@@ -347,8 +347,14 @@ class TranslationJobs extends BaseApiEndpoints {
 				$queued_ids[] = (int) $queued_row;
 			} else {
 				TranslationProxyDedupe::release_segments( $site_id, $language, $hashes );
-				$deduped += count( $items );
-				$subscription_hashes = array_values( array_diff( $subscription_hashes, $hashes ) );
+				return new \WP_Error(
+                    'translation_queue_busy',
+                    __( 'Translation is busy. Please try again shortly.', 'translate' ),
+                    [
+						'status' => 503,
+						'retryAfterSeconds' => 1,
+					]
+                );
 			}
 		}
 		if ( count( $raw_items ) === $skipped ) {
@@ -357,18 +363,9 @@ class TranslationJobs extends BaseApiEndpoints {
 
 		if ( $accepted > 0 ) {
 			\TranslateWP\Functionality\Indexer::schedule_drain();
-			// The inline drain serves the visitor's own row right after the
-			// response; the cron kick is the fallback when that path is not
-			// available on the host.
-			$mode = \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids );
-			if ( 'inline' !== $mode ) {
-				if ( function_exists( 'spawn_cron' ) ) {
-					spawn_cron();
-				}
-				// Cron does not start while another scheduled run holds its
-				// lock, and a visitor waiting on the page makes no further
-				// request to start it later: ask the site to drain now too.
-				\TranslateWP\Components\LoopbackKick::fire();
+			$mode = \TranslateWP\Functionality\Indexer::schedule_inline_drain( $queued_ids, $subscribe );
+			if ( 'inline' !== $mode && function_exists( 'spawn_cron' ) ) {
+				spawn_cron();
 			}
 		}
 
@@ -422,6 +419,10 @@ class TranslationJobs extends BaseApiEndpoints {
 	}
 
 	public function create_job( $request ) {
+		$provider_error = ProviderHold::request_error();
+		if ( $provider_error ) {
+			return $provider_error;
+		}
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;
@@ -509,6 +510,10 @@ class TranslationJobs extends BaseApiEndpoints {
 	}
 
 	public function push_batch( $request ) {
+		$provider_error = ProviderHold::request_error();
+		if ( $provider_error ) {
+			return $provider_error;
+		}
 		$body_limit = $this->enforce_body_size_limit( $request );
 		if ( is_wp_error( $body_limit ) ) {
 			return $body_limit;
@@ -1038,7 +1043,7 @@ class TranslationJobs extends BaseApiEndpoints {
 					'contextKind'   => $context_kind,
 				],
 				null === $neighbours ? [] : [ 'neighbours' => $neighbours ],
-				[ 'cache' => $cache ]
+				[ 'cache' => CacheVersions::cache_reference( $cache['siteId'], $cache['hash'], $job_languages['targetLang'] ) ]
 			);
 		}
 

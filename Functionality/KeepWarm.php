@@ -12,9 +12,13 @@ use TranslateWP\Components\TranslationStore;
 
 class KeepWarm {
 
+	public const BACKGROUND_HOOKS = [ self::VERSIONED_REFILL_HOOK, self::LEXICON_DEBOUNCE_HOOK, self::SETTINGS_DEBOUNCE_HOOK, self::REWARM_DEBOUNCE_HOOK ];
+	public const VERSIONED_REFILL_HOOK = 'translatewp_versioned_refill';
 	public const LEXICON_DEBOUNCE_HOOK  = 'translatewp_lexicon_stale_debounce';
 	public const SETTINGS_DEBOUNCE_HOOK = 'translatewp_settings_rebuild_debounce';
 	public const PENDING_LANGUAGES_OPTION = 'translatewp_settings_rebuild_languages';
+	public const REBUILD_CURSOR = 'translatewp_settings_refill_cursor';
+	public const LEXICON_LANGUAGES = 'translatewp_lexicon_debounce_languages';
 	private const ALL_LANGUAGES = '*';
 	public const REWARM_DEBOUNCE_HOOK  = 'translatewp_rewarm_debounce';
 
@@ -48,6 +52,7 @@ class KeepWarm {
 			10,
 			1
 		);
+		add_action( self::VERSIONED_REFILL_HOOK, [ $this, 'refill_versioned_changes' ] );
 		add_action( self::LEXICON_DEBOUNCE_HOOK, [ $this, 'mark_lexicon_stale' ] );
 		add_action( 'translatewp_localizer_settings_saved', [ $this, 'mark_localizer_stale' ] );
 		add_action( self::SETTINGS_DEBOUNCE_HOOK, [ $this, 'rebuild_after_settings_change' ] );
@@ -77,6 +82,11 @@ class KeepWarm {
 	}
 
 	public function rewarm_saved_object( int $post_id, string $post_type ): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::REWARM_DEBOUNCE_HOOK, [ $post_id, $post_type ] );
+			return;
+		}
+
 		if ( ! SiteConnection::is_connected() ) {
 			return;
 		}
@@ -142,12 +152,24 @@ class KeepWarm {
 		return is_array( $types ) ? array_values( array_filter( array_map( 'strval', $types ) ) ) : [];
 	}
 
-	public function schedule_lexicon_stale_mark(): void {
+	public function schedule_lexicon_stale_mark( array $languages = [] ): void {
+		self::remember_languages( self::LEXICON_LANGUAGES, $languages );
 		DebouncedTask::schedule( self::LEXICON_DEBOUNCE_HOOK );
 	}
 
 	public function mark_lexicon_stale(): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::LEXICON_DEBOUNCE_HOOK, [] );
+			return;
+		}
+
+		delete_option( self::LEXICON_LANGUAGES );
 		CacheVersions::bump_lexicon_version();
+		if ( \TranslateWP\Components\QueueExecution::in_step() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [ IndexQueue::STALE_GROUP_LEXICON ] );
+			return;
+		}
+		self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
 
 	/**
@@ -157,17 +179,14 @@ class KeepWarm {
 	 *                         empty means every one of them.
 	 */
 	public function schedule_settings_rebuild( $languages = [] ): void {
-		// Changes inside one debounce window add up to one retranslation: the
-		// languages are gathered here, and one change for every language wins.
-		$languages = is_array( $languages ) ? array_values( array_map( 'strval', $languages ) ) : [];
-		$pending   = get_option( self::PENDING_LANGUAGES_OPTION, null );
-		if ( ! $languages || ( is_array( $pending ) && in_array( self::ALL_LANGUAGES, $pending, true ) ) ) {
-			$pending = [ self::ALL_LANGUAGES ];
-		} else {
-			$pending = array_values( array_unique( array_merge( is_array( $pending ) ? $pending : [], $languages ) ) );
-		}
-		update_option( self::PENDING_LANGUAGES_OPTION, $pending, false );
+		self::remember_languages( self::PENDING_LANGUAGES_OPTION, is_array( $languages ) ? $languages : [] );
 		DebouncedTask::schedule( self::SETTINGS_DEBOUNCE_HOOK );
+	}
+
+	private static function remember_languages( string $option, array $languages ): void {
+		$pending = (array) get_option( $option, [] );
+		$pending = ! $languages || in_array( self::ALL_LANGUAGES, $pending, true ) ? [ self::ALL_LANGUAGES ] : array_values( array_unique( array_merge( $pending, $languages ) ) );
+		update_option( $option, $pending, false );
 	}
 
 	/**
@@ -177,12 +196,32 @@ class KeepWarm {
 	 * loop.
 	 */
 	public function rebuild_after_settings_change(): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::SETTINGS_DEBOUNCE_HOOK, [] );
+			return;
+		}
+
 		$pending = get_option( self::PENDING_LANGUAGES_OPTION, null );
-		delete_option( self::PENDING_LANGUAGES_OPTION );
-		$pending = is_array( $pending ) ? $pending : [ self::ALL_LANGUAGES ];
+		if ( ! is_array( $pending ) || ! $pending || ! delete_option( self::PENDING_LANGUAGES_OPTION ) ) {
+			return;
+		}
 		CacheVersions::bump_settings_version();
-		if ( SiteConnection::is_connected() ) {
-			( new Indexer() )->retranslate_everything( in_array( self::ALL_LANGUAGES, $pending, true ) ? [] : $pending );
+		if ( \TranslateWP\Components\QueueExecution::in_step() && SiteConnection::is_connected() ) {
+			$current = get_option( self::REBUILD_CURSOR, [] );
+			$languages = array_unique( array_merge( $current['languages'] ?? [], in_array( self::ALL_LANGUAGES, $pending, true ) ? TranslationProxySettings::target_languages() : $pending ) );
+			update_option(
+                self::REBUILD_CURSOR,
+                [
+					'after' => 0,
+					'languages' => array_values( $languages ),
+				],
+                false
+            );
+			if ( $languages ) {
+				TranslationStore::bump_cache_generation( $languages );
+			}
+		} elseif ( SiteConnection::is_connected() ) {
+			( new Indexer( '', '', null, null, false ) )->retranslate_everything( in_array( self::ALL_LANGUAGES, $pending, true ) ? [] : $pending );
 		}
 	}
 
@@ -195,7 +234,7 @@ class KeepWarm {
 	 * older lexicon or localizer version, so the new terms or formats reach
 	 * the pages that already exist. Returns how many rows were queued.
 	 */
-	public static function retranslate_stale( string $group ): int {
+	public static function retranslate_stale( string $group, bool $force = false ): int {
 		if ( ! SiteConnection::is_connected() ) {
 			return 0;
 		}
@@ -206,23 +245,39 @@ class KeepWarm {
 			return 0;
 		}
 
-		$queued = $queue->enqueue_retranslate( $rows );
+		$queued = $queue->enqueue_retranslate( $rows, $force );
 		if ( $queued > 0 ) {
 			$languages = [];
 			foreach ( $rows as $row ) {
 				$languages[ (string) $row['language'] ] = true;
 			}
 			TranslationStore::bump_cache_generation( array_keys( $languages ) );
+			Indexer::schedule_drain();
+
 		}
 
 		return $queued;
 	}
 
+	public function refill_versioned_changes( string $group = IndexQueue::STALE_GROUP_LOCALIZER ): void {
+		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [ $group ] );
+			return;
+		}
+
+		self::retranslate_stale( $group );
+	}
+
 	public static function apply_lexicon_now(): int {
+		LexiconChanges::flush();
+		if ( wp_next_scheduled( self::LEXICON_DEBOUNCE_HOOK ) ) {
+			wp_clear_scheduled_hook( self::LEXICON_DEBOUNCE_HOOK );
+		}
+
 		return self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
 
 	public static function apply_localizer_now(): int {
-		return self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER );
+		return self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER, true );
 	}
 }

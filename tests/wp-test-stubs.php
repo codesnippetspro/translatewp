@@ -173,6 +173,80 @@ class WP_Testwpdb {
 	public function query( string $query ) {
 		unset( $query );
 
+        if ( false !== strpos( $this->last_query, 'WHERE option_name = %s AND option_value = %s' ) ) {
+            [ $name, $owner ] = $this->prepared_args;
+            if ( get_option( $name, '' ) !== $owner ) { return 0; }
+            delete_option( $name ); return 1;
+        }
+
+        if ( 0 === strpos( $this->last_query, 'INSERT IGNORE INTO wp_options' ) ) {
+            if ( ! empty( $GLOBALS['wp_test_option_insert_fail'] ) ) { return false; }
+            [ $name, $owner ] = $this->prepared_args;
+            if ( false !== get_option( $name, false ) ) { return 0; }
+            update_option( $name, $owner, false ); return 1;
+        }
+		$insert_meta = str_starts_with( $this->last_query, 'INSERT INTO wp_postmeta (post_id, meta_key, meta_value)' );
+		if ( $insert_meta || str_starts_with( $this->last_query, 'UPDATE wp_postmeta pm INNER JOIN' ) ) {
+			$writes = [];
+			if ( $insert_meta ) {
+				for ( $i = 0; $i < count( $this->prepared_args ); $i += 7 ) {
+					[ $key, $value, $id, $type, $status ] = array_slice( $this->prepared_args, $i, 5 );
+					$writes[ $id ][ $key ] = $value;
+				}
+			} else {
+				$type = 'twp_index_item';
+				$status = 'private';
+				$end = 3 * substr_count( $this->last_query, ' WHEN pm.post_id =' );
+				for ( $i = 0; $i < $end; $i += 3 ) {
+					[ $id, $key, $value ] = array_slice( $this->prepared_args, $i, 3 );
+					$writes[ $id ][ $key ] = $value;
+				}
+			}
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				if ( $type !== $post['post_type'] || $status !== $post['post_status'] ) { continue; }
+				foreach ( $writes[ $post['ID'] ] ?? [] as $key => $value ) {
+					if ( $insert_meta !== array_key_exists( $key, $post['meta_input'] ) ) {
+						$post['meta_input'][ $key ] = maybe_unserialize( $value );
+					}
+				}
+			}
+			unset( $post );
+			return 1;
+		}
+        if ( 0 === strpos( $this->last_query, 'DELETE pm FROM wp_postmeta' ) ) {
+            $ids=[];$i=0;while(is_int($this->prepared_args[$i]??null)){$ids[]=$this->prepared_args[$i++];}
+            $keys=array_slice($this->prepared_args,$i,-2);
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post){
+                if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){foreach($keys as $key){unset($post['meta_input'][$key]);}}
+            }unset($post);return 1;
+        }
+		if ( 0 === strpos( $this->last_query, 'UPDATE wp_posts SET post_content = CASE ID' ) ) {
+			$n = substr_count( $this->last_query, 'WHEN %d THEN %s' );
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				for ( $i = 0; $i < 2 * $n; $i += 2 ) {
+					if ( (int) $post['ID'] === $this->prepared_args[ $i ] && 'twp_index_item' === $post['post_type'] && 'private' === $post['post_status'] ) {
+						$post['post_content'] = $this->prepared_args[ $i + 1 ];
+					}
+				}
+			}
+			unset( $post );
+			return $n;
+		}
+		if ( 0 === strpos( $this->last_query, 'UPDATE wp_posts SET post_content = %s' ) ) {
+			$ids = array_slice( $this->prepared_args, 3 );
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				if ( in_array( (int) $post['ID'], $ids, true ) && 'twp_index_item' === $post['post_type'] && 'private' === $post['post_status'] ) {
+					$post['post_content'] = $this->prepared_args[0];
+				}
+			}
+			unset( $post );
+			return count( $ids );
+		}
+        if ( 0 === strpos( $this->last_query, "UPDATE wp_posts SET post_content = ''" ) ) {
+            $ids=array_slice($this->prepared_args,2);
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post){if(in_array((int)$post['ID'],$ids,true)&&($post['post_type']??'')==='twp_index_item'&&($post['post_status']??'')==='private'){$post['post_content']='';}}unset($post);return count($ids);
+        }
+
 		// The uninstall's prefix delete of options, transients and network options.
 		if ( preg_match( '/^DELETE FROM (wp_options|wp_sitemeta) WHERE/', $this->last_query, $table ) ) {
 			$names = array_filter( $this->prepared_args, 'is_string' );
@@ -262,7 +336,78 @@ class WP_Testwpdb {
 		return false;
 	}
 
+	public function get_results( string $query ): array {
+        $GLOBALS['wp_test_engine_aggregate_calls'] = 1 + ( $GLOBALS['wp_test_engine_aggregate_calls'] ?? 0 );
+        $buckets = [];
+        foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
+            if ( 'twp_index_item' !== ( $post['post_type'] ?? '' ) ) { continue; }
+            $m = $post['meta_input'];
+            $row = [ 'language' => (string) ( $m['_twp_language'] ?? '' ), 'status' => $m['_twp_status'] ?? '', 'stage' => $m['_twp_stage'] ?? '', 'object_type' => $m['_twp_object_type'] ?? '', 'translated' => (int) ( $m['_twp_translated_at'] ?? 0 ) > 0, 'background' => (int) ( $m['_twp_background_refresh'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslate'] ?? 0 ) > 0 || (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslating' => (int) ( $m['_twp_retranslating'] ?? 0 ) > 0, 'retranslate' => (int) ( $m['_twp_retranslate'] ?? 0 ) > 0, 'repairing' => (int) ( $m['_twp_cold_retries'] ?? 0 ) > 0, 'recoverable' => (int) ( $m['_twp_dead_retries'] ?? 0 ) < 3 && empty( $m['_twp_cold_exhausted'] ) ];
+            $key = json_encode( $row ); $due = 'dead' === $row['status'] ? (int) ( $m['_twp_updated_at'] ?? 0 ) + 600 * ( 2 ** min( 3, (int) ( $m['_twp_dead_retries'] ?? 0 ) ) ) : (int) ( $m['_twp_reader_not_before'] ?? 0 );
+            $buckets[$key] = $row + [ 'due' => min( $due, $buckets[$key]['due'] ?? $due ), 'n' => 1 + ( $buckets[$key]['n'] ?? 0 ) ];
+        }
+        return array_map( static fn ( array $row ): object => (object) $row, array_values( $buckets ) );
+    }
+
 	public function get_col( string $query ): array {
+        if ( false !== strpos( $this->last_query, "AND ID > %d ORDER BY ID ASC LIMIT %d" ) ) {
+            [$type,$after,$limit] = $this->prepared_args;
+            $ids=[];
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[] as $post) {
+                if (($post['post_type']??'')===$type && ($post['post_status']??'')==='private' && (int)$post['ID']>(int)$after) { $ids[]=(int)$post['ID']; }
+            }
+            sort($ids); return array_slice($ids,0,(int)$limit);
+        }
+
+        if ( 0 === strpos( $this->last_query, 'SELECT ID FROM wp_posts WHERE ID IN (' ) ) {
+            $ids=array_slice($this->prepared_args,0,-2);
+            return array_values(array_map(static fn(array $p):int=>(int)$p['ID'],array_filter($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[],static fn(array $p):bool=>in_array((int)$p['ID'],$ids,true)&&($p['post_type']??'')==='twp_index_item'&&($p['post_status']??'')==='private')));
+        }
+        if ( false !== strpos( $this->last_query, 'AS engine_id' ) || false !== strpos( $this->last_query, 'AS engine_due_id' ) ) {
+            $sql=$this->last_query;$args=$this->prepared_args;$due=strpos($sql,'AS engine_due_id')!==false;
+            $push=$due||strpos($sql,"stage.meta_value = 'push'")!==false;
+            $limit=(int)$args[count($args)-($due?1:2)];$offset=$due?0:(int)end($args);
+            $rows=[];
+            foreach($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')]??[] as $post){
+                $m=$post['meta_input']??[];
+                if(($post['post_type']??'')!=='twp_index_item'||($post['post_status']??'')!=='private'){continue;}
+                if(strpos($sql,'AND p.ID = %d')!==false && (int)$post['ID'] !== (int)$args[count($args)-3]) {continue;}
+                if($due){if(($m['_twp_status']??'')!==$args[2]||($m['_twp_stage']??'')!==$args[3]||(int)($m['_twp_reader_not_before']??0)>(int)$args[4]){continue;}}
+                else{
+                    if(''===(string)($m['_twp_language']??'')){continue;}
+                    if (str_contains($sql, 'lang.meta_value NOT IN') && in_array($m['_twp_language'], array_slice($args,3,-2),true)) { continue; }
+                    $visitor=($m['_twp_object_type']??'')==='miss'&&(int)($m['_twp_retranslate']??0)<=0&&(int)($m['_twp_retranslating']??0)<=0&&(int)($m['_twp_background_refresh']??0)<=0;
+                    $background=strpos($sql,'NOT (kind.meta_value')!==false;
+                    if($background===$visitor){continue;}
+                    if($push){if(($m['_twp_status']??'')!=='pending'||($m['_twp_stage']??'')!=='push'||(int)($m['_twp_reader_not_before']??0)>(int)$args[2]){continue;}}
+                    elseif(($m['_twp_status']??'')!=='done'||(int)($m['_twp_translated_at']??0)>0||(int)($m['_twp_reader_not_before']??0)>(int)$args[2]){continue;}
+                }
+                $rows[]=$post;
+            }
+            usort($rows,static fn(array $a,array $b):int=>((int)($a['meta_input']['_twp_reader_not_before']??0)<=>(int)($b['meta_input']['_twp_reader_not_before']??0))?:($push?((int)($a['meta_input']['_twp_priority']??0)<=>(int)($b['meta_input']['_twp_priority']??0)):0)?:((int)$a['ID']<=>(int)$b['ID']));
+            $ids=array_column(array_slice($rows,$offset,$limit),'ID');
+            $GLOBALS['wp_test_engine_selects'][]=['query'=>$sql,'limit'=>$limit,'count'=>count($ids)];
+            return $ids;
+        }
+
+        if ( false !== strpos( $this->last_query, 'HAVING COUNT(DISTINCT p.ID) > 1 LIMIT 10' ) ) {
+            $groups = [];
+            foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
+                if ( 'twp_index_item' !== ( $post['post_type'] ?? '' ) ) { continue; }
+                $m=$post['meta_input'];
+                if ( 'done' !== ($m['_twp_status'] ?? '') || ( '' !== (string) ($m['_twp_language'] ?? '') && (int) ($m['_twp_translated_at'] ?? 0) <= 0 ) ) { continue; }
+                $key=implode('|', [ $m['_twp_object_type'] ?? '', $m['_twp_object_id'] ?? '', $m['_twp_language'] ?? '' ] );
+                $groups[$key][] = (int) $post['ID'];
+            }
+            return array_slice( array_map( static fn ( array $ids ): int => min( $ids ), array_values( array_filter( $groups, static fn ( array $ids ): bool => count($ids)>1 ) ) ), 0, 10 );
+        }
+
+		if ( false !== strpos( $this->last_query, 'ID > %d ORDER BY ID ASC LIMIT %d' ) ) {
+			[ $type, $after, $limit ] = $this->prepared_args;
+			$ids = array_values( array_filter( $GLOBALS[ wp_test_blog_store( 'wp_test_posts' ) ][ $type ] ?? [], static fn( $id ): bool => $id > $after ) );
+			sort( $ids, SORT_NUMERIC );
+			return array_slice( $ids, 0, (int) $limit );
+		}
 		unset( $query );
 
 		if ( preg_match( '/^SELECT (option_name FROM wp_options|meta_key FROM wp_sitemeta) WHERE/', $this->last_query, $table ) ) {
@@ -291,6 +436,11 @@ class WP_Testwpdb {
 	}
 
 	public function get_var( string $query ) {
+		if ( false !== strpos( $this->last_query, 'GET_LOCK(' ) || false !== strpos( $this->last_query, 'RELEASE_LOCK(' ) ) {
+            $GLOBALS['wp_test_named_lock_calls'][] = $this->prepared_args;
+            if ( false !== strpos( $this->last_query, 'GET_LOCK(' ) && array_key_exists( 'wp_test_named_lock_result', $GLOBALS ) ) { return $GLOBALS['wp_test_named_lock_result']; }
+			return '1';
+		}
 		unset( $query );
 
 		if ( false !== strpos( $this->last_query, 'SELECT payload FROM' ) ) {
@@ -398,6 +548,7 @@ function wp_test_reset( array $options ): void {
 	$GLOBALS['wp_test_lexicon_meta']         = [];
 	$GLOBALS['wp_test_post_types']           = [ 'post', 'page', 'attachment' ];
 	$GLOBALS['wp_test_scheduled']            = [];
+	$GLOBALS['wp_test_scheduled_args']       = [];
 	$GLOBALS['wp_test_scheduled_log']        = [];
 	$GLOBALS['wp_test_index_complete_fail']  = false;
 	$GLOBALS['wp_test_translation_job_responses']    = [];
@@ -544,6 +695,8 @@ function untrailingslashit( string $value ): string {
 	return rtrim( $value, '/' );
 }
 
+function wp_salt( $scheme = 'auth' ): string { return 'test-site-salt-' . $scheme; }
+
 function wp_generate_uuid4(): string {
 	return '11111111-1111-4111-8111-111111111111';
 }
@@ -631,6 +784,7 @@ function get_option( $name, $default = false ) {
 }
 
 function update_option( $name, $value ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$name = wp_test_option_key( (string) $name );
 	if ( 'translatewp_proxy_state_schema_version' === $name ) {
 		$GLOBALS['wp_test_proxy_schema_version'] = $value;
@@ -640,6 +794,9 @@ function update_option( $name, $value ) {
 	if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
 		$key = substr( $name, strlen( 'translatewp_' ) );
 		$GLOBALS['wp_test_options_store'][ $key ] = $value;
+		$after_write = $GLOBALS['wp_test_after_option_write'][ $name ] ?? null;
+		unset( $GLOBALS['wp_test_after_option_write'][ $name ] );
+		if ( is_callable( $after_write ) ) { $after_write(); }
 		return true;
 	}
 
@@ -648,6 +805,7 @@ function update_option( $name, $value ) {
 }
 
 function delete_option( $name ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$name = wp_test_option_key( (string) $name );
 	if ( is_string( $name ) && 0 === strpos( $name, 'translatewp_' ) ) {
 		$key = substr( $name, strlen( 'translatewp_' ) );
@@ -661,6 +819,8 @@ function delete_option( $name ) {
 
 if ( ! function_exists( 'add_option' ) ) {
 	function add_option( $name, $value = '', $deprecated = '', $autoload = null ): bool {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
+        if ( ! empty( $GLOBALS['wp_test_option_insert_fail'] ) && 0 === strpos( $name, 'translatewp_lock_' ) ) { return false; }
 		unset( $deprecated, $autoload );
 		if ( false !== get_option( $name, false ) ) {
 			return false;
@@ -702,7 +862,40 @@ function wp_test_blog_store( string $name ): string {
 	return 1 === $blog_id ? $name : $name . '_blog_' . $blog_id;
 }
 
+function wp_test_matches_meta( array $meta, array $query ): bool {
+	if ( isset( $query['key'] ) ) {
+		$key = (string) $query['key'];
+		$exists = array_key_exists( $key, $meta );
+		$compare = strtoupper( $query['compare'] ?? '=' );
+		if ( 'NOT EXISTS' === $compare ) { return ! $exists; }
+		if ( 'EXISTS' === $compare ) { return $exists; }
+		if ( ! $exists ) { return false; }
+		$actual = $meta[$key]; $expected = $query['value'] ?? '';
+		if ( 'IN' === $compare || 'NOT IN' === $compare ) {
+			$found = in_array( (string) $actual, array_map( 'strval', (array) $expected ), true );
+			return 'IN' === $compare ? $found : ! $found;
+		}
+		$actual = 'NUMERIC' === ( $query['type'] ?? '' ) ? (float) $actual : (string) $actual;
+		$expected = 'NUMERIC' === ( $query['type'] ?? '' ) ? (float) $expected : (string) $expected;
+		switch ( $compare ) {
+			case '<=': return $actual <= $expected;
+			case '>=': return $actual >= $expected;
+			case '<': return $actual < $expected;
+			case '>': return $actual > $expected;
+			case '!=': return $actual !== $expected;
+			default: return $actual === $expected;
+		}
+	}
+	$results = [];
+	foreach ( $query as $clause ) {
+		if ( is_array( $clause ) ) { $results[] = wp_test_matches_meta( $meta, $clause ); }
+	}
+	return 'OR' === ( $query['relation'] ?? 'AND' ) ? in_array( true, $results, true ) : ! in_array( false, $results, true );
+}
+
 function get_posts( array $args = [] ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
+	$GLOBALS['wp_test_get_posts_calls'][] = $args;
 	$post_type = $args['post_type'] ?? 'post';
 
 	if ( 'any' === $post_type && isset( $args['meta_key'] ) ) {
@@ -806,19 +999,7 @@ function get_posts( array $args = [] ) {
 								continue;
 							}
 
-							foreach ( $meta_query as $clause ) {
-								$key   = (string) ( $clause['key'] ?? '' );
-								$value = $clause['value'] ?? null;
-								if ( '' === $key ) {
-									continue;
-								}
-
-								if ( (string) ( $post['meta_input'][ $key ] ?? '' ) !== (string) $value ) {
-									return false;
-								}
-							}
-
-							return true;
+							return wp_test_matches_meta( $post['meta_input'] ?? [], $meta_query );
 						}
 
 						return false;
@@ -826,6 +1007,14 @@ function get_posts( array $args = [] ) {
 				)
 			);
 		}
+	}
+
+	if ( 'twp_index_item' === $post_type && isset( $args['meta_key'] ) && is_array( $args['orderby'] ?? null ) ) {
+		$meta_key = (string) $args['meta_key'];
+		usort( $ids, static fn( int $left, int $right ): int => ( (int) get_post_meta( $left, $meta_key, true ) <=> (int) get_post_meta( $right, $meta_key, true ) ) ?: ( $left <=> $right ) );
+	}
+	if ( 'twp_index_item' === $post_type && (int) ( $args['posts_per_page'] ?? -1 ) > 0 ) {
+		$ids = array_slice( $ids, (int) ( $args['offset'] ?? 0 ), (int) $args['posts_per_page'] );
 	}
 
 	return $ids;
@@ -852,12 +1041,16 @@ function wp_insert_post( array $postarr, $wp_error = false ) {
 }
 
 function wp_update_post( array $postarr, $wp_error = false ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	unset( $wp_error );
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) ( $postarr['ID'] ?? 0 ) ) {
 			$store[ $index ] = array_merge( $post, $postarr );
 			$GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] = $store;
+			$after_update = $GLOBALS['wp_test_after_post_update'] ?? null;
+			unset( $GLOBALS['wp_test_after_post_update'] );
+			if ( is_callable( $after_update ) ) { $after_update(); }
 			return (int) $postarr['ID'];
 		}
 	}
@@ -914,12 +1107,18 @@ function register_post_type( $post_type, $args = [] ) {
 }
 
 function get_post_field( $field, $post_id ) {
-	foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
-		if ( (int) $post['ID'] === (int) $post_id ) {
-			return (string) ( $post[ $field ] ?? '' );
-		}
+	$post = wp_test_inserted_post( (int) $post_id );
+	return (string) ( $post[ $field ] ?? '' );
+}
+
+function wp_test_inserted_post( int $id ): array {
+	$posts = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
+	$allocated = $posts[ $id - 9000 ] ?? [];
+	if ( $id === ( $allocated['ID'] ?? null ) ) { return $allocated; }
+	foreach ( $posts as $post ) {
+		if ( (int) $post['ID'] === $id ) { return $post; }
 	}
-	return '';
+	return [];
 }
 
 function get_post_meta( $post_id, $key, $single = false ) {
@@ -928,10 +1127,9 @@ function get_post_meta( $post_id, $key, $single = false ) {
 	if ( is_array( $lexicon_meta ) && array_key_exists( $key, $lexicon_meta ) ) {
 		return $lexicon_meta[ $key ];
 	}
-	foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
-		if ( (int) $post['ID'] === (int) $post_id ) {
-			return $post['meta_input'][ $key ] ?? '';
-		}
+	$post = wp_test_inserted_post( (int) $post_id );
+	if ( $post ) {
+		return $post['meta_input'][ $key ] ?? '';
 	}
 	foreach ( $GLOBALS['wp_test_nav_menu_items'] ?? [] as $menu_items ) {
 		foreach ( $menu_items as $item ) {
@@ -944,6 +1142,7 @@ function get_post_meta( $post_id, $key, $single = false ) {
 }
 
 function update_post_meta( $post_id, $key, $value ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) $post_id ) {
@@ -965,6 +1164,7 @@ function update_post_meta( $post_id, $key, $value ) {
 }
 
 function delete_post_meta( $post_id, $key, $value = '' ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	$store = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
 	foreach ( $store as $index => $post ) {
 		if ( (int) $post['ID'] === (int) $post_id ) {
@@ -979,7 +1179,19 @@ function delete_post_meta( $post_id, $key, $value = '' ) {
 	return false;
 }
 
+function maybe_serialize( $value ) {
+    if (is_array($value)||is_object($value)) { return serialize($value); }
+    if (is_string($value)&&('b:0;'===$value||false!==@unserialize($value))) { return serialize($value); }
+    return $value;
+}
+function maybe_unserialize( $value ) {
+    if (is_string($value)&&('b:0;'===$value||false!==@unserialize($value))) { return unserialize($value, ['allowed_classes'=>false]); }
+    return $value;
+}
+function wp_cache_set_posts_last_changed(): void { $GLOBALS['qm_last_changed']=1+($GLOBALS['qm_last_changed']??0); }
+
 function update_meta_cache( $type, $ids ) {
+	if ( ! empty( $GLOBALS['wp_test_count_core_queries'] ) ) { ++$GLOBALS['wpdb']->num_queries; }
 	unset( $type, $ids );
 	return true;
 }
@@ -1038,6 +1250,10 @@ function wp_setup_nav_menu_item( $menu_item ) {
 	return $menu_item;
 }
 
+function get_post_modified_time( $format = 'U', $gmt = false, $post = null ) {
+	return 0;
+}
+
 function get_post_status( $post_id ) {
 	return $GLOBALS['wp_test_post_statuses'][ (int) $post_id ] ?? 'publish';
 }
@@ -1091,19 +1307,19 @@ function wp_next_scheduled( string $hook ) {
 
 function wp_unschedule_event( int $timestamp, string $hook ): bool {
 	unset( $timestamp );
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return true;
 }
 
 function wp_unschedule_hook( string $hook ): int {
 	$cleared = isset( $GLOBALS['wp_test_scheduled'][ $hook ] ) ? 1 : 0;
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return $cleared;
 }
 
 function wp_clear_scheduled_hook( string $hook ): int {
 	$cleared = isset( $GLOBALS['wp_test_scheduled'][ $hook ] ) ? 1 : 0;
-	unset( $GLOBALS['wp_test_scheduled'][ $hook ] );
+	unset( $GLOBALS['wp_test_scheduled'][ $hook ], $GLOBALS['wp_test_scheduled_args'][ $hook ] );
 	return $cleared;
 }
 
@@ -1163,6 +1379,7 @@ function wp_print_styles( $handles = false ): void {
 
 function wp_schedule_single_event( int $timestamp, string $hook, array $args = [] ) {
 	$GLOBALS['wp_test_scheduled'][ $hook ] = $timestamp;
+	$GLOBALS['wp_test_scheduled_args'][ $hook ] = $args;
 	$GLOBALS['wp_test_scheduled_log'][]    = [ 'hook' => $hook, 'timestamp' => $timestamp, 'args' => $args ];
 	return true;
 }
@@ -1192,9 +1409,15 @@ function wp_remote_post( string $url, array $args = [] ) {
 }
 
 function wp_remote_request( string $url, array $args = [] ) {
+	$GLOBALS['wp_test_remote_request_calls'][] = [ 'url' => $url, 'args' => $args ];
 	$path   = (string) parse_url( $url, PHP_URL_PATH );
 	$method = strtoupper( (string) ( $args['method'] ?? 'GET' ) );
 	$body   = json_decode( (string) ( $args['body'] ?? '' ), true );
+
+	if ( '/v1/background/wake' === $path ) {
+        if ( (float) ( $args['timeout'] ?? 0 ) < 0.05 ) { return new WP_Error( 'http_request_failed', 'TLS handshake needs more than 50 ms' ); }
+        return $GLOBALS['wp_test_wake_response'] ?? [ 'response' => [ 'code' => 204 ], 'body' => '' ];
+    }
 
 	if ( '/v1/translation/telemetry/served' === $path ) {
 		return apply_filters( 'pre_http_request', false, $args, $url );
@@ -1404,6 +1627,17 @@ function wp_remote_request( string $url, array $args = [] ) {
 		];
 	}
 
+	if ( '/wp-json/translatewp/v1/indexing/drain-now' === $path && isset( $GLOBALS['wp_test_loopback_response'] ) ) {
+		return $GLOBALS['wp_test_loopback_response'];
+	}
+
+	if ( '/wp-json/translatewp/v1/indexing/drain-now' === $path && ! empty( $body['probe'] ) ) {
+		if ( ! empty( $GLOBALS['wp_test_loopback_probe_responses'] ) ) {
+			return array_shift( $GLOBALS['wp_test_loopback_probe_responses'] );
+		}
+		return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode( [ 'healthy' => true ] ) ];
+	}
+
 	if ( '/v1/translation/jobs' === $path ) {
 		$GLOBALS['wp_test_remote_posts'][] = [
 			'path' => $path,
@@ -1421,6 +1655,7 @@ function wp_remote_request( string $url, array $args = [] ) {
 					'jobId'      => '00000000-0000-4000-8000-000000000099',
 					'sourceLang' => $body['sourceLang'] ?? 'en',
 					'targetLang' => $body['targetLang'] ?? 'fr',
+					...( isset( $body['purpose'] ) ? [ 'purpose' => $body['purpose'] ] : [] ),
 				]
 			),
 		];
@@ -1513,6 +1748,9 @@ function wp_remote_get( string $url, array $args = [] ) {
 
 	$GLOBALS['wp_test_remote_get_urls'][] = $url;
 
+	if ( ! empty( $GLOBALS['wp_test_remote_get_sequence'] ) ) {
+		return array_shift( $GLOBALS['wp_test_remote_get_sequence'] );
+	}
 	if ( isset( $GLOBALS['wp_test_remote_get_response'] ) ) {
 		return $GLOBALS['wp_test_remote_get_response'];
 	}
@@ -1539,7 +1777,7 @@ function wp_remote_get( string $url, array $args = [] ) {
 				[
 					'state'     => $GLOBALS['wp_test_job_states'][ $job_match[1] ] ?? 'open',
 					'createdAt' => '2026-08-15T00:00:00Z',
-				]
+				] + ( in_array( $GLOBALS['wp_test_job_states'][ $job_match[1] ] ?? '', [ 'done', 'finished', 'completed' ], true ) ? [ 'items' => [ 'total' => 1, 'succeeded' => 1, 'failed' => 0 ] ] : [] )
 			),
 		];
 	}
@@ -2169,4 +2407,13 @@ if ( ! function_exists( 'wp_styles' ) ) {
 		}
 		return $GLOBALS['wp_test_styles'];
 	}
+}
+
+function _get_cron_array(): array {
+	$cron = [];
+	foreach ( $GLOBALS['wp_test_scheduled'] ?? [] as $hook => $at ) {
+		$cron[ $at ][ $hook ]['test'] = [ 'args' => $GLOBALS['wp_test_scheduled_args'][ $hook ] ?? [] ];
+	}
+	ksort( $cron );
+	return $cron;
 }

@@ -72,8 +72,8 @@ $GLOBALS['wp_test_post_type_map'] = [ 21 => 'page', 22 => 'page' ];
 $keepwarm->on_save_post( 21, make_post( 21 ) );
 $keepwarm->on_save_post( 22, make_post( 22 ) );
 assert_true( false === wp_next_scheduled( KeepWarm::REWARM_DEBOUNCE_HOOK ), 'Saving a protected or excluded page must schedule no rewarm' );
-$keepwarm->rewarm_saved_object( 21, 'page' );
-$keepwarm->rewarm_saved_object( 22, 'page' );
+\TranslateWP\Components\QueueExecution::run( static fn() => $keepwarm->rewarm_saved_object( 21, 'page' ) );
+\TranslateWP\Components\QueueExecution::run( static fn() => $keepwarm->rewarm_saved_object( 22, 'page' ) );
 assert_true( [] === queue_rows(), 'A protected or excluded page must never be queued by the rewarm' );
 
 // --- never-warmed object: rewarm enqueues nothing (miss path serves it) ---
@@ -82,9 +82,9 @@ rewarm_test_setup();
 $keepwarm->on_save_post( 10, make_post( 10 ) );
 assert_true( false !== wp_next_scheduled( KeepWarm::REWARM_DEBOUNCE_HOOK ), 'Publish must schedule the rewarm debounce' );
 
-$keepwarm->rewarm_saved_object( 10, 'page' );
+\TranslateWP\Components\QueueExecution::run( static fn() => $keepwarm->rewarm_saved_object( 10, 'page' ) );
 assert_true( 0 === count( queue_rows() ), 'Never-warmed objects must not be enqueued by rewarm' );
-assert_true( false === wp_next_scheduled( Indexer::DRAIN_HOOK ), 'No rows revived means no drain scheduled' );
+assert_true( [] === ( new IndexQueue() )->engine_rows( 'background_push' ), 'An unwarmed object creates no background push work' );
 
 // --- previously warmed object: done rows revive to pending extract ---
 
@@ -113,6 +113,8 @@ foreach ( queue_rows() as $row ) {
 }
 
 $keepwarm->rewarm_saved_object( 10, 'page' );
+assert_true( false !== wp_next_scheduled( Indexer::DRAIN_HOOK ), 'Rewarm outside the worker schedules the engine fallback' );
+\TranslateWP\Components\QueueExecution::run( static fn() => $keepwarm->rewarm_saved_object( 10, 'page' ) );
 $rows = queue_rows();
 assert_true( 2 === count( $rows ), 'Rewarm must not duplicate existing rows' );
 foreach ( $rows as $row ) {
@@ -156,7 +158,7 @@ assert_true( false === wp_next_scheduled( KeepWarm::REWARM_DEBOUNCE_HOOK ), 'Out
 
 rewarm_test_setup();
 $GLOBALS['wp_test_options_store']['site'] = [ 'id' => '', 'token' => '', 'home_url' => '', 'account_label' => '' ];
-$keepwarm->rewarm_saved_object( 10, 'page' );
+\TranslateWP\Components\QueueExecution::run( static fn() => $keepwarm->rewarm_saved_object( 10, 'page' ) );
 assert_true( 0 === count( queue_rows() ), 'Unconnected sites must not enqueue rewarm rows' );
 
 if ( $failures > 0 ) {

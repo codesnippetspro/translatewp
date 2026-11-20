@@ -33,6 +33,7 @@ class Lyfecycle {
     public static function activate( $network_wide ) {
 		update_option( self::REWRITE_FLUSH_OPTION, TRANSLATEWP_VERSION );
 		\TranslateWP\Components\Migrations::seed_for_fresh_install();
+		\TranslateWP\Components\BackgroundEngine::install();
 		// At uninstall the plugin is inactive, so whether it was network active is read from here.
 		if ( is_multisite() ) {
 			update_site_option( self::ACTIVATION_SCOPE_OPTION, $network_wide ? self::SCOPE_NETWORK : self::SCOPE_SITE );

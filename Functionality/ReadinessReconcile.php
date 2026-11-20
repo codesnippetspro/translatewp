@@ -3,6 +3,8 @@
 namespace TranslateWP\Functionality;
 
 use TranslateWP\Components\IndexQueue;
+use TranslateWP\Components\QueueExecution;
+use TranslateWP\Components\TranslationStore;
 use TranslateWP\Components\ReadinessBudget;
 use TranslateWP\Components\SiteConnection;
 use TranslateWP\Components\TranslationReadiness;
@@ -12,69 +14,100 @@ class ReadinessReconcile {
 	public const HOOK = 'translatewp_readiness_reconcile';
 	public const CHECK_TRANSIENT = 'translatewp_readiness_reconcile_check';
 	public const CURSOR_OPTION = 'translatewp_readiness_reconcile_cursor';
+	public const VISITOR_CURSOR_OPTION = 'translatewp_visitor_readiness_cursor';
+	public const STEP_CURSOR_OPTION = 'translatewp_step_readiness_cursor';
 	public const MAX_COLD_ATTEMPTS = 3;
 	public const MAX_DEAD_ATTEMPTS = 3;
 
-	private const CHECK_SECONDS = 600;
-	private const CATCH_UP_SECONDS = 60;
-	// A scheduled pass proves a sixth of the site, bounded by time rather than
-	// by count: as many look-ups as fit in forty seconds, every minute. A site
-	// is walked in six passes while the service answers within the budget.
-	private const PASS_SECONDS = 40;
 	private const GRACE_SECONDS = 120;
+	private const MAX_JOB_AGE_SECONDS = 900;
 	private const DEAD_BACKOFF_SECONDS = 600;
 
+	private int $rows_seen = 0;
+
+	public function step_rows_seen(): int {
+		return $this->rows_seen;
+	}
+	private ?array $step_translated = null;
+	private ?array $step_batch = null;
 	private Indexer $indexer;
 	private $lookup;
 	private $clock;
 
 	public function __construct( $plugin_name = '', $plugin_version = '', ?Indexer $indexer = null, ?callable $lookup = null, ?callable $clock = null, bool $register_hooks = true ) {
-		unset( $plugin_name, $plugin_version );
-		$this->indexer = $indexer ?? new Indexer();
+		unset( $plugin_name, $plugin_version, $register_hooks );
+		$this->indexer = $indexer ?? new Indexer( '', '', null, null, false );
 		$this->lookup  = $lookup;
-		$this->clock   = $clock ?? 'time';
-		if ( $register_hooks ) {
-			add_action( 'init', [ $this, 'maybe_schedule' ] );
-			add_action( self::HOOK, [ $this, 'run' ] );
-		}
+		$this->clock   = $clock ?? static fn (): int => time();
 	}
 
 	public function maybe_schedule(): void {
-		if ( ! SiteConnection::is_connected() || false !== get_transient( self::CHECK_TRANSIENT ) ) {
-			return;
-		}
-		// How often an unattended site re-checks. A first pass has thousands of
-		// segments to prove, so a site with work outstanding may want this far
-		// shorter than the steady-state ten minutes.
-		// A site larger than one pass is walked a pass a minute until it is
-		// covered; a site one pass covers keeps the steady ten minutes.
-		$batches  = TranslationReadiness::batch_count( $this->indexer->page_rows() );
-		$steady   = $batches <= self::batches_per_pass( $batches ) ? self::CHECK_SECONDS : self::CATCH_UP_SECONDS;
-		$interval = max( 5, (int) apply_filters( 'translatewp_readiness_reconcile_interval', $steady ) );
-		set_transient( self::CHECK_TRANSIENT, 1, $interval );
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time(), self::HOOK );
-		}
+		\TranslateWP\Components\BackgroundEngine::install();
 	}
 
 	public function run(): void {
-		if ( ! SiteConnection::is_connected() ) {
+		QueueExecution::run(
+            function (): void {
+                $this->step_run( QueueExecution::budget() );
+            }
+        );
+	}
+
+	public static function step_rows( bool $visitor_only = false ): array {
+		$queue = new IndexQueue();
+		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
+		$position = (array) get_option( $option, [] );
+		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) );
+		$rows = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 50, $offset );
+		if ( ! $rows && $offset > 0 ) {
+			$offset = 0;
+			$rows = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 50 );
+		}
+		if ( (int) ( $position['cursor'] ?? 0 ) > 0 ) {
+			$resume = $queue->engine_rows( $visitor_only ? 'visitor_ready' : 'background_ready', 1, 0, (int) $position['row'] );
+			$rows = array_merge( $resume, array_values( array_filter( $rows, static fn ( array $row ): bool => (int) $row['id'] !== (int) $position['row'] ) ) );
+		}
+		return array_slice( $rows, 0, 50 );
+	}
+
+	public function step_run( ReadinessBudget $budget, bool $visitor_only = false, ?array $selected = null ): void {
+		$this->rows_seen = 0;
+		if ( ! SiteConnection::is_connected() || $budget->remaining_seconds() <= 0 ) {
 			return;
 		}
-		// Unattended, one batch per ten minutes would take half a day to walk a
-		// large site; the scheduled pass proves a share of it each time.
-		$batches = TranslationReadiness::batch_count( $this->indexer->page_rows() );
-		$per_pass = static fn ( int $value ): int => max( $value, self::batches_per_pass( $batches ) );
-		$seconds  = static fn ( float $value ): float => $value > 0 ? $value : (float) self::PASS_SECONDS;
-		add_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
-		add_filter( 'translatewp_readiness_pass_seconds', $seconds );
+		$option = $visitor_only ? self::VISITOR_CURSOR_OPTION : self::STEP_CURSOR_OPTION;
+		$position = (array) get_option( $option, [] );
+		$offset = max( 0, (int) ( $position['offset'] ?? 0 ) );
+		$rows = $selected ?? self::step_rows( $visitor_only );
+		$this->step_batch = $rows;
+		$this->rows_seen = 0;
+		$this->step_translated = [];
 		try {
-			$result = $this->reconcile( (int) get_option( self::CURSOR_OPTION, 0 ), new ReadinessBudget( self::PASS_SECONDS ) );
+			$result = $this->reconcile( (int) ( $position['cursor'] ?? 0 ), $budget );
 		} finally {
-			remove_filter( 'translatewp_readiness_batches_per_pass', $per_pass );
-			remove_filter( 'translatewp_readiness_pass_seconds', $seconds );
+			$this->step_batch = null;
 		}
-		update_option( self::CURSOR_OPTION, (int) ( $result['cursor'] ?? 0 ) );
+		$translated = $this->step_translated;
+		$this->step_translated = null;
+		if ( $translated ) {
+			$this->indexer->mark_translated( array_values( array_unique( $translated ) ) );
+		}
+		if ( empty( $result['lookupUnavailable'] ) && ! QueueExecution::expired() ) {
+			$this->rows_seen += ( new IndexQueue() )->defer_confirmations( $rows );
+		}
+		$this->rows_seen += count( $translated ) + $result['requeued'] + $result['failed'] + $result['retried'];
+		$next = (int) ( $result['cursor'] ?? 0 );
+		if ( $rows ) {
+			update_option(
+                $option,
+                [
+					'offset' => 0,
+					'row' => (int) $rows[ 0 === $next ? count( $rows ) - 1 : 0 ]['id'],
+					'cursor' => $next,
+				],
+                false
+            );
+		}
 	}
 
 	public static function batches_per_pass( int $batches ): int {
@@ -82,10 +115,57 @@ class ReadinessReconcile {
 	}
 
 	public function reconcile( int $cursor = 0, ?ReadinessBudget $budget = null ): array {
+		$result = [
+			'cursor' => $cursor,
+			'language' => '',
+			'hashes' => [],
+			'rowIds' => [],
+			'legacyRowIds' => [],
+			'requeued' => 0,
+			'failed' => 0,
+			'retried' => 0,
+			'translated' => 0,
+		];
+		QueueExecution::run(
+            function () use ( &$result, $cursor, $budget ): void {
+                $result = $this->reconcile_unlocked( $cursor, $budget );
+            }
+        );
+		return $result;
+	}
+
+	private function reconcile_unlocked( int $cursor, ?ReadinessBudget $budget ): array {
 		$budget = $budget ?? new ReadinessBudget();
-		$jobs = $this->indexer->poll_remembered_jobs( $budget );
-		$rows   = $this->indexer->page_rows();
-		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget );
+		$rows = $this->step_batch ?? $this->indexer->page_rows();
+		$jobs = $this->indexer->poll_remembered_jobs( $budget, $this->step_batch );
+		if ( \TranslateWP\Components\ProviderHold::waiting() ) {
+			return [
+				'cursor' => $cursor,
+				'lookupUnavailable' => true,
+				'requeued' => 0,
+				'failed' => 0,
+				'retried' => 0,
+				'translated' => 0,
+			];
+		}
+		$rows = array_values( array_filter( $rows, static fn( array $row ): bool => (int) get_post_meta( (int) $row['id'], '_twp_reader_not_before', true ) <= time() ) );
+		$result = TranslationReadiness::refresh( $rows, $cursor, $this->lookup, $budget, null !== $this->step_batch );
+		if ( ! empty( $result['lookupUnavailable'] ) ) {
+			$finished = [];
+			foreach ( $rows as $row ) {
+				if ( IndexQueue::STATUS_DONE === $row['status'] && empty( $row['translated'] ) && empty( $row['retranslating'] ) && 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) ) {
+					$finished[] = (int) $row['id'];
+				}
+			}
+			$this->indexer->mark_translated( $finished );
+			$result['translated'] = count( $finished );
+			return $result + [
+				'requeued' => 0,
+				'failed' => 0,
+				'retried' => 0,
+				'translated' => 0,
+			];
+		}
 		$now    = (int) call_user_func( $this->clock );
 		$ids    = array_unique( array_merge( $result['rowIds'], $result['legacyRowIds'] ) );
 		$by_id  = [];
@@ -98,22 +178,45 @@ class ReadinessReconcile {
 		// A done row counts as translated once its job finished or every one of
 		// its segments is proven; one status call per job per pass.
 		foreach ( $rows as $row ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
 			if ( IndexQueue::STATUS_DONE !== (string) $row['status'] || ! empty( $row['translated'] ) ) {
 				continue;
 			}
 			// A finished job is evidence; so are proven segments. A cancelled,
 			// forgotten or unrecorded job is not: the proofs decide for those.
+			if ( ! empty( $row['retranslating'] ) ) {
+				if ( 'open' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) || ! TranslationReadiness::is_ready( $row ) ) {
+					continue;
+				}
+				$object_id = 'miss' === $row['object_type'] ? 0 : (int) $row['object_id'];
+				TranslationStore::hold_overwrite( $row['url'], $object_id, $row['language'], 0 );
+				TranslationStore::resolve_pending( $row['url'], $object_id, $row['language'], static fn ( string $language, array $hashes ): array => array_intersect_key( $result['answers'][ $language ] ?? [], array_fill_keys( $hashes, true ) ), $budget );
+				if ( TranslationStore::pending_count( $row['url'], $row['language'], $object_id ) > 0 ) {
+					continue;
+				}
+			}
 			if ( TranslationReadiness::is_ready( $row ) || 'done' === $this->indexer->job_outcome_for_row( (int) $row['id'], $jobs, false ) ) {
 				$translated[] = (int) $row['id'];
 			}
 		}
-		$this->indexer->mark_translated( $translated );
+		if ( null !== $this->step_translated ) {
+			$this->step_translated = array_merge( $this->step_translated, $translated );
+		} else {
+			$this->indexer->mark_translated( $translated );
+		}
 		foreach ( $ids as $id ) {
+			if ( QueueExecution::expired() ) {
+				break;
+			}
 			$row = $by_id[ (int) $id ] ?? null;
 			if ( ! is_array( $row ) || (int) $row['updated'] > $now - self::GRACE_SECONDS ) {
 				continue;
 			}
-			if ( TranslationReadiness::is_ready( $row ) ) {
+			if ( 'open' === $this->indexer->job_outcome_for_row( (int) $id, $jobs, false ) && (int) $row['updated'] <= $now - self::MAX_JOB_AGE_SECONDS ) {
+				$cold[] = $row + [ 'priority' => Indexer::PRIORITY_DEFAULT ];
+			} elseif ( TranslationReadiness::is_ready( $row ) ) {
 				$ready[] = (int) $id;
 			} elseif ( $this->indexer->job_finished_for_row( (int) $id, $jobs, false )
 				&& ! TranslationReadiness::sweep_incomplete( $row ) ) {

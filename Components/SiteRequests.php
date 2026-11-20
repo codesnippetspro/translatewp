@@ -5,6 +5,7 @@ namespace TranslateWP\Components;
 class SiteRequests {
 
 	public const DEFAULT_TIMEOUT_SECONDS = 15;
+	private const WAKE_TIMEOUT_SECONDS = 1.5;
 	private const MAX_JOB_EVENTS_LIMIT    = 500;
 
 	public static function bearer_token(): string {
@@ -30,6 +31,7 @@ class SiteRequests {
 
 		$headers = [
 			'Authorization'         => 'Bearer ' . $token,
+			'X-TranslateWP-Engine'  => '1',
 			'X-TranslateWP-Version' => defined( 'TRANSLATEWP_VERSION' ) ? (string) TRANSLATEWP_VERSION : '',
 		];
 
@@ -141,7 +143,7 @@ class SiteRequests {
 		return self::decode_response( $response, $path );
 	}
 
-	public static function post( string $path, array $body, int|float $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
+	public static function post( string $path, array|object $body, int|float $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {
 		if ( '' === self::bearer_token() ) {
 			return new \WP_Error(
 				'site_not_connected',
@@ -167,6 +169,22 @@ class SiteRequests {
 		);
 
 		return self::decode_response( $response, $path );
+	}
+
+	public static function notify( string $path, array|object $body ): bool {
+		if ( '' === self::bearer_token() ) {
+			return false;
+		}
+		$response = wp_remote_post(
+            RemoteApi::endpoint( $path ),
+            [
+				'timeout' => self::WAKE_TIMEOUT_SECONDS,
+				'blocking' => true,
+				'headers' => array_merge( [ 'Content-Type' => 'application/json' ], self::outbound_headers() ),
+				'body' => wp_json_encode( $body ),
+			]
+        );
+		return ! is_wp_error( $response ) && 204 === (int) wp_remote_retrieve_response_code( $response );
 	}
 
 	public static function put( string $path, array $body, int $timeout_seconds = self::DEFAULT_TIMEOUT_SECONDS ) {

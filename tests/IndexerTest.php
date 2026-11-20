@@ -176,6 +176,16 @@ class InMemoryIndexQueue extends IndexQueue {
 		return $claimed;
 	}
 
+	public function remember_batch_versions( array $ids, string $unbatched_job = '' ): bool { return true; }
+
+	public function complete_delivery( array $delivery ): int {
+		$completed = 0;
+		foreach ( $delivery['rows'] as $row ) {
+			$completed += $this->complete( (int) $row['id'] ) ? 1 : 0;
+		}
+		return $completed;
+	}
+
 	private function find( int $id ): ?string {
 		foreach ( $this->rows as $key => $row ) {
 			if ( $row['id'] === $id ) {
@@ -256,7 +266,7 @@ class InMemoryIndexQueue extends IndexQueue {
 		return true;
 	}
 
-	public function fail( int $id, string $reason ): bool {
+	public function fail( int $id, string $reason, bool $backoff = false ): bool {
 		$key = $this->find( $id );
 		if ( null === $key || self::STATUS_CLAIMED !== $this->rows[ $key ]['status'] ) {
 			return false;
@@ -564,7 +574,7 @@ $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] = time() - 120;
 $indexing = new \TranslateWP\Functionality\Endpoints\Indexing( 'translatewp', TRANSLATEWP_VERSION, $indexer );
 $status   = $indexing->status( new WP_REST_Request( 'GET', '/translatewp/v1/indexing/status', [], [], '' ) );
 assert_true( 0 === $queue->counts()['es']['done'], 'Status must return without waiting for an overdue translation drain' );
-assert_true( [] !== array_filter( $GLOBALS['wp_test_actions_fired'] ?? [], static fn( $event ) => 'translatewp_loopback_kick' === $event['tag'] ), 'Status must preserve the asynchronous constrained-host drain kick' );
+assert_true( [] === array_filter( $GLOBALS['wp_test_actions_fired'] ?? [], static fn( $event ) => 'translatewp_loopback_kick' === $event['tag'] ), 'Reading status must not call the site worker' );
 
 // --- Drain happy path: one job per language, batches pushed, closeInput, rows done ---
 wp_test_reset( connected_options() );
@@ -629,10 +639,10 @@ $index_complete_posts = static fn(): array => array_values( array_filter( $GLOBA
 assert_true( 1 === count( $index_complete_posts() ), 'Completed language must be reported once' );
 assert_true( 'es' === $index_complete_posts()[0]['body']['language'], 'Completion must carry the language' );
 $purge_events = static fn(): array => array_values( array_filter( $GLOBALS['wp_test_actions_fired'], static fn( array $event ): bool => 'translatewp_page_cache_purged' === $event['tag'] ) );
-assert_true( 1 === count( $purge_events() ) && 'first_pass_complete' === ( $purge_events()[0]['args'][0] ?? '' ), 'A language completing its first pass purges the page caches once, got ' . count( $purge_events() ) );
+assert_true( 0 === count( $purge_events() ), 'Completion does not purge source page caches, got ' . count( $purge_events() ) );
 $indexer->drain_tick();
 assert_true( 1 === count( $index_complete_posts() ), 'A second drain must not re-report completion' );
-assert_true( 1 === count( $purge_events() ), 'A drain that completes nothing new purges nothing' );
+assert_true( 0 === count( $purge_events() ), 'A drain that completes nothing new purges nothing' );
 $status = $indexer->status();
 assert_true( true === $status['languages']['es']['complete'] && true === $status['languages']['es']['reported'], 'Status must show lv complete and reported' );
 
@@ -1030,7 +1040,7 @@ $indexer = make_indexer( $queue );
 $queue->enqueue( [ [ 'object_type' => 'page', 'object_id' => 1, 'url' => 'https://example.com/?p=1', 'language' => 'es', 'priority' => 100 ] ] );
 unset( $GLOBALS['wp_test_scheduled'][ Indexer::DRAIN_HOOK ] );
 assert_true( 1 === $queue->counts()['es']['pending_extract'], 'Precondition: one row waits for extraction' );
-assert_true( false === $indexer->status()['scheduledTasksLate'], 'Rows waiting for extraction with no drain scheduled are not late' );
+assert_true( true === $indexer->status()['scheduledTasksLate'], 'Background extraction with no drain scheduled is late' );
 
 // --- Scheduled-tasks-late case a: push work waits but the drain is not scheduled at all ---
 wp_test_reset( connected_options() );

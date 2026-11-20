@@ -132,19 +132,11 @@ remove_filter( 'translatewp_readiness_skip_proven' );
 wp_test_reset( [ 'site' => [ 'id' => 'site', 'token' => 'secret' ] ] );
 $reconcile = new ReadinessReconcile( 'translate', '1.0' );
 $reconcile->maybe_schedule();
-$first_check = get_transient( ReadinessReconcile::CHECK_TRANSIENT );
-assert_true( false !== $first_check, 'A check is recorded so the next one waits' );
-
-wp_test_reset( [ 'site' => [ 'id' => 'site', 'token' => 'secret' ] ] );
-add_filter( 'translatewp_readiness_reconcile_interval', static fn(): int => 30 );
-$reconcile = new ReadinessReconcile( 'translate', '1.0' );
+$first_check = wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK );
+assert_true( false !== $first_check && $first_check >= time() + 59, 'The shared fallback is scheduled once with the contract minute pace' );
 $reconcile->maybe_schedule();
-$check_expires_in = ( $GLOBALS['wp_test_transient_expirations'][ ReadinessReconcile::CHECK_TRANSIENT ] ?? 0 ) - time();
-assert_true(
-	$check_expires_in >= 29 && $check_expires_in <= 30,
-	'A site with work outstanding can re-check far sooner than the settled interval'
-);
-remove_filter( 'translatewp_readiness_reconcile_interval' );
+assert_true( $first_check === wp_next_scheduled( \TranslateWP\Components\BackgroundEngine::CRON_HOOK ), 'Repeated scheduling keeps one background step rather than a second readiness loop' );
+assert_true( false === get_transient( ReadinessReconcile::CHECK_TRANSIENT ), 'Readiness no longer needs a visitor-time polling gate' );
 
 /* -------------------------------------------------------------------------
  * Skipping the look-up must not make a settled page flicker not-ready
