@@ -145,7 +145,7 @@ Use the plugin's Support screen or the [WordPress.org support forum](https://wor
 
 1. The first step of the setup wizard connects your site to your TranslateWP account.
 2. The last step of the setup wizard shows your first pages translated and lets you finish.
-3. The dashboard shows today's translations, your usage and the pages read most in other languages.
+3. The dashboard shows how many page translations are ready in each language and what needs your attention.
 4. Set how the language switcher looks and where it sits, and see each change in the preview.
 5. Describe your site and choose the writing style and tone of the translations.
 6. The Lexicon keeps names and terms translated the same way on every page.
