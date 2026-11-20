@@ -1,4 +1,4 @@
-import { useTranslationReadiness } from '@/shared/hooks/useTranslationReadiness';
+import { useTranslationReadinessState } from '@/shared/hooks/useTranslationReadiness';
 import { useQuery } from "@tanstack/react-query";
 import { __, sprintf } from "@wordpress/i18n";
 
@@ -11,7 +11,7 @@ import { ConnectionStatusText } from "@/shared/components/connection/ConnectionS
 import { getCountryFlagFromLocale } from "@/shared/lib/languages";
 import { getLanguageNameFromLocale } from "@/shared/lib/languages/languageName";
 import { InfoTip } from "@/shared/components/infoTip";
-import { getDashboardMetricsQueryOptions } from "@/shared/query-options/admin";
+import { getDashboardMetricsQueryOptions, getIndexPagesQueryOptions } from "@/shared/query-options/admin";
 import { TranslationPausedNotice } from "@/apps/admin/components/Dashboard/TranslationPausedNotice";
 import { FinishSetupBanner } from "@/apps/admin/components/Dashboard/FinishSetupBanner";
 import { OverviewNextAction } from "@/apps/admin/components/Dashboard/OverviewNextAction";
@@ -21,8 +21,10 @@ import { ProInstallCard } from '@/apps/admin/components/Dashboard/ProInstallCard
 import { ProWelcome } from '@/apps/admin/components/Dashboard/ProWelcome';
 import { pendingProAction } from '@/shared/lib/pro/proState';
 import { QuotaCard } from '@/apps/admin/components/Dashboard/QuotaCard';
+import { ReadinessInsights } from './ReadinessInsights';
+import { InsightGauge, InsightProgress, UsageHistory } from './InsightCharts';
 
-const formatNumber = (value: number) => new Intl.NumberFormat("en-US").format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat().format(value);
 
 const ShareBar = ({ value, color }: { value: number; color: string }) => (
     <div className="flex items-center gap-2 w-full">
@@ -41,7 +43,8 @@ export const Dashboard = () =>
     const { data, isLoading, isError } = useQuery(getDashboardMetricsQueryOptions());
     const { data: connectStatus, isPending: connectStatusPending } = useQuery(getConnectStatusQueryOptions());
     const connected = connectStatus?.connected === true;
-    const liveStatus = useTranslationReadiness(!isLoading);
+    const { status: liveStatus, unconfirmed } = useTranslationReadinessState(!isLoading);
+    const { data: pages } = useQuery({ ...getIndexPagesQueryOptions(), enabled: false, refetchInterval: false });
     // The install card owns the install and activate states; the
     // plain Pro status stays for the update and payment timeline states.
     const proCardShown = pendingProAction(connectStatus) !== null;
@@ -87,7 +90,11 @@ export const Dashboard = () =>
                 )}
 
                 {data && !isLoading && (
-                    <DashboardMetricsContent data={data} connected={connected} />
+                    <>
+                        <ReadinessInsights data={data} status={liveStatus} pages={pages} unconfirmed={unconfirmed} />
+                        <DashboardMetricsContent data={data} connected={connected}
+                            translationsUnconfirmed={unconfirmed} />
+                    </>
                 )}
                 {data && !isLoading && (data.anchorMissing?.length ?? 0) > 0 && (
                     <p className="m-0 text-sm text-translatewp-muted" data-anchor-missing>
@@ -115,54 +122,42 @@ export const Dashboard = () =>
     );
 }
 
-export const SummaryStats = ({ data }: { data: DashboardMetrics }) =>
-{
-    const summaryStats = [
-        {
-            label: __('Page translations today', 'translate'),
-            value: formatNumber(data.translationsToday),
-            helper: __('finished since midnight, one per page and language', 'translate'),
-            explanation: sprintf(
-                /* translators: %s: number of text segments served from the translation cache today. */
-                __('A page counts once per language when its translation finishes. Separately, %s pieces of already translated text (headings, paragraphs, button labels) were shown to visitors today without a new translation.', 'translate'),
-                formatNumber(data.cacheHitsToday)
-            ),
-        },
-        {
-            label: __('Reused translations', 'translate'),
-            value: `${data.cacheHitRatio}%`,
-            helper: __('of what visitors read in the last 48 hours was already translated', 'translate'),
-            explanation: __('Of all the text visitors opened in the last 48 hours, this share came from translations the site already had, so it cost nothing and showed at once. The rest was new or changed text, translated fresh.', 'translate'),
-        },
-    ];
+export const SummaryStats = ({ data, unconfirmed = false }: {
+    data: DashboardMetrics; unconfirmed?: boolean;
+}) => (
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card title={__('Page translations in the last 24 hours', 'translate')}>
+            <span className="text-3xl font-semibold text-translatewp-neutral">
+                {unconfirmed ? __('Unavailable', 'translate') : formatNumber(data.translationsToday)}
+            </span>
+            <p className="m-0 text-sm text-translatewp-muted">
+                {__('Currently ready pages completed in the last 24 hours, counted once per language.', 'translate')}
+            </p>
+        </Card>
+        <Card title={__('Reused translations', 'translate')}>
+            {data.usageAvailable === false && <p className="m-0 text-sm">
+                {__('Usage data is unavailable.', 'translate')}
+            </p>}
+            {data.usageAvailable !== false && data.cacheLookups === 0 && <p className="m-0 text-sm">
+                {__('No translation lookups recorded today or yesterday.', 'translate')}
+            </p>}
+            {data.usageAvailable !== false && data.cacheLookups !== 0 && <InsightGauge
+                value={data.cacheHitRatio}
+                label={__('Share of lookups served from existing translations today and yesterday.', 'translate')}
+            />}
+        </Card>
+    </div>
+);
 
-    return (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {summaryStats.map((stat) => (
-                <div
-                    key={stat.label}
-                    className="flex flex-col gap-2 rounded-lg border border-translatewp-border bg-white p-6"
-                >
-                    <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-translatewp-muted">
-                        {stat.label}
-                        <InfoTip text={stat.explanation} />
-                    </span>
-                    <span className="text-3xl font-semibold text-translatewp-neutral">
-                        {stat.value}
-                    </span>
-                    <span className="text-sm text-translatewp-muted">{stat.helper}</span>
-                </div>
-            ))}
-        </div>
-    );
-};
-
-export const DashboardMetricsContent = ({ data, connected = false }: { data: DashboardMetrics; connected?: boolean }) =>
+export const DashboardMetricsContent = ({ data, connected = false, translationsUnconfirmed = false }: {
+    data: DashboardMetrics; connected?: boolean; translationsUnconfirmed?: boolean;
+}) =>
 {
     return (
         <>
-            <Section heading={__("Today", "translate")} description={__("Since midnight.", "translate")}>
-                <SummaryStats data={data} />
+            <Section heading={__("Recent activity", "translate")}>
+                <SummaryStats data={data} unconfirmed={translationsUnconfirmed} />
+                <UsageHistory data={data} />
             </Section>
 
             <Section
@@ -174,9 +169,11 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     {connected && <QuotaCard />}
 
-                    <Card title={__('Language usage', 'translate')}>
+                    <Card title={__('Ready page translations by language', 'translate')}>
                         {data.languageUsage.length === 0 ? (
-                            <p className="m-0 text-sm text-translatewp-muted">{__('No translation data yet.', 'translate')}</p>
+                            <p className="m-0 text-sm text-translatewp-muted">{translationsUnconfirmed
+                                ? __('Readiness could not be refreshed.', 'translate')
+                                : __('No translation data yet.', 'translate')}</p>
                         ) : (
                             <Table>
                                 <TableHeaderRow>
@@ -205,12 +202,14 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
 
             <Section
                 heading={__("Content", "translate")}
-                description={__("The pages visitors read most in another language, and the terms you fixed lately.", "translate")}
+                description={__("Recently completed translations and terminology rules for your content.", "translate")}
             >
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                    <Card title={__('Most translated content', 'translate')}>
+                    <Card title={__('Recently translated pages', 'translate')}>
                         {data.recentContent.length === 0 ? (
-                            <p className="m-0 text-sm text-translatewp-muted">{__('No translated content yet.', 'translate')}</p>
+                            <p className="m-0 text-sm text-translatewp-muted">{translationsUnconfirmed
+                                ? __('Readiness could not be refreshed.', 'translate')
+                                : __('No translated content yet.', 'translate')}</p>
                         ) : (
                             <Table>
                                 <TableHeaderRow>
@@ -233,6 +232,30 @@ export const DashboardMetricsContent = ({ data, connected = false }: { data: Das
                     </Card>
 
                     <Card title={__('Lexicon entries', 'translate')} badge={<InfoTip text={__('The Lexicon fixes how a word or phrase is translated: a brand name that stays as it is, a product name, or a term with one agreed translation per language. Every page that uses it follows the rule.', 'translate')} />} action={data.recentLexicon.length > 0 ? <CardLink href="admin.php?page=translatewp-lexicon">{__('View all', 'translate')}</CardLink> : undefined}>
+                        {data.lexiconSummary && (
+                            <div className="flex flex-col gap-3">
+                                <p className="m-0 text-sm text-translatewp-muted">
+                                    {sprintf(
+                                        // translators: 1: total Lexicon terms, 2: terms applying to every language.
+                                        __('Total terms: %1$d. Terms for every language: %2$d.', 'translate'),
+                                        data.lexiconSummary.total, data.lexiconSummary.global
+                                    )}
+                                </p>
+                                {Object.entries(data.lexiconSummary.languages).map(([locale, count]) => (
+                                    <div key={locale} className="flex flex-col gap-1">
+                                        <div className="flex justify-between text-sm">
+                                            <span>{getLanguageNameFromLocale(locale) || locale}</span>
+                                            <span>{formatNumber(count)}</span>
+                                        </div>
+                                        <InsightProgress value={count} total={data.lexiconSummary!.total}
+                                            label={getLanguageNameFromLocale(locale) || locale} />
+                                    </div>
+                                ))}
+                                <p className="m-0 text-xs text-translatewp-muted">
+                                    {__('Applicable terms per language. A term can apply to more than one language.', 'translate')}
+                                </p>
+                            </div>
+                        )}
                         {data.recentLexicon.length === 0 ? (
                             <div className="flex flex-col items-start gap-3">
                                 <p className="m-0 text-sm text-translatewp-muted">{__('No lexicon entries yet. Fix how a name, a product or a phrase is translated, in every language, once.', 'translate')}</p>
