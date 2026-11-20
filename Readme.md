@@ -174,6 +174,7 @@ AI translation, Lexicon, language switchers and role controls for WordPress. Bac
 * Fixed: the TranslateWP Pro update now shows the TranslateWP logo on the Updates and Plugins screens.
 * Fixed: text in the Query Monitor 4 panel is no longer picked up for translation.
 * Fixed: the TranslateWP controls and notices that a logged-in manager sees on the front end keep their own look when a theme or page builder styles buttons and text. The language switcher your visitors see is unchanged.
+* Fixed: in the setup wizard, the Style and tone step fits its card, so both sliders are visible without scrolling. Buttons across the admin screens now share the same corners.
 * Improved: accessibility of the setup wizard and the Translations screens. The languages table shows each language's status, and Support has its own page.
 * A dismissable notice about the current Black Friday offer is shown to administrators on TranslateWP screens.
 
