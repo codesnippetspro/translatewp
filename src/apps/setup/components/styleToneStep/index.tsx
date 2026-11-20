@@ -32,7 +32,7 @@ export const StyleToneStep = () =>
     }, [proActive, setStyle, setTone]);
 
     return (
-        <div className="setup-style-tone flex flex-col gap-5">
+        <div className="setup-style-tone flex flex-col gap-6">
             <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                     <Palette className="w-5.5 h-5.5 text-translatewp-primary!" />
@@ -44,7 +44,7 @@ export const StyleToneStep = () =>
             </div>
 
             <ManagedByNetwork group="style_tone">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2" data-style-tone-grid>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-8 md:grid-cols-2" data-style-tone-grid>
                 <div className="flex flex-col gap-3">
                     <h3 className="text-sm! font-semibold m-0">{__('Style', 'translate')}</h3>
                     {proActive
