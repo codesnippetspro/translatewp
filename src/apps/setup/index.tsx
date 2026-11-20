@@ -16,7 +16,7 @@ import { StepSelector } from '@/apps/setup/components/stepSelector';
 import { Footer } from '@/apps/setup/components/footer';
 
 import { LanguagesStep } from '@/apps/setup/components/languagesStep';
-import { ConnectStep } from '@/apps/setup/components/connectStep';
+import { ConnectProAction, ConnectStep } from '@/apps/setup/components/connectStep';
 import { TranslationStep } from '@/apps/setup/components/translationStep';
 import { ReadSiteStep } from '@/apps/setup/components/readSiteStep';
 import { StyleToneStep } from '@/apps/setup/components/styleToneStep';
@@ -47,18 +47,20 @@ export const Setup = () =>
 
                 <div className={WIZARD_BODY_CLASS}>
                 { connectStatus?.connected && currentStep.id !== 'connect' && (
-                    <div className="mx-8 mt-6 flex items-center gap-2 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3">
+                    <div className="mx-8 mt-6 flex flex-wrap items-center gap-2 rounded-sm border border-translatewp-border bg-translatewp-selection px-4 py-3">
                         <CheckCircle2 size={18} className="text-translatewp-primary shrink-0" aria-hidden="true" />
                         <ConnectionStatusText />
+                        {/* The last step offers Pro together with finishing. */}
+                        { !isLastStep && <ConnectProAction /> }
                         { (siteRead || currentStep.id !== 'read-site') && <SiteLanguagePicker /> }
                     </div>
                 ) }
 
                 {/* Step content */}
-                <section className='setup-step p-8 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto'>
+                <section aria-label={currentStep.label} tabIndex={0} className='setup-step p-8 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto'>
                     { currentStep.id === 'connect' && <ConnectStep /> }
                     { currentStep.id === 'languages' && <LanguagesStep /> }
-                    { currentStep.id === 'translation' && <TranslationStep enabled={finishEnabled} pending={finishPending} proAction={proAction} proPending={proPending} finish={() => void nextStep()} finishWithPro={() => void finishWithPro()} /> }
+                    { currentStep.id === 'translation' && <TranslationStep enabled={finishEnabled} pending={finishPending} proAction={proAction} proPending={proPending} finishWithPro={() => void finishWithPro()} /> }
                     { currentStep.id === 'read-site' && <ReadSiteStep /> }
                     { currentStep.id === 'style-tone' && <StyleToneStep /> }
                 </section>
@@ -70,6 +72,8 @@ export const Setup = () =>
                     isFirstStep={isFirstStep}
                     isLastStep={isLastStep}
                     stepSaving={stepSaving}
+                    finishDisabled={!finishEnabled || finishPending || proPending}
+                    finishPending={finishPending}
                     nextStep={nextStep}
                     previousStep={previousStep}
                 />

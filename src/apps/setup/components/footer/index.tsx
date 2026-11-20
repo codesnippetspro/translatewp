@@ -12,16 +12,18 @@ interface FooterProps
     isFirstStep: boolean;
     isLastStep: boolean;
     stepSaving?: boolean;
+    finishDisabled?: boolean;
+    finishPending?: boolean;
     nextStep: () => void;
     previousStep: () => void;
 }
 
-export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = false, nextStep, previousStep }: FooterProps) =>
+export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = false, finishDisabled = false, finishPending = false, nextStep, previousStep }: FooterProps) =>
 {
     const stepError = useStepStore(state => state.stepError);
 
     return (
-        <div className={`px-6 py-4.5 flex flex-wrap items-center gap-3 border-t border-translatewp-border ${isFirstStep ? 'justify-end' : 'justify-between'}`}>
+        <footer className={`px-6 py-4.5 flex flex-wrap items-center gap-3 border-t border-translatewp-border ${isFirstStep ? 'justify-end' : 'justify-between'}`}>
             {!isFirstStep && (
                 <Button variant='secondary' onClick={previousStep} className='rounded-sm!'>
                     {__('Previous', 'translate')}
@@ -33,7 +35,21 @@ export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = fals
             )}
 
             {isLastStep
-                ? <HomepageLinks />
+                ? (
+                    <>
+                        <HomepageLinks />
+                        <Button
+                            variant='primary'
+                            onClick={() => void nextStep()}
+                            className='rounded-sm!'
+                            disabled={finishDisabled}
+                            isBusy={finishPending}
+                            data-finish-setup
+                        >
+                            {__('Finish', 'translate')}
+                        </Button>
+                    </>
+                )
                 : currentStep.id === 'connect'
                     ? <ConnectSiteButton label={__('Connect your site', 'translate')} />
                     : (
@@ -47,6 +63,6 @@ export const Footer = ({ currentStep, isFirstStep, isLastStep, stepSaving = fals
                             {__('Continue', 'translate')}
                         </Button>
                     )}
-        </div>
+        </footer>
     );
 }

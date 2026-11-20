@@ -52,6 +52,7 @@ export const SettingsConnection = () =>
                 <div>
                     <Button
                         variant="secondary"
+                        className="rounded-sm!"
                         disabled={restartMutation.isPending}
                         isBusy={restartMutation.isPending}
                         onClick={() => restartMutation.mutate()}
@@ -73,7 +74,7 @@ export const SettingsConnection = () =>
                         {__('Choose which settings the network shares, locks or leaves to each subsite.', 'translate')}
                     </p>
                     <div>
-                        <Button variant="secondary" href={networkUrl}>{__('Open network settings', 'translate')}</Button>
+                        <Button variant="secondary" className="rounded-sm!" href={networkUrl}>{__('Open network settings', 'translate')}</Button>
                     </div>
                 </section>
             )}

@@ -24,6 +24,10 @@ class PageTextTranslator {
 	// Attributes whose value is shown or read out to the visitor.
 	public const TRANSLATED_ATTRIBUTES = [ 'alt', 'title', 'placeholder', 'aria-label' ];
 
+	// Head tags whose content a search result or a shared link shows. Like the
+	// <title>, a missing translation here never counts as missing text.
+	public const TRANSLATED_META = [ 'description', 'og:title', 'og:description', 'twitter:title', 'twitter:description' ];
+
 	// A comment, a doctype or declaration, or a tag; attribute values may hold ">".
 	private const TOKEN = '/(<!--.*?-->|<![^>]*>|<\/?[a-zA-Z][^>"\']*(?:(?:"[^"]*"|\'[^\']*\')[^>"\']*)*>)/s';
 
@@ -33,9 +37,10 @@ class PageTextTranslator {
 	 * @param string $html       The rendered page.
 	 * @param array  $map        Source text => translated text.
 	 * @param array  $attributes The attributes to translate; alt text is left out on a site that is not entitled to it.
+	 * @param array  $meta       The head meta tags, by name or property, whose content is translated.
 	 * @return array{html: string, translated: int, missing: int, missing_texts: string[]}
 	 */
-	public static function translate( string $html, array $map, array $attributes = self::TRANSLATED_ATTRIBUTES ): array {
+	public static function translate( string $html, array $map, array $attributes = self::TRANSLATED_ATTRIBUTES, array $meta = self::TRANSLATED_META ): array {
 		$normalized = [];
 		foreach ( $map as $source => $translation ) {
 			if ( PlainText::has_letters( (string) $source ) ) {
@@ -61,7 +66,7 @@ class PageTextTranslator {
 				// An element that opts out covers its own attributes too.
 				$output .= ( $opted_out || ( null !== $skip_from && self::opts_out( $token ) ) )
 					? $token
-					: self::translate_attributes( $token, $normalized, $attributes );
+					: self::translate_meta_content( self::translate_attributes( $token, $normalized, $attributes ), $normalized, $meta );
 				continue;
 			}
 
@@ -114,6 +119,15 @@ class PageTextTranslator {
 		);
 
 		return is_string( $replaced ) ? $replaced : $tag;
+	}
+
+	/** A listed head meta tag with its content translated, where a translation is known. */
+	private static function translate_meta_content( string $tag, array $normalized, array $meta ): string {
+		if ( ! $meta || 1 !== preg_match( '/^<meta\s/i', $tag ) || 1 !== preg_match( '/\s(?:name|property)\s*=\s*(["\'])(.*?)\1/is', $tag, $name ) ) {
+			return $tag;
+		}
+
+		return in_array( strtolower( trim( $name[2] ) ), $meta, true ) ? self::translate_attributes( $tag, $normalized, [ 'content' ] ) : $tag;
 	}
 
 	/** The text with its translation swapped in and its own edge spaces kept, null when none is known. */

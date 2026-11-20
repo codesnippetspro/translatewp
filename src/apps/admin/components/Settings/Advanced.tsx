@@ -73,6 +73,7 @@ export const SettingsAdvanced = () =>
                 <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
+                        className="rounded-sm!"
                         isDestructive
                         disabled={clearCacheMutation.isPending}
                         isBusy={clearCacheMutation.isPending}
@@ -144,6 +145,7 @@ export const SettingsAdvanced = () =>
                 <div>
                     <Button
                         variant="primary"
+                        className="rounded-sm!"
                         isDestructive
                         disabled={confirmPhrase !== CONFIRM_PHRASE || resetMutation.isPending}
                         isBusy={resetMutation.isPending}

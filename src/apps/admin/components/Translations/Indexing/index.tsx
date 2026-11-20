@@ -320,8 +320,8 @@ export const LanguagesIndexing = () =>
     );
 
     return (
-        <section className="flex w-full min-w-0 flex-col gap-6" aria-labelledby="twp-reading-translating">
-            <div className="flex flex-col gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-6">
+            <section className="flex flex-col gap-2" aria-labelledby="twp-reading-translating">
                 <h3 id="twp-reading-translating" className="font-semibold text-lg text-translatewp-neutral m-0">
                     {__('Reading and translating', 'translate')}
                 </h3>
@@ -339,7 +339,7 @@ export const LanguagesIndexing = () =>
                         )}
                     </p>
                 )}
-            </div>
+            </section>
 
             <ScheduledTasksLateNotice
                 late={status?.scheduledTasksLate ?? false}
@@ -351,6 +351,7 @@ export const LanguagesIndexing = () =>
                 <div className="flex items-center gap-3 flex-wrap">
                     <Button
                         variant="primary"
+                        className="rounded-sm!"
                         onClick={isRunning ? handleStopIndexing : () => void handleIndexSite()}
                         disabled={!isRunning && (status === null || statusFailed)}
                     >
@@ -523,6 +524,6 @@ export const LanguagesIndexing = () =>
             />
 
             <ConfirmDialog {...confirmDialogProps} />
-        </section>
+        </div>
     );
 };

@@ -5,7 +5,7 @@ Tags: translation, multilingual, language switcher, localization, ai translation
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -56,6 +56,15 @@ Every plan includes AI translation with a fair-use allowance per 30 days. When y
 
 Visit [TranslateWP](https://translatewp.ai/) for plan information.
 
+= About TranslateWP =
+
+TranslateWP is made by Code Snippets B.V., Teteringen, the Netherlands, the company behind the Code Snippets plugin.
+
+* Website: [translatewp.ai](https://translatewp.ai/)
+* Documentation: [translatewp.ai/docs](https://translatewp.ai/docs/)
+* Contact: [translatewp.ai/contact-us](https://translatewp.ai/contact-us/) or team@translatewp.ai
+* Ideas for the plugin: [Request a feature](https://translatewp.ai/request-a-feature/)
+
 = Support and contributions =
 
 * [WordPress.org support forum](https://wordpress.org/support/plugin/translate/)
@@ -83,6 +92,10 @@ Find TranslateWP useful? [Leave a review on WordPress.org](https://wordpress.org
 Network activate TranslateWP from Network Admin to use the network settings and defaults. Check each site's connection, languages and settings before offering translations to visitors.
 
 == Frequently Asked Questions ==
+
+= Who makes TranslateWP? =
+
+TranslateWP is made by Code Snippets B.V., the team behind the Code Snippets plugin, based in Teteringen, the Netherlands. You can reach the team at team@translatewp.ai or through [translatewp.ai/contact-us](https://translatewp.ai/contact-us/).
 
 = Do I need a TranslateWP account? =
 
@@ -128,7 +141,18 @@ No. Pro features require an eligible TranslateWP account as well as the addon. T
 
 Use the plugin's Support screen or the [WordPress.org support forum](https://wordpress.org/support/plugin/translate/). Report reproducible bugs on [GitHub](https://github.com/codesnippetspro/translatewp/issues).
 
+== Screenshots ==
+
+1. The first step of the setup wizard connects your site to your TranslateWP account.
+2. The last step of the setup wizard shows your first pages translated and lets you finish.
+3. The dashboard shows how many page translations are ready in each language and what needs your attention.
+4. Set how the language switcher looks and where it sits, and see each change in the preview.
+5. Describe your site and choose the writing style and tone of the translations.
+6. The Lexicon keeps names and terms translated the same way on every page.
+
 == External services and privacy ==
+
+The TranslateWP service is operated by Code Snippets B.V., the Netherlands.
 
 TranslateWP connects to `api.translatewp.ai` to register your connected site, generate and retrieve translations, report translation progress and check which features your account may use.
 
@@ -144,10 +168,14 @@ When you connect your site or use these features, the TranslateWP service is inv
 
 Using your own AI provider on Pro also makes the provider's terms and privacy policy relevant to the content it processes.
 
-* [TranslateWP service terms](https://translatewp.ai/terms)
-* [TranslateWP privacy policy](https://translatewp.ai/privacy)
+* [TranslateWP service terms](https://translatewp.ai/terms-and-conditions/)
+* [TranslateWP privacy policy](https://translatewp.ai/privacy-policy/)
 
 == Upgrade Notice ==
+
+= 1.1.2 =
+
+Keeps the language list on screen on phones, gives search engines translated sharing titles, and tells you when a security header blocks translations.
 
 = 1.1.1 =
 
@@ -174,6 +202,21 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 == Changelog ==
+
+= 1.1.2 =
+
+* New: a notice in the TranslateWP admin when a security header on your site (Content-Security-Policy) blocks the translation service, with what to change. Visitors no longer see a "Translating…" state that never ends in that case.
+* New: search engines also get translated sharing titles (Open Graph and Twitter tags), including titles set by SEO plugins. With TranslateWP Pro, page descriptions are included.
+* New: during setup, Install Pro or Activate Pro is offered right after the site is connected to an account with the Orbital plan, and the last step has a Finish button.
+* Fixed: on phones, the language list of a switcher placed near the edge of the screen could run off the screen.
+* Fixed: the browser tab title of pages whose title includes the site name (for example product pages) could stay in the original language.
+* Fixed: the TranslateWP Pro update now shows the TranslateWP logo on the Updates and Plugins screens.
+* Fixed: text in the Query Monitor 4 panel is no longer picked up for translation.
+* Fixed: the TranslateWP controls and notices that a logged-in manager sees on the front end keep their own look when a theme or page builder styles buttons and text. The language switcher your visitors see is unchanged.
+* Fixed: in the setup wizard, the Style and tone step fits its card, so both sliders are visible without scrolling. Buttons across the admin screens now share the same corners.
+* New: the Dashboard opens with a translation overview: how many page translations are ready, per language, what needs attention, and how much translated text was reused over the last 14 days.
+* Improved: accessibility of the setup wizard and the Translations screens. The languages table shows each language's status, and Support has its own page.
+* A dismissable notice about the current Black Friday offer is shown to administrators on TranslateWP screens.
 
 = 1.1.1 =
 

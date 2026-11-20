@@ -1,3 +1,4 @@
+import { managerStyles } from '@/apps/translatewp/managerStyles';
 import { resolveSwitcherFontSize, SWITCHER_LANGUAGE_LINE_HEIGHT_RATIO } from '@/shared/lib/switcherFontSize';
 import { switcherSurface } from '@/apps/translatewp/switcherSurface';
 import type React from 'react';
@@ -406,6 +407,7 @@ export function SwitcherView({
                     }
                 }
                 .twp-inline {
+                    --twp-list-room: calc(100vw - 2 * ${ LIST_SCREEN_MARGIN });
                     position: relative !important;
                     display: inline-block !important;
                     z-index: 999999 !important;
@@ -830,6 +832,7 @@ export function SwitcherView({
                     cursor: pointer !important;
                     color: ${ textColor } !important;
                 }
+                ${managerStyles}
                 ${ surface.fallback }
                 ${ sideTab ? sideTabCss(triggerWidthPx) : '' }
                 ` }
@@ -1094,7 +1097,7 @@ export function SwitcherView({
                 ) }
 
                 { visibleNotice && (
-                    <div className="twp-toast" role="status" aria-live="polite">
+                    <div className="twp-toast" data-twp-manager={canManage ? 'true' : undefined} role="status" aria-live="polite">
                         <span>{ visibleNotice }</span>
                         { notice && noticeAction && (
                             <a className="twp-toast-action" href={noticeAction.href}>{ noticeAction.label }</a>

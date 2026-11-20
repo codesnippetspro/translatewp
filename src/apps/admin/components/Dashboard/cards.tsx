@@ -54,19 +54,19 @@ export const LanguagesCard = () =>
                                 type="button"
                                 aria-pressed={language.active}
                                 onClick={() => toggle(language.locale)}
-                                className={`rounded-sm border px-2.5 py-1 text-sm cursor-pointer ${language.active ? 'border-translatewp-primary bg-translatewp-selection text-translatewp-neutral' : 'border-translatewp-border bg-white text-translatewp-muted line-through'}`}
+                                className={`rounded-sm border px-2.5 py-1 text-sm cursor-pointer ${language.active ? 'border-translatewp-primary bg-translatewp-selection text-translatewp-neutral' : 'border-translatewp-border bg-white text-translatewp-muted'}`}
                                 title={language.active ? __('Switch off', 'translate') : __('Switch on', 'translate')}
                             >
                                 <span className="flex items-center gap-1.5">
                                     {getCountryFlagFromLocale(language.locale)}
-                                    <span>{nameOf(language.locale)}</span>
+                                    <span className={language.active ? undefined : 'line-through'}>{nameOf(language.locale)}</span>
                                 </span>
                             </button>
                         ))}
                     </div>
                 )}
                 <div>
-                    <Button variant="secondary" href={buildAdminUrl('settings', 'languages')}>{__('Add languages', 'translate')}</Button>
+                    <Button variant="secondary" className="rounded-sm!" href={buildAdminUrl('settings', 'languages')}>{__('Add languages', 'translate')}</Button>
                 </div>
             </div>
             <ManagedByNetwork group="visitor_language">

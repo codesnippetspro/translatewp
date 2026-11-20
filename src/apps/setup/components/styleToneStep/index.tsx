@@ -44,21 +44,21 @@ export const StyleToneStep = () =>
             </div>
 
             <ManagedByNetwork group="style_tone">
-            <div className="flex flex-col gap-3">
-                <h3 className="text-sm! font-semibold m-0">{__('Style', 'translate')}</h3>
-                {proActive
-                    ? <PresetChoice kind="style" selected={style} onChange={setStyle} />
-                    : <CustomOption feature={__('Custom style', 'translate')} slot="translationStyle" kind="style" selected={style} onChange={setStyle} />}
-            </div>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2" data-style-tone-grid>
+                <div className="flex flex-col gap-3 sm:col-span-2 md:col-span-1">
+                    <h3 className="text-sm! font-semibold m-0">{__('Style', 'translate')}</h3>
+                    {proActive
+                        ? <PresetChoice kind="style" selected={style} onChange={setStyle} />
+                        : <CustomOption feature={__('Custom style', 'translate')} slot="translationStyle" kind="style" selected={style} onChange={setStyle} />}
+                </div>
 
-            <div className="flex flex-col gap-3">
-                <h3 className="text-sm! font-semibold m-0">{__('Tone', 'translate')}</h3>
-                {proActive
-                    ? <PresetChoice kind="tone" selected={tone} onChange={setTone} />
-                    : <CustomOption feature={__('Custom tone', 'translate')} slot="translationTone" kind="tone" selected={tone} onChange={setTone} />}
-            </div>
+                <div className="flex flex-col gap-3 sm:col-span-2 md:col-span-1">
+                    <h3 className="text-sm! font-semibold m-0">{__('Tone', 'translate')}</h3>
+                    {proActive
+                        ? <PresetChoice kind="tone" selected={tone} onChange={setTone} />
+                        : <CustomOption feature={__('Custom tone', 'translate')} slot="translationTone" kind="tone" selected={tone} onChange={setTone} />}
+                </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div className="flex flex-col gap-3">
                     <h3 className="text-sm! font-semibold m-0">{__('Precision vs fluency', 'translate')}</h3>
                     <Range

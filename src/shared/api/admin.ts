@@ -46,6 +46,15 @@ export const getRetranslationEstimate = async (): Promise<RetranslationEstimate>
 }
 
 export type DashboardMetrics = {
+    usageAvailable?: boolean;
+    cacheLookups?: number;
+    tokensToday?: number;
+    tokensThisMonth?: number;
+    tokensVsYesterday?: number;
+    tokenTrend?: {
+        period: string; totalTokens: number; cachedHits: number; reusePercent?: number | null;
+    }[];
+    lexiconSummary?: { total: number; global: number; languages: Record<string, number> };
     translationsToday: number;
     cacheHitsToday: number;
     cacheHitRatio: number;

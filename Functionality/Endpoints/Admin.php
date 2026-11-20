@@ -11,6 +11,7 @@ use TranslateWP\Components\DashboardTranslations;
 use TranslateWP\Components\IndexQueue;
 use TranslateWP\Components\Options;
 use TranslateWP\Components\ProEligibility;
+use TranslateWP\Components\ServiceBlockNotice;
 use TranslateWP\Components\SwitcherPlacement;
 use TranslateWP\Components\SwitcherFontSize;
 use TranslateWP\Components\SiteLanguageSync;
@@ -178,8 +179,16 @@ class Admin extends BaseApiEndpoints {
 			[ $this, 'settings_write_permissions_check' ]
 		);
 
+		$service_blocked = new PostEndpoint(
+			$this->namespace,
+			'service-blocked',
+			[ $this, 'record_service_block' ],
+			[ $this, 'admin_write_permissions_check' ]
+		);
+
         return [
 			$switcher_position,
+			$service_blocked,
             $get_post_types,
             $get_roles,
             $get_data,
@@ -235,6 +244,13 @@ class Admin extends BaseApiEndpoints {
 			'position' => $position,
 			'revision' => $result['revision'],
 		];
+	}
+
+	public function record_service_block( $request ) {
+		return ServiceBlockNotice::record(
+			esc_url_raw( (string) $request->get_param( 'origin' ) ),
+			sanitize_text_field( (string) $request->get_param( 'path' ) )
+		);
 	}
 
     public function get_post_types( $request ) {
@@ -542,6 +558,8 @@ class Admin extends BaseApiEndpoints {
         // every visitor served from the cache counts as a hit.
         $data                      = [];
         $usage                     = SiteUsage::dashboard_usage();
+		$data['usageAvailable']    = $usage['available'];
+		$data['cacheLookups']      = $usage['cacheLookups'];
         $data['tokensToday']       = $usage['tokensToday'];
         $data['tokensThisMonth']   = $usage['tokensThisMonth'];
         $data['tokensVsYesterday'] = $usage['tokensVsYesterday'];
@@ -557,6 +575,25 @@ class Admin extends BaseApiEndpoints {
         $data['recentContent']     = $translations['recentContent'];
 
         $data['recentLexicon'] = $this->recent_lexicon();
+		$terms = Lexicon::get_all();
+		$data['lexiconSummary'] = [
+			'total' => count( $terms ),
+			'global' => count( array_filter( $terms, static fn( array $term ): bool => empty( $term['languages'] ) ) ),
+			'languages' => [],
+		];
+		foreach ( $languages_config as $language ) {
+			if ( empty( $language['locale'] ) || ! empty( $language['default'] ) ) {
+				continue;
+			}
+			$locale = (string) $language['locale'];
+			$data['lexiconSummary']['languages'][ $locale ] = count(
+				array_filter(
+					$terms,
+					static fn( array $term ): bool => empty( $term['languages'] )
+						|| in_array( $locale, $term['languages'], true )
+				)
+			);
+		}
         $data['anchorMissing'] = array_map( static fn( array $page ): string => $page['url'], \TranslateWP\Components\AnchorMisses::pages() );
 
         return $data;

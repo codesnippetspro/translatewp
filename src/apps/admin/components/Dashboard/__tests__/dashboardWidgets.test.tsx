@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server.node';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { DashboardMetricsContent } from '@/apps/admin/components/Dashboard';
+import { UsageHistory } from '@/apps/admin/components/Dashboard/InsightCharts';
 import type { DashboardMetrics } from '@/shared/api/admin';
 import { getQuotaQueryOptions } from '@/shared/api/quota';
 
@@ -60,7 +61,7 @@ describe('Dashboard widgets', () =>
         const html = renderToStaticMarkup(<DashboardMetricsContent data={populatedMetrics} />);
 
         expect(html).toContain('432');
-        expect(html).toContain('Page translations today');
+        expect(html).toContain('Page translations in the last 24 hours');
         expect(html).toContain('German');
         expect(html).toContain('French');
         expect(html).toContain('Welcome home');
@@ -80,9 +81,37 @@ describe('Dashboard widgets', () =>
         expect(html).not.toContain(EMPTY_TRANSLATIONS);
         expect(html).not.toContain(EMPTY_CONTENT);
         expect(html).not.toContain(EMPTY_LEXICON);
-        expect(html).toContain('finished since midnight, one per page and language');
-        expect(html).toContain('240 pieces of already translated text');
-        expect((html.match(/data-info-tip/g) ?? []).length).toBe(3);
+        expect(html).toContain('Currently ready pages completed in the last 24 hours, counted once per language.');
+        expect(html).toContain('>36%<');
+        expect(html).toContain('Share of lookups served from existing translations today and yesterday.');
+        expect(html).toContain('>240<');
+        expect(html).toContain('The Lexicon fixes how a word or phrase is translated');
+    });
+
+    test('leaves days without lookups out of the reuse chart and never draws them as 0%', () =>
+    {
+        const html = renderToStaticMarkup(<UsageHistory data={{
+            ...populatedMetrics,
+            tokenTrend: [
+                { period: 'Sep 10', totalTokens: 0, cachedHits: 0, reusePercent: null },
+                { period: 'Sep 11', totalTokens: 10, cachedHits: 7, reusePercent: 70 },
+            ],
+        }} />);
+        const reuse = html.slice(html.indexOf('Translation reuse over time'), html.indexOf('Reused text over time'));
+
+        expect(reuse).toContain('Sep 11');
+        expect(reuse).not.toContain('Sep 10');
+        expect(reuse.match(/<circle/g)).toHaveLength(1);
+        expect(reuse).toContain('Scale: 0–100');
+
+        const quiet = renderToStaticMarkup(<UsageHistory data={{
+            ...populatedMetrics,
+            tokenTrend: [{ period: 'Sep 10', totalTokens: 0, cachedHits: 0, reusePercent: null }],
+        }} />);
+        const quietReuse = quiet.slice(quiet.indexOf('Translation reuse over time'), quiet.indexOf('Reused text over time'));
+
+        expect(quietReuse).toContain('No daily history available yet.');
+        expect(quietReuse).not.toContain('<circle');
     });
 
     test('links the Recent Lexicon Entries "View all" to the Lexicon page', () =>
@@ -105,7 +134,7 @@ describe('Dashboard widgets', () =>
         expect(html).not.toContain('Recent lexicon entries');
 
         // The numeric cards still render a genuine zero rather than being hidden.
-        expect(html).toContain('Page translations today');
+        expect(html).toContain('Page translations in the last 24 hours');
         expect(html).toContain('>0<');
     });
 

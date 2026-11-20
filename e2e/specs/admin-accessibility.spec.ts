@@ -49,7 +49,11 @@ test('search focus remains visible in wp-admin and feedback has an accessible na
 	await expect(search.locator('..')).toHaveCSS('outline-style', 'solid');
 	expect(await search.locator('..').evaluate(element => parseFloat(getComputedStyle(element).outlineWidth)))
 		.toBeGreaterThan(0);
-	await page.goto('/wp-admin/admin.php?page=translatewp#support');
+	const support = page.getByRole('navigation', { name: 'TranslateWP navigation' })
+		.getByRole('link', { name: 'Support', exact: true });
+	await support.click();
+	await expect(page).toHaveURL(/\/wp-admin\/admin\.php\?page=translatewp-support$/);
+	await expect(support).toHaveAttribute('aria-current', 'page');
 	await expect(page.getByRole('textbox', {
 		name: 'Tell us what would make TranslateWP better', exact: true,
 	})).toBeVisible();
@@ -58,7 +62,7 @@ test('search focus remains visible in wp-admin and feedback has an accessible na
 test('language headers remain semantic and the permissions table scrolls within a narrow page', async ({ page }) => {
 	await page.goto('/wp-admin/admin.php?page=translatewp-settings#languages');
 	const table = page.getByRole('table');
-	for (const header of ['Language', 'Slug', 'Locale', 'Actions']) {
+	for (const header of ['Language', 'Slug', 'Locale', 'Status', 'Actions']) {
 		await expect(table.getByRole('columnheader', { name: header, exact: true })).toBeVisible();
 	}
 	await page.setViewportSize({ width: 375, height: 812 });
@@ -77,6 +81,44 @@ test('language headers remain semantic and the permissions table scrolls within 
 	await region.focus();
 	await page.keyboard.press('ArrowRight');
 	await expect.poll(() => region.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+});
+
+test('inactive language styling follows activation across Dashboard and Languages', async ({ page }) => {
+	await page.goto('/wp-admin/admin.php?page=translatewp');
+	const german = page.getByRole('button', { name: 'Deutsch', exact: true });
+	await expect(german).toHaveAttribute('aria-pressed', 'true');
+	const saved = page.waitForResponse(response =>
+		response.url().includes('/admin/update-data') && response.request().method() === 'POST'
+	);
+	await german.click();
+	await expect(german).toHaveAttribute('aria-pressed', 'false');
+	await expect(german).toHaveCSS('filter', 'none');
+	await expect(german.getByText('Deutsch', { exact: true })).toHaveCSS('text-decoration-line', 'line-through');
+	expect((await saved).ok()).toBe(true);
+
+	await page.goto('/wp-admin/admin.php?page=translatewp-settings#languages');
+	const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'German', exact: true }) });
+	const name = row.getByText('German', { exact: true });
+	const flagGroup = row.locator('.lang-icon').locator('..');
+	await expect(row.getByRole('cell', { name: 'Inactive', exact: true })).toBeVisible();
+	await expect(name).toHaveCSS('text-decoration-line', 'line-through');
+	await expect(flagGroup).toHaveCSS('filter', 'none');
+
+	await row.getByRole('button', { name: 'Edit German' }).click();
+	const restored = page.waitForResponse(response =>
+		response.url().includes('/admin/update-data') && response.request().method() === 'POST'
+	);
+	await page.getByRole('checkbox', { name: /Is active/ }).check();
+	await page.getByRole('button', { name: 'Update language' }).click();
+	expect((await restored).ok()).toBe(true);
+	await expect(row.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
+	await expect(name).toHaveCSS('text-decoration-line', 'none');
+	await expect(flagGroup).toHaveCSS('filter', 'none');
+
+	await page.goto('/wp-admin/admin.php?page=translatewp');
+	await expect(german).toHaveAttribute('aria-pressed', 'true');
+	await expect(german).toHaveCSS('filter', 'none');
+	await expect(german.getByText('Deutsch', { exact: true })).toHaveCSS('text-decoration-line', 'none');
 });
 
 test('language-table action buttons do not compress or clip their icons on mobile', async ({ page }) => {

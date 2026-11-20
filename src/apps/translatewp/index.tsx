@@ -24,6 +24,8 @@ import type { AppliedSegment } from '@/shared/lib/translations/segmentRegistry';
 import { effectivePlacement, livePlacement, mountPlacement, resolvePlacementTarget, unmountPlacement } from '@/apps/translatewp/inlinePlacement';
 import { AdminChunkBoundary, diagnoseSwitcher, warnSwitcherHidden } from '@/apps/translatewp/switcherDiagnostic';
 import { managerCan, opensEditMode } from '@/apps/translatewp/managerAccess';
+import { reportServiceBlocked } from '@/shared/api/wordpress';
+import { watchServiceBlock } from '@/shared/lib/translations/serviceBlock';
 
 const AdminFloatingSwitcher = lazy(() => import('./AdminFloatingSwitcher'));
 
@@ -73,7 +75,7 @@ export const TranslateWP = () =>
         new HydrationStore(undefined, window.TranslateWP.context.cache_version, window.TranslateWP.context.cache_versions ?? {})
     );
     const missCoalescerRef = useRef<MissReportCoalescer>(new MissReportCoalescer());
-    const headTitleRef = useRef<HeadTitleTranslator>(new HeadTitleTranslator());
+    const headTitleRef = useRef<HeadTitleTranslator>(new HeadTitleTranslator(undefined, window.TranslateWP.context.site_name ?? ''));
     const pageUnloadingRef = useRef(false);
     useEffect(() =>
     {
@@ -86,6 +88,15 @@ export const TranslateWP = () =>
             window.removeEventListener('beforeunload', markUnloading);
         };
     }, []);
+    // Before any translation starts, so the first blocked request is caught.
+    useEffect(() => watchServiceBlock(window.TranslateWP.context.remote_api_base, origin =>
+    {
+        console.error(`[TranslateWP] A Content-Security-Policy header blocks ${origin}; the page stays in its original language. Add ${origin} to connect-src.`);
+        if (window.TranslateWP.context.can_administer === true)
+        {
+            void reportServiceBlocked(origin, window.location.pathname).catch(() => undefined);
+        }
+    }), []);
     const headTitleAbortRef = useRef<AbortController | null>(null);
     const automaticSelectionStartedRef = useRef(false);
     const [notice, setNotice] = useState<string | null>(null);

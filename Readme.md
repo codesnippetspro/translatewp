@@ -134,6 +134,10 @@ Using your own AI provider on Pro also makes the provider's terms and privacy po
 
 ## Upgrade Notice
 
+### 1.1.2
+
+Keeps the language list on screen on phones, gives search engines translated sharing titles, and tells you when a security header blocks translations.
+
 ### 1.1.1
 
 Fixed: on translated pages, prices with a decimal comma could be shown with the wrong value (for example 14,50 shown as 1.450). Prices and other number-only text are no longer sent for translation, and earlier wrong results are no longer shown.
@@ -159,6 +163,21 @@ Fixes sign-in from WordPress Playground and other framed WordPress admin screens
 AI translation, Lexicon, language switchers and role controls for WordPress. Back up your site and test translated pages, caching and any Pro features before updating a live site.
 
 ## Changelog
+
+### 1.1.2
+
+* New: a notice in the TranslateWP admin when a security header on your site (Content-Security-Policy) blocks the translation service, with what to change. Visitors no longer see a "Translating…" state that never ends in that case.
+* New: search engines also get translated sharing titles (Open Graph and Twitter tags), including titles set by SEO plugins. With TranslateWP Pro, page descriptions are included.
+* New: during setup, Install Pro or Activate Pro is offered right after the site is connected to an account with the Orbital plan, and the last step has a Finish button.
+* Fixed: on phones, the language list of a switcher placed near the edge of the screen could run off the screen.
+* Fixed: the browser tab title of pages whose title includes the site name (for example product pages) could stay in the original language.
+* Fixed: the TranslateWP Pro update now shows the TranslateWP logo on the Updates and Plugins screens.
+* Fixed: text in the Query Monitor 4 panel is no longer picked up for translation.
+* Fixed: the TranslateWP controls and notices that a logged-in manager sees on the front end keep their own look when a theme or page builder styles buttons and text. The language switcher your visitors see is unchanged.
+* Fixed: in the setup wizard, the Style and tone step fits its card, so both sliders are visible without scrolling. Buttons across the admin screens now share the same corners.
+* New: the Dashboard opens with a translation overview: how many page translations are ready, per language, what needs attention, and how much translated text was reused over the last 14 days.
+* Improved: accessibility of the setup wizard and the Translations screens. The languages table shows each language's status, and Support has its own page.
+* A dismissable notice about the current Black Friday offer is shown to administrators on TranslateWP screens.
 
 ### 1.1.1
 

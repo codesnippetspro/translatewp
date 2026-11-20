@@ -43,3 +43,10 @@ yarn build
 CI=true yarn test --watch=false --ci --runTestsByPath src/shared/components/form/numberField/__tests__/numberField.test.tsx
 npx playwright test --config e2e/playwright.config.ts e2e/specs/number-field-layout.spec.ts
 ```
+
+## Placed switcher list on small screens
+
+`switcher-list-in-viewport.spec.ts` builds the placed switcher from the source
+with React bundled in (`e2e/support/switcher-harness.tsx`) and opens it in a
+page header at phone widths, left and right to left, and at a desktop width,
+without a running WordPress. It is part of `yarn e2e:layout`.

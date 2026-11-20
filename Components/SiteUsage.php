@@ -94,7 +94,11 @@ class SiteUsage {
 			$timestamp = strtotime( $date . ' UTC' );
 			$label     = false !== $timestamp ? gmdate( 'M j', $timestamp ) : $date;
 
+			$hits = max( 0, (int) ( $point['cacheHits'] ?? 0 ) );
+			$misses = max( 0, (int) ( $point['cacheMisses'] ?? 0 ) );
+			$has_lookups = isset( $point['cacheHits'], $point['cacheMisses'] ) && $hits + $misses > 0;
 			$trend[] = [
+				'reusePercent' => $has_lookups ? round( $hits / ( $hits + $misses ) * self::FULL_PERCENT, 2 ) : null,
 				'period'      => $label,
 				'totalTokens' => max( 0, (int) ( $point['totalTokens'] ?? 0 ) ),
 				'cachedHits'  => max( 0, (int) ( $point['cacheHits'] ?? 0 ) ),
@@ -111,6 +115,7 @@ class SiteUsage {
 		$ratio       = $lookups_48h > 0 ? (int) round( ( $hits_today + $hits_yesterday ) / $lookups_48h * 100 ) : 0;
 
 		return [
+			'available'         => true,
 			'tokensToday'       => $tokens_today,
 			'tokensThisMonth'   => $tokens_month,
 			'storedSegments'    => max( 0, (int) ( $response['storedSegments'] ?? 0 ) ),
@@ -119,11 +124,13 @@ class SiteUsage {
 			'tokenTrend'        => $trend,
 			'cacheHitsToday'    => $hits_today,
 			'cacheHitRatio'     => $ratio,
+			'cacheLookups'      => $lookups_48h,
 		];
 	}
 
 	private static function empty_usage(): array {
 		return [
+			'available'         => false,
 			'tokensToday'       => 0,
 			'tokensThisMonth'   => 0,
 			'storedSegments'    => 0,
@@ -132,6 +139,7 @@ class SiteUsage {
 			'tokenTrend'        => [],
 			'cacheHitsToday'    => 0,
 			'cacheHitRatio'     => 0,
+			'cacheLookups'      => 0,
 		];
 	}
 }
