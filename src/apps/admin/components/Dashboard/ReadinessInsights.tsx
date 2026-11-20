@@ -33,7 +33,7 @@ export const ReadinessInsights = ({ data, status, pages, unconfirmed }: {
 	const failures = new Set((status?.failed ?? [])
 		.filter(item => activeLocales.has(item.language))
 		.map(item => `${item.url}|${item.language}`)).size;
-	const readable = Boolean(status) && !unconfirmed;
+	const readable = Boolean(status);
 	const indexingUrl = buildAdminUrl('', 'indexing');
 	const summaries = [
 		{ label: __('Active translation languages', 'translate'), value: languages.length },
@@ -79,7 +79,9 @@ export const ReadinessInsights = ({ data, status, pages, unconfirmed }: {
 					action={<CardLink href={indexingUrl}>{__('View pages', 'translate')}</CardLink>}>
 					{!status && !unconfirmed && <p role="status">{__('Checking readiness…', 'translate')}</p>}
 					{unconfirmed && <p role="status">
-						{__('Readiness could not be refreshed. Counts shown are from the last check.', 'translate')}
+						{status
+							? __('Readiness could not be refreshed. Counts shown are from the last check.', 'translate')
+							: __('Readiness could not be refreshed.', 'translate')}
 					</p>}
 					{readable && total > 0 && <InsightGauge value={ready / total * FULL_PERCENT}
 						label={sprintf(

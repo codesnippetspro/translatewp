@@ -8,7 +8,6 @@ const CHART_WIDTH = 600;
 const CHART_HEIGHT = 160;
 const CHART_PADDING = 12;
 const HISTORY_LIMIT = 14;
-const PERCENT_SCALE_STEP = 0.1;
 
 export const formatMetric = (value: number) => new Intl.NumberFormat().format(value);
 
@@ -47,10 +46,11 @@ export const InsightProgress = ({ value, total, label }: {
 );
 
 export const UsageHistory = ({ data }: { data: DashboardMetrics }) => {
-	const points = (data.tokenTrend ?? []).slice(-HISTORY_LIMIT).map(point => ({
-		...point,
-		reusePercent: point.reusePercent ?? 0,
-	}));
+	const history = (data.tokenTrend ?? []).slice(-HISTORY_LIMIT);
+	// A day without lookups has no reuse figure; it is left out, not drawn as 0%.
+	const measured = history.flatMap(point => (
+		typeof point.reusePercent === 'number' ? [{ ...point, reusePercent: point.reusePercent }] : []
+	));
 	const charts = [
 		{ key: 'reusePercent' as const, title: __('Translation reuse over time', 'translate'),
 			unit: __('Reused translations (%)', 'translate'), line: true },
@@ -61,12 +61,10 @@ export const UsageHistory = ({ data }: { data: DashboardMetrics }) => {
 	return (
 		<div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
 			{charts.map(chart => {
+				const points = chart.line ? measured : history.map(point => ({ ...point, reusePercent: 0 }));
 				const maximum = chart.line
 					? FULL_PERCENT : Math.max(1, ...points.map(point => point.cachedHits));
-				const values = points.map(point => point.reusePercent);
-				const minimum = chart.line && values.length
-					? Math.max(0, Math.floor(Math.min(...values) / PERCENT_SCALE_STEP - 1)
-						* PERCENT_SCALE_STEP) : 0;
+				const minimum = 0;
 				const width = CHART_WIDTH - CHART_PADDING * 2;
 				const height = CHART_HEIGHT - CHART_PADDING * 2;
 				const step = width / Math.max(1, points.length);
@@ -89,7 +87,7 @@ export const UsageHistory = ({ data }: { data: DashboardMetrics }) => {
 									<span>{sprintf(
 										// translators: 1: minimum chart scale value, 2: maximum chart scale value.
 										__('Scale: %1$s–%2$s', 'translate'),
-										formatMetric(Number(minimum.toFixed(1))), formatMetric(maximum)
+										formatMetric(minimum), formatMetric(maximum)
 									)}</span>
 								</div>
 								<svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} aria-hidden="true"
@@ -135,7 +133,7 @@ export const UsageHistory = ({ data }: { data: DashboardMetrics }) => {
 										</thead>
 										<tbody>{points.map((point, index) => (
 											<tr key={index}>
-												<td scope="row">{point.period}</td>
+												<th scope="row" className="text-start font-normal">{point.period}</th>
 												<td className="text-end">{formatMetric(point[chart.key])}</td>
 											</tr>
 										))}</tbody>
