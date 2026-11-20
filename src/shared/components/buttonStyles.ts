@@ -19,7 +19,7 @@ export const TWP_BUTTON_SECONDARY =
     `inline-flex items-center justify-center gap-1.5 ${NOWRAP} rounded-full border border-twp-neutral-200 bg-twp-neutral-0 px-3.5 py-1.5 text-sm font-semibold text-twp-neutral-800! no-underline cursor-pointer ${TRANSITION} hover:bg-twp-neutral-100 ${FOCUS} disabled:opacity-60`;
 
 export const TWP_BUTTON_PRIMARY_BLOCK =
-    `inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border-0 bg-translatewp-primary! px-5 py-3 text-sm font-semibold text-white! no-underline cursor-pointer ${TRANSITION} hover:bg-translatewp-primary/90 active:scale-[0.98] ${FOCUS} disabled:opacity-60 disabled:active:scale-100`;
+    `inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-sm! border-0 bg-translatewp-primary! px-5 py-3 text-sm font-semibold text-white! no-underline cursor-pointer ${TRANSITION} hover:bg-translatewp-primary/90 active:scale-[0.98] ${FOCUS} disabled:opacity-60 disabled:active:scale-100`;
 
 export const TWP_BUTTON_GHOST =
-    `inline-flex items-center justify-center gap-1.5 ${NOWRAP} rounded-lg border-0 bg-transparent px-5 py-2.5 text-sm font-medium text-twp-neutral-500! cursor-pointer ${TRANSITION} hover:bg-twp-neutral-100 ${FOCUS}`;
+    `inline-flex items-center justify-center gap-1.5 ${NOWRAP} rounded-sm! border-0 bg-transparent px-5 py-2.5 text-sm font-medium text-twp-neutral-500! cursor-pointer ${TRANSITION} hover:bg-twp-neutral-100 ${FOCUS}`;
