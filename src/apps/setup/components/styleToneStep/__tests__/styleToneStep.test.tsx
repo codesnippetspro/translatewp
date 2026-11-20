@@ -83,6 +83,19 @@ describe('the style and tone step', () =>
         expect(checked(container, 'Preset tone')).toBe('formal');
     });
 
+    it('lays style, tone and both sliders out in one two-column grid, so the step fits the wizard card', async () =>
+    {
+        const container = await render();
+        const grid = container.querySelector('[data-style-tone-grid]') as HTMLElement;
+
+        expect(grid.className).toContain('md:grid-cols-2');
+        expect(grid.children).toHaveLength(4);
+        expect(grid.children[0].querySelector('[role="radiogroup"][aria-label="Preset style"]')).not.toBeNull();
+        expect(grid.children[1].querySelector('[role="radiogroup"][aria-label="Preset tone"]')).not.toBeNull();
+        expect(grid.children[2].querySelector('input[aria-label="Precision vs fluency"]')).not.toBeNull();
+        expect(grid.children[3].querySelector('input[aria-label="Formality"]')).not.toBeNull();
+    });
+
     it('offers every preset as a working choice', async () =>
     {
         await act(async () => { useSetupStore.setState({ style: 'neutral', tone: 'friendly' }); });
