@@ -26,12 +26,12 @@ export const NetworkConnection = ({ data }: { data: NetworkAdminData }) =>
                     <input type="hidden" name="action" value={data.actions.connect} />
                     <Nonce value={data.actions.nonces.connect} />
                     {data.connection.connected && <input type="hidden" name="reconnect" value="1" />}
-                    <Button variant="primary" type="submit">
+                    <Button variant="primary" className="rounded-sm!" type="submit">
                         {data.connection.connected ? __('Reconnect all sites', 'translate') : __('Connect all sites', 'translate')}
                     </Button>
                 </form>
                 {connectableSubsites.length > 0 && (
-                    <Button variant="secondary" onClick={() => setSubsiteChooserOpen(true)}>
+                    <Button variant="secondary" className="rounded-sm!" onClick={() => setSubsiteChooserOpen(true)}>
                         {__('Connect a subsite', 'translate')}
                     </Button>
                 )}
@@ -70,7 +70,7 @@ export const NetworkConnection = ({ data }: { data: NetworkAdminData }) =>
                             <Button variant="tertiary" onClick={() => setSubsiteChooserOpen(false)}>
                                 {__('Cancel', 'translate')}
                             </Button>
-                            <Button variant="primary" type="submit" disabled={chosenHost === ''}>
+                            <Button variant="primary" className="rounded-sm!" type="submit" disabled={chosenHost === ''}>
                                 {__('Connect', 'translate')}
                             </Button>
                         </div>

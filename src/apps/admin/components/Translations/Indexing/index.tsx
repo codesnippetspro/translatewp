@@ -351,6 +351,7 @@ export const LanguagesIndexing = () =>
                 <div className="flex items-center gap-3 flex-wrap">
                     <Button
                         variant="primary"
+                        className="rounded-sm!"
                         onClick={isRunning ? handleStopIndexing : () => void handleIndexSite()}
                         disabled={!isRunning && (status === null || statusFailed)}
                     >

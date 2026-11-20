@@ -185,7 +185,7 @@ const StateForm = ({ group, form }: { group: NetworkScopeGroup; form: FormAction
                 name="state"
             />
             <div>
-                <Button variant="secondary" type="button" onClick={() => formRef.current?.requestSubmit()} disabled={state === group.state}>
+                <Button variant="secondary" className="rounded-sm!" type="button" onClick={() => formRef.current?.requestSubmit()} disabled={state === group.state}>
                     {__('Save scope', 'translate')}
                 </Button>
             </div>
@@ -253,7 +253,7 @@ const ValueForm = ({ group, form, subsites, requestConfirmation, proActive = fal
             />
             {applyTo === 'chosen' && <SubsiteChecklist subsites={subsites} selected={sites} onChange={setSites} dataKey="value" />}
             <div>
-                <Button variant="primary" type="button" onClick={() => void save()} disabled={applyTo === 'chosen' && sites.length === 0}>
+                <Button variant="primary" className="rounded-sm!" type="button" onClick={() => void save()} disabled={applyTo === 'chosen' && sites.length === 0}>
                     {__('Save value', 'translate')}
                 </Button>
             </div>
@@ -308,8 +308,8 @@ const ExceptionsForm = ({ group, form, subsites, requestConfirmation }: {
             )}
             <SubsiteChecklist subsites={subsites} selected={sites} onChange={setSites} dataKey="exception" />
             <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" type="button" disabled={sites.length === 0} onClick={() => submit('local')}>{__('Unlock for chosen subsites', 'translate')}</Button>
-                <Button variant="secondary" type="button" disabled={sites.length === 0} onClick={() => submit('locked')}>{__('Lock for chosen subsites', 'translate')}</Button>
+                <Button variant="secondary" className="rounded-sm!" type="button" disabled={sites.length === 0} onClick={() => submit('local')}>{__('Unlock for chosen subsites', 'translate')}</Button>
+                <Button variant="secondary" className="rounded-sm!" type="button" disabled={sites.length === 0} onClick={() => submit('locked')}>{__('Lock for chosen subsites', 'translate')}</Button>
                 <Button variant="tertiary" type="button" disabled={current.length === 0} onClick={() => void clearAll()}>{__('Clear exceptions', 'translate')}</Button>
             </div>
         </form>
@@ -372,11 +372,11 @@ export const SettingsScopeSection = ({ scope, form, account = null, proActive = 
                                 <input type="hidden" name="action" value={form.action} />
                                 <input type="hidden" name="_wpnonce" value={form.nonce} />
                                 <input type="hidden" name="op" value="switcher_position" />
-                                <Button variant="primary" type="submit">{__('Apply the main site position', 'translate')}</Button>
+                                <Button variant="primary" className="rounded-sm!" type="submit">{__('Apply the main site position', 'translate')}</Button>
                             </form>
                         ) : (
                             <ProLock feature={__('Switcher position for every subsite', 'translate')} className="w-fit">
-                                <Button variant="primary" disabled>{__('Apply the main site position', 'translate')}</Button>
+                                <Button variant="primary" className="rounded-sm!" disabled>{__('Apply the main site position', 'translate')}</Button>
                             </ProLock>
                         )}
                     </Card>

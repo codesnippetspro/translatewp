@@ -29,7 +29,7 @@ export const ConnectReturnError = ({ connected = false }: { connected?: boolean 
                         </a>
                     )}
                     {canRetry && (
-                        <Button variant="primary" onClick={connect.start} disabled={connect.isPending}>
+                        <Button variant="primary" className="rounded-sm!" onClick={connect.start} disabled={connect.isPending}>
                             {__('Try again', 'translate')}
                         </Button>
                     )}
