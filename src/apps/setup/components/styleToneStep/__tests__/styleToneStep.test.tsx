@@ -88,8 +88,10 @@ describe('the style and tone step', () =>
         const container = await render();
         const grid = container.querySelector('[data-style-tone-grid]') as HTMLElement;
 
-        expect(grid.className).toContain('md:grid-cols-2');
+        expect(grid.className).toContain('sm:grid-cols-2');
         expect(grid.children).toHaveLength(4);
+        expect(grid.children[0].className).toContain('md:col-span-1');
+        expect(grid.children[1].className).toContain('md:col-span-1');
         expect(grid.children[0].querySelector('[role="radiogroup"][aria-label="Preset style"]')).not.toBeNull();
         expect(grid.children[1].querySelector('[role="radiogroup"][aria-label="Preset tone"]')).not.toBeNull();
         expect(grid.children[2].querySelector('input[aria-label="Precision vs fluency"]')).not.toBeNull();
