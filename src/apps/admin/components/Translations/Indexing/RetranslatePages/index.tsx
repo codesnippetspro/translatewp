@@ -382,6 +382,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                             <div className="flex items-center gap-2">
                                 <Button
                                     variant="secondary"
+                                    className="rounded-sm!"
                                     disabled={isBusy}
                                     isBusy={isBusy}
                                     onClick={() => void runBulkAction(() => retryFailed(activeLanguage))}
@@ -521,7 +522,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                 )}</span>
                     <div className="flex items-center gap-2">
                         <Button
-                            variant="secondary" type="button"
+                            variant="secondary" className="rounded-sm!" type="button"
                             aria-label={__('Previous page of retranslation pages', 'translate')}
                             aria-controls="retranslation-pages-results"
                             disabled={currentPage <= 1}
@@ -534,7 +535,7 @@ export const RetranslatePages = ({ targetLocales, statusLocales, onStatusRefresh
                             {__('Previous', 'translate')}
                         </Button>
                         <Button
-                            variant="secondary" type="button"
+                            variant="secondary" className="rounded-sm!" type="button"
                             aria-label={__('Next page of retranslation pages', 'translate')}
                             aria-controls="retranslation-pages-results"
                             disabled={currentPage >= totalPages}

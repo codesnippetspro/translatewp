@@ -101,7 +101,7 @@ export const WhereItShows = () =>
                         {sideTab ? __('Side tab', 'translate') : __('Floating switcher', 'translate')}
                     </h3>
                     {saved && (
-                        <Button variant="secondary" size="small" onClick={resetPosition}>{__('Reset position', 'translate')}</Button>
+                        <Button variant="secondary" className="rounded-sm!" size="small" onClick={resetPosition}>{__('Reset position', 'translate')}</Button>
                     )}
                 </div>
                 <span className="text-sm text-translatewp-muted!">

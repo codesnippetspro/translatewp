@@ -54,6 +54,7 @@ export const RetranslateEverything = () =>
             <div>
                 <Button
                     variant="primary"
+                    className="rounded-sm!"
                     disabled={confirmPhrase !== CONFIRM_PHRASE || mutation.isPending}
                     isBusy={mutation.isPending}
                     onClick={() => mutation.mutate(confirmPhrase)}
