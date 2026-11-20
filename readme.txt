@@ -141,6 +141,15 @@ No. Pro features require an eligible TranslateWP account as well as the addon. T
 
 Use the plugin's Support screen or the [WordPress.org support forum](https://wordpress.org/support/plugin/translate/). Report reproducible bugs on [GitHub](https://github.com/codesnippetspro/translatewp/issues).
 
+== Screenshots ==
+
+1. The first step of the setup wizard connects your site to your TranslateWP account.
+2. The last step of the setup wizard shows your first pages translated and lets you finish.
+3. The dashboard shows today's translations, your usage and the pages read most in other languages.
+4. Set how the language switcher looks and where it sits, and see each change in the preview.
+5. Describe your site and choose the writing style and tone of the translations.
+6. The Lexicon keeps names and terms translated the same way on every page.
+
 == External services and privacy ==
 
 The TranslateWP service is operated by Code Snippets B.V., the Netherlands.
