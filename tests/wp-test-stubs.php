@@ -185,23 +185,34 @@ class WP_Testwpdb {
             if ( false !== get_option( $name, false ) ) { return 0; }
             update_option( $name, $owner, false ); return 1;
         }
-        if ( 0 === strpos( $this->last_query, 'INSERT INTO wp_postmeta (post_id, meta_key, meta_value)' ) ) {
-            for ( $i = 0; $i < count( $this->prepared_args ); $i += 7 ) {
-                [ $key, $value, $id, $type, $status ] = array_slice( $this->prepared_args, $i, 5 );
-                foreach ( $GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post ) {
-                    if ( (int) $post['ID'] === (int) $id && ($post['post_type']??'') === $type && ($post['post_status']??'') === $status && !array_key_exists($key,$post['meta_input']) ) { $post['meta_input'][$key] = maybe_unserialize($value); }
-                } unset($post);
-            } return 1;
-        }
-        if ( 0 === strpos( $this->last_query, 'UPDATE wp_postmeta pm INNER JOIN' ) ) {
-            $n = substr_count($this->last_query, ' WHEN pm.post_id =');
-            for ($i=0;$i<$n*3;$i+=3) {
-                [$id,$key,$value] = array_slice($this->prepared_args,$i,3);
-                foreach ($GLOBALS[wp_test_blog_store('wp_test_inserted_posts')] as &$post) {
-                    if ((int)$post['ID']===(int)$id && ($post['post_type']??'')==='twp_index_item' && ($post['post_status']??'')==='private' && array_key_exists($key,$post['meta_input'])) { $post['meta_input'][$key]=maybe_unserialize($value); }
-                } unset($post);
-            } return 1;
-        }
+		$insert_meta = str_starts_with( $this->last_query, 'INSERT INTO wp_postmeta (post_id, meta_key, meta_value)' );
+		if ( $insert_meta || str_starts_with( $this->last_query, 'UPDATE wp_postmeta pm INNER JOIN' ) ) {
+			$writes = [];
+			if ( $insert_meta ) {
+				for ( $i = 0; $i < count( $this->prepared_args ); $i += 7 ) {
+					[ $key, $value, $id, $type, $status ] = array_slice( $this->prepared_args, $i, 5 );
+					$writes[ $id ][ $key ] = $value;
+				}
+			} else {
+				$type = 'twp_index_item';
+				$status = 'private';
+				$end = 3 * substr_count( $this->last_query, ' WHEN pm.post_id =' );
+				for ( $i = 0; $i < $end; $i += 3 ) {
+					[ $id, $key, $value ] = array_slice( $this->prepared_args, $i, 3 );
+					$writes[ $id ][ $key ] = $value;
+				}
+			}
+			foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] as &$post ) {
+				if ( $type !== $post['post_type'] || $status !== $post['post_status'] ) { continue; }
+				foreach ( $writes[ $post['ID'] ] ?? [] as $key => $value ) {
+					if ( $insert_meta !== array_key_exists( $key, $post['meta_input'] ) ) {
+						$post['meta_input'][ $key ] = maybe_unserialize( $value );
+					}
+				}
+			}
+			unset( $post );
+			return 1;
+		}
         if ( 0 === strpos( $this->last_query, 'DELETE pm FROM wp_postmeta' ) ) {
             $ids=[];$i=0;while(is_int($this->prepared_args[$i]??null)){$ids[]=$this->prepared_args[$i++];}
             $keys=array_slice($this->prepared_args,$i,-2);
@@ -1096,12 +1107,18 @@ function register_post_type( $post_type, $args = [] ) {
 }
 
 function get_post_field( $field, $post_id ) {
-	foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
-		if ( (int) $post['ID'] === (int) $post_id ) {
-			return (string) ( $post[ $field ] ?? '' );
-		}
+	$post = wp_test_inserted_post( (int) $post_id );
+	return (string) ( $post[ $field ] ?? '' );
+}
+
+function wp_test_inserted_post( int $id ): array {
+	$posts = $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [];
+	$allocated = $posts[ $id - 9000 ] ?? [];
+	if ( $id === ( $allocated['ID'] ?? null ) ) { return $allocated; }
+	foreach ( $posts as $post ) {
+		if ( (int) $post['ID'] === $id ) { return $post; }
 	}
-	return '';
+	return [];
 }
 
 function get_post_meta( $post_id, $key, $single = false ) {
@@ -1110,10 +1127,9 @@ function get_post_meta( $post_id, $key, $single = false ) {
 	if ( is_array( $lexicon_meta ) && array_key_exists( $key, $lexicon_meta ) ) {
 		return $lexicon_meta[ $key ];
 	}
-	foreach ( $GLOBALS[ wp_test_blog_store( 'wp_test_inserted_posts' ) ] ?? [] as $post ) {
-		if ( (int) $post['ID'] === (int) $post_id ) {
-			return $post['meta_input'][ $key ] ?? '';
-		}
+	$post = wp_test_inserted_post( (int) $post_id );
+	if ( $post ) {
+		return $post['meta_input'][ $key ] ?? '';
 	}
 	foreach ( $GLOBALS['wp_test_nav_menu_items'] ?? [] as $menu_items ) {
 		foreach ( $menu_items as $item ) {

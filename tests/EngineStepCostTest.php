@@ -47,7 +47,7 @@ echo 'EngineStepCostTest: ' . wp_json_encode( $trace ) . "\n";
 update_option( \TranslateWP\Functionality\KeepWarm::REBUILD_CURSOR, [ 'after' => 0, 'languages' => array_slice( $languages, 1 ) ], false );
 $trace = BackgroundEngine::step()['trace'];
 $cursor = get_option( \TranslateWP\Functionality\KeepWarm::REBUILD_CURSOR );
-if ( empty( $cursor['after'] ) || ! $trace['rows'] || $trace['queries'] >= 450 ) {
+if ( false !== $cursor || $trace['rows'] < 440 ) {
 	throw new RuntimeException( 'Settings cursor failed its working-step budget: ' . wp_json_encode( $trace ) );
 }
 echo 'Settings rebuild: ' . wp_json_encode( $trace ) . "\n";

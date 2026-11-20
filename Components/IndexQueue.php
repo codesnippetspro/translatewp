@@ -3019,6 +3019,87 @@ class IndexQueue {
 		);
 	}
 
+	public function mark_settings_chunk( array $cursor ): array {
+		return self::mutate_rows(
+			function () use ( $cursor ): array {
+				$ids = $this->row_ids_after( $cursor['after'], QueueMetadata::MAX_ROWS );
+				if ( $ids ) {
+					if ( function_exists( '_prime_post_caches' ) ) {
+						_prime_post_caches( $ids, false, true );
+					} else {
+						update_meta_cache( 'post', $ids );
+					}
+				}
+				$pending = [];
+				$claimed = [];
+				$clear_payload = [];
+				$languages = [];
+				$flags = [
+					self::META_BACKGROUND_REFRESH => 1,
+					self::META_RETRANSLATING => 1,
+					self::META_RETRANSLATE => 1,
+				];
+				$remove = [
+					self::META_TRANSLATED_AT,
+					self::META_JOB_OUTCOME,
+					self::META_REFILL_FINISHED,
+					self::META_COLD_RETRIES,
+					self::META_COLD_EXHAUSTED,
+					self::META_CLAIMED_AT,
+					self::META_STARTED_AT,
+					'_twp_confirmation_attempts',
+					'_twp_reader_not_before',
+					'_twp_reader_retries',
+				];
+				$version = CacheVersions::settings_version();
+				foreach ( $ids as $id ) {
+					$language = (string) get_post_meta( $id, self::META_LANGUAGE, true );
+					if ( ! in_array( $language, $cursor['languages'], true ) ) {
+						continue;
+					}
+					$status = $this->row_status( $id );
+					$miss = 'miss' === get_post_meta( $id, self::META_OBJECT_TYPE, true );
+					if ( $miss && ( ! json_decode( self::decode_payload( (string) get_post_field( 'post_content', $id ) ), true )
+						|| ( $version > 0 && (int) get_post_meta( $id, self::META_SETTINGS_VERSION, true ) >= $version )
+						|| ( self::STATUS_PENDING === $status && ! $this->requires_background_refresh( $id ) ) ) ) {
+						continue;
+					}
+					$languages[ $language ] = false;
+					if ( self::STATUS_CLAIMED === $status ) {
+						$claimed[ $id ] = $flags;
+						continue;
+					}
+					$has_extraction = $miss || ( self::STATUS_PENDING === $status && self::STAGE_PUSH === get_post_meta( $id, self::META_STAGE, true )
+						&& '' !== (string) get_post_field( 'post_content', $id ) );
+					$pending[ $id ] = $flags + [
+						self::META_STAGE => $has_extraction ? self::STAGE_PUSH : self::STAGE_EXTRACT,
+						self::META_STATUS => self::STATUS_PENDING,
+						self::META_ATTEMPTS => 0,
+						self::META_FAIL_REASON => '',
+					];
+					if ( ! $has_extraction ) {
+						$clear_payload[ $id ] = '';
+					}
+				}
+				if ( ! QueueMetadata::write( $claimed, [ self::META_REFILL_FINISHED ] ) || ! QueueMetadata::write( $pending, $remove )
+					|| ( $clear_payload && ! self::write_payloads( $clear_payload ) ) ) {
+					return [];
+				}
+				if ( $languages ) {
+					update_option( self::REFILL_COMPLETIONS_OPTION, $languages + (array) get_option( self::REFILL_COMPLETIONS_OPTION, [] ), false );
+				}
+				if ( count( $ids ) < QueueMetadata::MAX_ROWS ) {
+					delete_option( \TranslateWP\Functionality\KeepWarm::REBUILD_CURSOR );
+				} else {
+					$cursor['after'] = end( $ids );
+					update_option( \TranslateWP\Functionality\KeepWarm::REBUILD_CURSOR, $cursor, false );
+				}
+				return [ 'marked' => count( $pending ) + count( $claimed ) ];
+			},
+			[]
+		);
+	}
+
 	public function row_ids_after( int $after, int $limit ): array {
 		global $wpdb;
 		return array_map(

@@ -140,7 +140,7 @@ class BackgroundEngine {
 		QueueExecution::reset_trace();
 		QueueExecution::begin_step();
 		try {
-			$response = self::run_step( $pages );
+			$response = self::run_step( $pages, $started );
 		} finally {
 			self::$step_work = null;
 			QueueExecution::end_step();
@@ -157,7 +157,7 @@ class BackgroundEngine {
 		return $response;
 	}
 
-	private static function run_step( array $pages ): array {
+	private static function run_step( array $pages, float $started ): array {
 		if ( BackgroundSwitch::off() ) {
 			self::$trace_phase = 'paused';
 			return self::snapshot( 'paused' );
@@ -201,11 +201,26 @@ class BackgroundEngine {
 					$response['nextDue'] = ! empty( $hold['probe'] ) ? time() + 15 : $hold['due'];
 					return;
 				}
+				$inputs = self::start_inputs();
+				$visitor_rows = 0;
+				if ( ! empty( self::work_state()['pending']['visitor'] ) || '' !== $visitor_hint ) {
+					$visitor_ids = array_column( ( new IndexQueue() )->engine_rows( 'visitor_push', Indexer::drain_batch_size() ), 'id' );
+					if ( $visitor_ids ) {
+						$pushed = $indexer->step_push( $budget, $visitor_ids );
+						$visitor_rows += $pushed['processed'] + $pushed['failed'];
+					}
+					$ready = ReadinessReconcile::step_rows( true );
+					if ( $ready && ! QueueExecution::expired() ) {
+						$keys = array_map( static fn ( array $row ): string => TranslationUrl::canonicalize( $row['url'] ) . '|' . $row['language'], $ready );
+						self::complete( $indexer, $budget, $keys, $ready );
+						$visitor_rows += self::$trace_rows;
+					}
+				}
 				if ( ! empty( self::work_state()['needs_normalization'] ) ) {
 					add_option( IndexQueue::NORMALIZE_CURSOR_OPTION, 0, '', false );
 					( new IndexQueue() )->normalize_legacy_rows();
 				}
-				$inputs = self::apply_inputs();
+				$inputs = self::apply_inputs( $inputs );
 				if ( $inputs['rows'] ) {
 					self::$trace_phase = 'maintenance';
 				}
@@ -214,9 +229,12 @@ class BackgroundEngine {
 				if ( $total_rows > 0 ) {
 					self::$trace_phase = 'read';
 				}
-				$total_rows += $inputs['rows'];
+				$total_rows += $inputs['rows'] + $visitor_rows;
 				$queue = new IndexQueue();
-				$queue->reclaim_stale();
+				$marking = false !== get_option( KeepWarm::REBUILD_CURSOR, false );
+				if ( ! $marking ) {
+					$queue->reclaim_stale();
+				}
 				$work = [
 					'visitorPush' => [],
 					'visitorReady' => [],
@@ -225,9 +243,9 @@ class BackgroundEngine {
 					'read' => false,
 				];
 				$selection = [];
-				$refill_pending = self::pending()['refill'] > 0;
+				$refill_pending = $marking || $inputs['rows'] > 0 || self::pending()['refill'] > 0;
 				$idle_turns = 0;
-				for ( $unit = 0; $unit < self::MAX_UNITS_PER_STEP && ! QueueExecution::expired() && ! BackgroundSwitch::off(); ++$unit ) {
+				for ( $unit = 0; ! $marking && $unit < self::MAX_UNITS_PER_STEP && ! QueueExecution::expired() && ! BackgroundSwitch::off(); ++$unit ) {
 					if ( ProviderHold::waiting() ) {
 						break;
 					}
@@ -302,7 +320,7 @@ class BackgroundEngine {
 					}
 				}
 				self::$step_work = null;
-				if ( ! QueueExecution::expired() ) {
+				if ( ! $marking && ! QueueExecution::expired() ) {
 					$indexer->report_completion();
 				}
 				self::$trace_rows = $total_rows;
@@ -369,7 +387,8 @@ class BackgroundEngine {
 					$response['want'] = $indexer->wanted_pages();
 				}
 				update_option( self::STATE_OPTION, $response, false );
-			}
+			},
+			max( 0.01, QueueExecution::STEP_SECONDS - ( microtime( true ) - $started ) - min( 3.0, 1.5 * ( self::work_state()['aggregate_seconds'] ?? 0.0 ) ) )
 		);
 		if ( '' !== self::visitor_hint() ) {
 			$response['pending']['visitor'] = max( 1, $response['pending']['visitor'] );
@@ -496,8 +515,7 @@ class BackgroundEngine {
 		self::schedule_wake();
 	}
 
-	private static function apply_inputs(): array {
-		( new LexiconChanges( '', '', false ) )->seed();
+	private static function start_inputs(): array {
 		$hooks = [ KeepWarm::SETTINGS_DEBOUNCE_HOOK, KeepWarm::LEXICON_DEBOUNCE_HOOK, KeepWarm::VERSIONED_REFILL_HOOK ];
 		$blocked = [];
 		$rows = 0;
@@ -508,7 +526,11 @@ class BackgroundEngine {
 			}
 			if ( $event['at'] <= time() ) {
 				if ( ! QueueExecution::expired() && wp_unschedule_event( $event['at'], $event['hook'], $event['args'] ) ) {
-					do_action( $event['hook'], ...$event['args'] );
+					if ( KeepWarm::VERSIONED_REFILL_HOOK === $event['hook'] ) {
+						self::defer_task( $event['hook'], $event['args'] );
+					} else {
+						do_action( $event['hook'], ...$event['args'] );
+					}
 				}
 			} else {
 				$due = $due ? min( $due, $event['at'] ) : $event['at'];
@@ -521,15 +543,49 @@ class BackgroundEngine {
 				$blocked = array_merge( $blocked, (array) $languages );
 			}
 		}
-		while ( ! QueueExecution::expired() && self::run_deferred_task( $hooks ) ) {
+		while ( ! QueueExecution::expired() && self::run_deferred_task( [ KeepWarm::SETTINGS_DEBOUNCE_HOOK, KeepWarm::LEXICON_DEBOUNCE_HOOK ] ) ) {
 			continue;
 		}
-		foreach ( [ LexiconChanges::SEED_CURSOR_OPTION, KeepWarm::REBUILD_CURSOR, IndexQueue::DEFERRED_REFILLS_OPTION ] as $option ) {
+		return [
+			'languages' => array_values( array_unique( $blocked ) ),
+			'due' => $due,
+			'rows' => $rows,
+		];
+	}
+
+	private static function apply_inputs( array $inputs ): array {
+		while ( ! QueueExecution::expired() && self::run_deferred_task( [ KeepWarm::VERSIONED_REFILL_HOOK ] ) ) {
+			continue;
+		}
+		( new LexiconChanges( '', '', false ) )->seed();
+		$settings = get_option( KeepWarm::REBUILD_CURSOR, false );
+		if ( false !== $settings ) {
+			$inputs['rows'] += QueueExecution::run_input_turn(
+				static function () use ( $settings ): int {
+					$marked = 0;
+					$indexer = new Indexer( '', '', null, null, false );
+					while ( false !== $settings && QueueExecution::budget()->remaining_seconds() > 0.3 * QueueExecution::STEP_SECONDS ) {
+						$marked += $indexer->resume_settings_refill( $settings );
+						$next = get_option( KeepWarm::REBUILD_CURSOR, false );
+						if ( $next === $settings ) {
+							break;
+						}
+						$settings = $next;
+					}
+					return $marked;
+				}
+			);
+			if ( false !== get_option( KeepWarm::REBUILD_CURSOR, false ) ) {
+				$inputs['languages'][] = '*';
+			}
+		}
+		$rows = $inputs['rows'];
+		$due = $inputs['due'];
+		$blocked = $inputs['languages'];
+		foreach ( [ LexiconChanges::SEED_CURSOR_OPTION, IndexQueue::DEFERRED_REFILLS_OPTION ] as $option ) {
 			while ( ! QueueExecution::expired() && false !== ( $before = get_option( $option, false ) ) ) {
 				if ( LexiconChanges::SEED_CURSOR_OPTION === $option ) {
 					LexiconChanges::run_seed_batch();
-				} elseif ( KeepWarm::REBUILD_CURSOR === $option ) {
-					$rows += ( new Indexer( '', '', null, null, false ) )->resume_settings_refill( $before );
 				} else {
 					( new IndexQueue() )->resume_deferred_refills();
 				}
@@ -656,7 +712,9 @@ class BackgroundEngine {
             'queue_rows',
             static function () use ( &$state ): void {
 				wp_cache_delete( self::REVISION_OPTION, 'options' );
+				$started = microtime( true );
 				$state = ( new IndexQueue() )->engine_aggregate();
+				$state['aggregate_seconds'] = microtime( true ) - $started;
 				$state['revision'] = get_option( self::REVISION_OPTION, '' );
 				update_option( self::WORK_OPTION, $state, false );
 			}

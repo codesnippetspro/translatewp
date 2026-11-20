@@ -165,6 +165,10 @@ class KeepWarm {
 
 		delete_option( self::LEXICON_LANGUAGES );
 		CacheVersions::bump_lexicon_version();
+		if ( \TranslateWP\Components\QueueExecution::in_step() ) {
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [ IndexQueue::STALE_GROUP_LEXICON ] );
+			return;
+		}
 		self::retranslate_stale( IndexQueue::STALE_GROUP_LEXICON );
 	}
 
@@ -255,13 +259,13 @@ class KeepWarm {
 		return $queued;
 	}
 
-	public function refill_versioned_changes(): void {
+	public function refill_versioned_changes( string $group = IndexQueue::STALE_GROUP_LOCALIZER ): void {
 		if ( ! \TranslateWP\Components\QueueExecution::is_bounded() ) {
-			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [] );
+			\TranslateWP\Components\BackgroundEngine::defer_task( self::VERSIONED_REFILL_HOOK, [ $group ] );
 			return;
 		}
 
-		self::retranslate_stale( IndexQueue::STALE_GROUP_LOCALIZER );
+		self::retranslate_stale( $group );
 	}
 
 	public static function apply_lexicon_now(): int {

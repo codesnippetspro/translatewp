@@ -24,6 +24,18 @@ class QueueExecution {
 		self::$query_start = null;
 	}
 
+	public static function run_input_turn( callable $work ) {
+		global $wpdb;
+		$before = (int) ( $wpdb->num_queries ?? 0 );
+		try {
+			return $work();
+		} finally {
+			if ( null !== self::$query_start ) {
+				self::$query_start += (int) ( $wpdb->num_queries ?? 0 ) - $before;
+			}
+		}
+	}
+
 	public static function query_budget_spent(): bool {
 		global $wpdb;
 		return null !== self::$query_start && (int) ( $wpdb->num_queries ?? 0 ) - self::$query_start >= self::QUERY_WORK_LIMIT;

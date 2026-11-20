@@ -788,25 +788,8 @@ class Indexer {
 	 * and the languages touched.
 	 */
 	public function resume_settings_refill( array $cursor ): int {
-		$processed = 0;
-		$ids = $this->queue->row_ids_after( $cursor['after'], 16 );
-		foreach ( $this->queue->list_rows( $ids ) as $row ) {
-			if ( QueueExecution::expired() ) {
-				return $processed;
-			}
-			if ( in_array( $row['language'], $cursor['languages'], true ) ) {
-				$processed += $this->retranslate_pages( [ $row ], $cursor['languages'], false )['requeued'];
-			}
-			$cursor['after'] = (int) $row['id'];
-			update_option( KeepWarm::REBUILD_CURSOR, $cursor, false );
-		}
-		if ( count( $ids ) < 16 ) {
-			delete_option( KeepWarm::REBUILD_CURSOR );
-		} elseif ( end( $ids ) > $cursor['after'] ) {
-			$cursor['after'] = end( $ids );
-			update_option( KeepWarm::REBUILD_CURSOR, $cursor, false );
-		}
-		return $processed;
+		$result = $this->queue->mark_settings_chunk( $cursor );
+		return $result['marked'] ?? 0;
 	}
 
 	public function retranslate_everything( array $only_languages = [] ): array {
