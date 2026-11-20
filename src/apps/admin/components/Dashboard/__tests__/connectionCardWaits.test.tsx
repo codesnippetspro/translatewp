@@ -9,9 +9,9 @@ import { Dashboard } from '@/apps/admin/components/Dashboard';
 const mockApi = { getConnectStatus: jest.fn(), getDashboardMetrics: jest.fn(),
     beginConnect: jest.fn(), reconnectSite: jest.fn() };
 
-const mockReadiness = jest.fn((_enabled?: boolean) => undefined);
+const mockReadiness = jest.fn((_enabled: boolean) => ({ status: undefined, unconfirmed: false }));
 jest.mock('@/shared/hooks/useTranslationReadiness', () => ({
-    useTranslationReadiness: (enabled: boolean) => mockReadiness(enabled),
+    useTranslationReadinessState: (enabled: boolean) => mockReadiness(enabled),
 }));
 
 jest.mock('@/shared/api/connect', () => ({
@@ -172,7 +172,7 @@ it('renders local Dashboard content before readiness and starts one shared readi
         await new Promise(resolve => setTimeout(resolve, 0));
     });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-    expect(container.textContent).toContain('Page translations today');
+    expect(container.textContent).toContain('Page translations in the last 24 hours');
     expect(container.textContent).not.toContain('Loading translation figures…');
     expect(mockReadiness.mock.calls.some(([enabled]) => enabled === true)).toBe(true);
     expect(mockReadiness.mock.calls.every(([enabled]) => typeof enabled === 'boolean')).toBe(true);
