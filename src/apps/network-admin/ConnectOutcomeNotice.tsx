@@ -42,7 +42,7 @@ export const ConnectOutcomeNotice = ({ outcome, form }: { outcome: NetworkConnec
                                 <input type="hidden" name="action" value={form.action} />
                                 <input type="hidden" name="_wpnonce" value={form.nonce} />
                                 <input type="hidden" name="only_hosts" value={entry.host} />
-                                <Button variant="secondary" type="submit" size="compact">
+                                <Button variant="secondary" className="rounded-sm!" type="submit" size="compact">
                                     {/* translators: %s: subsite name */}
                                     {sprintf(__('Try again for %s', 'translate'), entry.name)}
                                 </Button>

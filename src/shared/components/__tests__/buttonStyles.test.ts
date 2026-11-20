@@ -23,7 +23,7 @@ describe('shared button styles', () =>
     it('the block primary fills its container with the card radius', () =>
     {
         expect(TWP_BUTTON_PRIMARY_BLOCK).toContain('w-full');
-        expect(TWP_BUTTON_PRIMARY_BLOCK).toContain('rounded-lg');
+        expect(TWP_BUTTON_PRIMARY_BLOCK).toContain('rounded-sm!');
         expect(TWP_BUTTON_PRIMARY_BLOCK).toContain('bg-translatewp-primary!');
     });
 

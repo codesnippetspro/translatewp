@@ -257,7 +257,7 @@ export const Lexicon = () =>
                     {termsQuery.isError && (
                         <div role="alert">
                             <p>{__('Terms could not be loaded. Try again.', 'translate')}</p>
-                            <Button variant="secondary" onClick={() => void termsQuery.refetch()}>
+                            <Button variant="secondary" className="rounded-sm!" onClick={() => void termsQuery.refetch()}>
                                 {__('Retry', 'translate')}
                             </Button>
                         </div>

@@ -66,7 +66,7 @@ export const LanguagesCard = () =>
                     </div>
                 )}
                 <div>
-                    <Button variant="secondary" href={buildAdminUrl('settings', 'languages')}>{__('Add languages', 'translate')}</Button>
+                    <Button variant="secondary" className="rounded-sm!" href={buildAdminUrl('settings', 'languages')}>{__('Add languages', 'translate')}</Button>
                 </div>
             </div>
             <ManagedByNetwork group="visitor_language">

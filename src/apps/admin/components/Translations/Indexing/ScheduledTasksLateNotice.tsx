@@ -28,7 +28,7 @@ export const ScheduledTasksLateNotice = ({ late, onSyncNow, isSyncing }: Schedul
                 </p>
             </div>
             <div className="flex items-center gap-3">
-                <Button variant="secondary" onClick={onSyncNow} isBusy={isSyncing} disabled={isSyncing}>
+                <Button variant="secondary" className="rounded-sm!" onClick={onSyncNow} isBusy={isSyncing} disabled={isSyncing}>
                     {__('Sync now', 'translate')}
                 </Button>
             </div>
