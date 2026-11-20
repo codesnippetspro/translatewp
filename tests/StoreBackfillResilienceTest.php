@@ -159,6 +159,9 @@ for ( $pass = 0; $pass < TranslationStore::MAX_BACKFILL_ATTEMPTS; ++$pass ) {
 }
 assert_true( ! TranslationStore::has_pending_work(), 'A replacement at its retry cap leaves the active work list' );
 assert_true( 1 === TranslationStore::pending_count( $replacement_url, 'de' ), 'The unresolved replacement retains its hash and hold for a later explicit retry' );
+assert_true( 0 === TranslationStore::requeue_orphaned_pending(), 'An exhausted replacement cannot restart during the orphan sweep' );
+assert_true( str_contains( \TranslateWP\Components\ActionLog::text(), 'Stored translation unavailable' ), 'An exhausted lookup has a visible reason' );
+
 
 if ( $failures > 0 ) {
 	fwrite( STDERR, "StoreBackfillResilienceTest: {$failures} assertion(s) failed\n" );
@@ -207,3 +210,81 @@ if ( $failures > 0 ) {
 	fwrite( STDERR, "StoreBackfillResilienceTest (rotation) failed with {$failures} assertion(s)\n" );
 	exit( 1 );
 }
+
+function old_pending( int $id, string $url ): void {
+	TranslationStore::record_pending( $url, $id, 'it', 'en', [ [ 'hash' => 'old', 'markerPayload' => '⟪item_0001⟫Price' ] ] );
+	$entries = get_post_meta( $id, TranslationStore::POST_META_KEY, true );
+	$entries['it']['stored_at'] = time() - 86400;
+	$entries['it']['map']['Class'] = 'Classe';
+	update_post_meta( $id, TranslationStore::POST_META_KEY, $entries );
+}
+
+function drive_store_turn(): void {
+	$work = get_option( TranslationStore::WORK_OPTION, [] );
+	foreach ( $work as &$entry ) {
+		$entry['not_before'] = 0;
+	}
+	unset( $entry );
+	update_option( TranslationStore::WORK_OPTION, $work );
+	TranslationStore::run_backfill_batch( 25, null, null, true );
+}
+
+foreach ( [ 'gone', 'indexed', 'translated', 'transient' ] as $scenario ) {
+	wp_test_reset( connected_options() );
+	$url = home_url( '/class/' );
+	$id = (int) wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] );
+	$GLOBALS['wp_test_url_to_postid'][ $url ] = $id;
+	old_pending( $id, $url );
+	$queue = new IndexQueue();
+	if ( in_array( $scenario, [ 'indexed', 'translated' ], true ) ) {
+		$row = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+			'_twp_language' => 'it', '_twp_object_type' => 'page', '_twp_object_id' => $id, '_twp_url' => $url, '_twp_stage' => 'push', '_twp_status' => 'done', '_twp_translated_at' => 'translated' === $scenario ? time() : 0,
+		] ] );
+	}
+	if ( 'translated' === $scenario ) {
+		$items = [ [ 'groupId' => 'intro', 'markerPayload' => '⟪item_0001⟫Welcome' ] ];
+		wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'post_content' => wp_json_encode( $items ), 'meta_input' => [
+			'_twp_language' => '', '_twp_object_type' => 'page', '_twp_object_id' => $id, '_twp_url' => $url, '_twp_stage' => 'read', '_twp_status' => 'done', '_twp_updated_at' => time(),
+		] ] );
+		$item = ( new Indexer( '', '', null, null, false ) )->page_cache_items( 'it', $items, '' )[0];
+		$GLOBALS['wp_test_cache_lookup_items'][ $item['cache']['hash'] ] = '⟪item_0001⟫Benvenuti';
+	}
+	if ( 'transient' === $scenario ) {
+		$GLOBALS['wp_test_cache_lookup_rate_limited'] = true;
+	}
+	drive_store_turn();
+	assert_true( TranslationStore::has_pending_work(), "$scenario: one answer cannot retire the entry" );
+	if ( 'transient' === $scenario ) {
+		unset( $GLOBALS['wp_test_cache_lookup_rate_limited'] );
+		$GLOBALS['wp_test_cache_lookup_items']['old'] = '⟪item_0001⟫Prezzo';
+	}
+	drive_store_turn();
+	if ( 'translated' === $scenario ) {
+		assert_true( 'Benvenuti' === TranslationStore::translated_string( 'Welcome', 'Welcome', $url, 'it', $id ), 'Current cached pieces replace the retired entry on the second turn' );
+		drive_store_turn();
+	}
+	assert_true( ! TranslationStore::has_pending_work(), "$scenario: the store settles" );
+	assert_true( 'Classe' === TranslationStore::translated_string( 'Class', 'Class', $url, 'it', $id ), "$scenario: served map retained" );
+	if ( 'indexed' === $scenario ) {
+		assert_true( 'pending' === get_post_meta( $row, '_twp_status', true ), 'Indexed page without fresh proof queued for normal rebuild' );
+	} elseif ( 'translated' === $scenario ) {
+		assert_true( 'done' === get_post_meta( $row, '_twp_status', true ), 'A translated page with the current map does not incur another paid push' );
+	} elseif ( 'transient' === $scenario ) {
+		assert_true( 'Prezzo' === TranslationStore::translated_string( 'Price', 'Price', $url, 'it', $id ), 'After transient failure the real answer is stored' );
+	} else {
+		assert_true( str_contains( \TranslateWP\Components\ActionLog::text(), 'Source no longer indexed.' ), 'Missing source ends as Indexing information' );
+	}
+	for ( $i = 0; $i < 20; ++$i ) {
+		assert_true( 0 === TranslationStore::requeue_orphaned_pending() && ! TranslationStore::has_pending_work(), 'Settled work cannot restart' );
+	}
+}
+
+foreach ( [ [], [ 'hash' => [ 'item_0001' ] ] ] as $groups ) {
+	$row = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+		'_twp_language' => 'it', '_twp_object_type' => 'miss', '_twp_status' => 'done', '_twp_job_outcome' => 'unknown', '_twp_delivery_manifest' => [ 'groups' => $groups ],
+	] ] );
+	$queue->defer_confirmations( [ [ 'id' => $row ] ] );
+	assert_true( $groups ? 'done' === get_post_meta( $row, '_twp_status', true ) : ! get_post( $row ), 'Only receipts without delivery evidence retire' );
+	assert_true( ! get_post_meta( $row, '_twp_translated_at', true ), 'Retirement is never proof of delivery' );
+}
+exit( $failures ? 1 : 0 );

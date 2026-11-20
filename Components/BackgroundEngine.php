@@ -41,6 +41,7 @@ class BackgroundEngine {
 	private const MAX_UNITS_PER_STEP = 64;
 	private static bool $servicing = false;
 	private static ?array $step_work = null;
+	private static int $trace_input_rows = 0;
 	private static string $trace_phase = 'idle';
 	private static int $trace_rows = 0;
 
@@ -136,6 +137,7 @@ class BackgroundEngine {
 		$started = microtime( true );
 		$queries = (int) ( $wpdb->num_queries ?? 0 );
 		self::$trace_phase = 'idle';
+		self::$trace_input_rows = 0;
 		self::$trace_rows = 0;
 		QueueExecution::reset_trace();
 		QueueExecution::begin_step();
@@ -149,6 +151,7 @@ class BackgroundEngine {
 			$response['trace'] = [
 				'phase' => self::$trace_phase,
 				'rows' => self::$trace_rows,
+				'inputRows' => self::$trace_input_rows,
 				'queries' => max( 0, (int) ( $wpdb->num_queries ?? 0 ) - $queries ),
 				'ms' => round( ( microtime( true ) - $started ) * 1000, 2 ),
 				'remote' => QueueExecution::trace_remote(),
@@ -221,6 +224,7 @@ class BackgroundEngine {
 					( new IndexQueue() )->normalize_legacy_rows();
 				}
 				$inputs = self::apply_inputs( $inputs );
+				self::$trace_input_rows = $inputs['rows'];
 				if ( $inputs['rows'] ) {
 					self::$trace_phase = 'maintenance';
 				}

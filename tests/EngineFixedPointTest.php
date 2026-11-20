@@ -50,6 +50,54 @@ namespace {
 	}
 	check_convergence( $jobs === count( $GLOBALS['wp_test_remote_posts'] ) && $before === $queue->list_rows(), 'Two hundred steps neither submit jobs nor modify settled rows' );
 
+	$legacy_post = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] );
+	TranslationStore::record_pending( home_url( '/legacy-class/' ), $legacy_post, 'it', 'en', [ [ 'hash' => 'retired-segment', 'markerPayload' => '⟪item_0001⟫Class' ] ] );
+	$GLOBALS['fixed_time'] += 600;
+	for ( $step = 1; $step <= 5; ++$step ) {
+		$response = BackgroundEngine::step();
+		if ( 'done' === $response['state'] ) {
+			break;
+		}
+		$GLOBALS['fixed_time'] += 60;
+	}
+	check_convergence( $step <= 5 && ! TranslationStore::has_pending_work(), 'Unanswerable historical segments settle within five signed steps' );
+
+
+	$visitor = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+		'_twp_language' => 'es', '_twp_status' => 'done', '_twp_stage' => 'push', '_twp_object_type' => 'miss', '_twp_url' => home_url( '/legacy-visitor/' ),
+		'_twp_job_outcome' => 'done', '_twp_delivery_manifest' => [ 'groups' => [] ],
+	] ] );
+	BackgroundEngine::mark_dirty();
+	BackgroundEngine::step();
+	check_convergence( (int) get_post_meta( $visitor, '_twp_translated_at', true ) > 0, 'A receipt with a confirmed successful job can settle even after the replay payload is gone' );
+
+	$url = home_url( '/replacement-class/' );
+	$post = wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish' ] );
+	$target = wp_insert_post( [ 'post_type' => IndexQueue::POST_TYPE, 'post_status' => 'private', 'meta_input' => [
+		'_twp_language' => 'es', '_twp_status' => 'done', '_twp_stage' => 'push', '_twp_object_type' => 'page', '_twp_object_id' => $post, '_twp_url' => $url,
+	] ] );
+	TranslationStore::record_pending( $url, $post, 'es', 'en', [ [ 'hash' => 'missing-on-indexed-page', 'markerPayload' => '⟪item_0001⟫Former timetable' ] ] );
+	$GLOBALS['fixed_time'] += 600;
+	add_filter( 'translatewp_engine_service_reads', static fn(): bool => true );
+	new \TranslateWP\Functionality\TranslationStoreSync();
+	$GLOBALS['wp_test_url_to_postid'][ $url ] = $post;
+	$GLOBALS['wp_test_job_states']['00000000-0000-4000-8000-000000000099'] = 'done';
+	BackgroundEngine::mark_dirty();
+	for ( $step = 1; $step <= 10; ++$step ) {
+		$GLOBALS['wp_test_now'] = $GLOBALS['fixed_time'];
+		$response = BackgroundEngine::step( [ [ 'url' => $url, 'status' => 200, 'html' => '<p>New timetable</p>' ] ] );
+		foreach ( $GLOBALS['wp_test_remote_posts'] as $request ) {
+			foreach ( $request['body']['items'] ?? [] as $piece ) {
+				$GLOBALS['wp_test_cache_lookup_items'][ $piece['cache']['hash'] ] = str_replace( 'New timetable', 'Nuevo horario', $piece['markerPayload'] );
+			}
+		}
+		if ( 'done' === $response['state'] ) {
+			break;
+		}
+		$GLOBALS['fixed_time'] += 120;
+	}
+	check_convergence( $step <= 10 && get_post_meta( $target, '_twp_translated_at', true ) && 'Nuevo horario' === TranslationStore::translated_string( 'New timetable', 'New timetable', $url, 'es', $post ), 'Indexed historical entry rebuilds through extraction and a current-version result within ten steps' );
+
 	foreach ( [ false, true ] as $timeout ) {
 		$list = [ 'en' => [ 'locale' => 'en', 'active' => true, 'default' => true ] ];
 		foreach ( [ 'es', 'it' ] as $language ) {

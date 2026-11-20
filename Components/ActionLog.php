@@ -11,17 +11,21 @@ class ActionLog {
 	public const OPTION = 'translatewp_action_log';
 	public const LIMIT  = 100;
 
-	public static function record( string $message, string $level = 'info' ): void {
+	public static function record( string $message, string $level = 'info', string $category = '' ): void {
 		// uninstall.php runs without the formatting functions; nothing is worth recording there.
 		if ( ! function_exists( 'sanitize_text_field' ) ) {
 			return;
 		}
 		$entries   = self::entries();
-		$entries[] = [
+		$entry = [
 			'time'    => gmdate( 'Y-m-d H:i:s' ),
 			'level'   => in_array( $level, [ 'info', 'warning', 'error' ], true ) ? $level : 'info',
 			'message' => substr( sanitize_text_field( $message ), 0, 300 ),
 		];
+		if ( '' !== $category ) {
+			$entry['category'] = $category;
+		}
+		$entries[] = $entry;
 		if ( count( $entries ) > self::LIMIT ) {
 			$entries = array_slice( $entries, -self::LIMIT );
 		}

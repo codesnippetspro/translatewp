@@ -1446,6 +1446,19 @@ class Indexer {
 		return new \WP_Error( 'page_redirected', 'page_redirected' );
 	}
 
+	public function page_cache_items( string $language, array $items, string $title ): array {
+		$title = trim( $title );
+		if ( '' !== $title ) {
+			$items[] = [
+				'groupId' => 'seo:' . self::TITLE_CONTEXT_KEY,
+				'markerPayload' => self::TITLE_MARKER . $title,
+				'contextKey' => self::TITLE_CONTEXT_KEY,
+				'contextKind' => TranslationFingerprint::CONTEXT_KIND_ATTRIBUTE,
+			];
+		}
+		return $this->stamp_hashes( $language, $items );
+	}
+
 	private function push_language_rows( string $language, array $language_rows, array &$result, bool $retranslate = false ): void {
 		// Every segment leaves under the fingerprint this site computes for
 		// it (its source language, the target and its own model profile),
@@ -1479,16 +1492,7 @@ class Indexer {
 				$readiness_items[ (int) $language_row['id'] ] = $language_row['items'];
 				continue;
 			}
-			$title = trim( (string) ( $language_row['page_title'] ?? '' ) );
-			if ( '' !== $title ) {
-				$language_row['items'][] = [
-					'groupId'       => 'seo:' . self::TITLE_CONTEXT_KEY,
-					'markerPayload' => self::TITLE_MARKER . $title,
-					'contextKey'    => self::TITLE_CONTEXT_KEY,
-					'contextKind'   => TranslationFingerprint::CONTEXT_KIND_ATTRIBUTE,
-				];
-			}
-			$language_row['items'] = $this->stamp_hashes( $language, $language_row['items'] );
+			$language_row['items'] = $this->page_cache_items( $language, $language_row['items'], $language_row['page_title'] ?? '' );
 			$readiness_items[ (int) $language_row['id'] ] = $language_row['items'];
 			// A forced retranslation overwrites whatever is in flight or
 			// cached, so it pushes every segment.

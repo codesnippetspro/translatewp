@@ -308,7 +308,10 @@ class Indexing extends BaseApiEndpoints {
 	public function status( $request ) {
 		unset( $request );
 
-		return $this->indexer->status() + [ 'pins' => $this->pin_details() ];
+		return $this->indexer->status() + [
+			'pins' => $this->pin_details(),
+			'storeMessages' => array_column( array_filter( \TranslateWP\Components\ActionLog::entries(), static fn( $entry ) => 'store_settlement' === ( $entry['category'] ?? '' ) ), 'message' ),
+		];
 	}
 
 	public function readiness( $request ) {

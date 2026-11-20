@@ -369,6 +369,14 @@ export const LanguagesIndexing = () =>
                 <p className="text-sm text-translatewp-muted m-0">
                     {__('Reading collects the text of your site spine, the front page and menu pages, in the background and costs nothing. Translation runs on the service for the languages you chose, visible pages first. Other pages translate the first time someone views them.', 'translate')}
                 </p>
+                {Boolean(status?.storeMessages?.length) && (
+                    <details>
+                        <summary>{__('Stored translation updates', 'translate')}</summary>
+                        <ul>
+                            {status?.storeMessages?.map((message, i) => <li key={i}>{message}</li>)}
+                        </ul>
+                    </details>
+                )}
                 {status?.readerError && (
                     <p className="text-sm text-translatewp-error m-0" role="alert">
                         {readerErrorMessage(status.readerError)}

@@ -2801,13 +2801,44 @@ class IndexQueue {
 		return $this->list_rows( array_map( 'intval', $ids ) );
 	}
 
+	public function indexed_translation_for_store( string $url, int $post_id, string $language ): ?array {
+		if ( $post_id > 0 ) {
+			$type = get_post_type( $post_id );
+			if ( ! $type || ! in_array( get_post_status( $post_id ), [ 'publish', 'private' ], true ) || PageExclusion::is_excluded( $post_id ) ) {
+				return null;
+			}
+			$id = $this->find_row( $type, $post_id, $language );
+			if ( null !== $id ) {
+				return $this->list_rows( [ $id ] )[0] ?? null;
+			}
+		}
+		foreach ( $this->rows_for_url( $url, $language ) as $row ) {
+			if ( 'miss' !== $row['object_type'] && ( $post_id <= 0 || $post_id === $row['object_id'] ) ) {
+				return $row;
+			}
+		}
+		return null;
+	}
+
 	public function defer_confirmations( array $rows ): int {
 		return self::mutate_rows(
 			function () use ( $rows ): int {
 				$changes = [];
+				$retired = 0;
 				foreach ( $rows as $row ) {
 					$id = (int) $row['id'];
 					if ( self::STATUS_DONE !== $this->row_status( $id ) || get_post_meta( $id, self::META_TRANSLATED_AT, true ) ) {
+						continue;
+					}
+					if ( 'miss' === get_post_meta( $id, self::META_OBJECT_TYPE, true )
+						&& 'unknown' === $this->job_outcome( $id )
+						&& ! get_post_meta( $id, self::META_JOB_ID, true )
+						&& '' === (string) get_post_field( 'post_content', $id )
+						&& empty( get_post_meta( $id, '_twp_delivery_manifest', true )['groups'] ) ) {
+						if ( wp_delete_post( $id, true ) ) {
+							++$retired;
+							ActionLog::record( sprintf( 'Visitor receipt %d retired: no source text or delivery evidence remains.', $id ), 'info', 'store_settlement' );
+						}
 						continue;
 					}
 					$attempt = (int) get_post_meta( $id, '_twp_confirmation_attempts', true ) + 1;
@@ -2825,7 +2856,7 @@ class IndexQueue {
 						'_twp_reader_not_before' => $this->now() + min( 120, 5 * $attempt ),
 					];
 				}
-				return QueueMetadata::write( $changes ) ? count( $changes ) : 0;
+				return $retired + ( QueueMetadata::write( $changes ) ? count( $changes ) : 0 );
 			},
 			0
 		);
